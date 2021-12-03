@@ -1,0 +1,5 @@
+# git ignore.
+# only VS simulated project will be stored in repo
+out/
+3rd_party/fatfs/
+simple_config/
