@@ -4,6 +4,10 @@
 #ifndef __SDCARD__
 #define __SDCARD__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
 	Important flags that must be set
 	
@@ -56,5 +60,9 @@ SDCARD_Status SDCARD_FAT_Register(HSDCARD hsdcard, uint8_t drive_index);
 SDCARD_Status SDCARD_FAT_IsInitialized(uint8_t drive_index);
 SDCARD_Status SDCARD_FAT_Read(uint8_t drive_index, uint8_t *buffer, uint32_t sector, uint32_t count);
 SDCARD_Status SDCARD_FAT_Write(uint8_t drive_index, const uint8_t *buffer, uint32_t sector, uint32_t count);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif //__SDCARD__
