@@ -7,10 +7,14 @@
 class DeviceTest : public ::testing::Test
 {
 protected:
+    DeviceSettings settings;
     std::unique_ptr<Device> device = nullptr;
 
     virtual void SetUp()
     {
+        settings.available_heap = sizeof(uint32_t);
+
+        device = std::make_unique<Device>(settings);
     }
 
     virtual void TearDown()
@@ -21,19 +25,11 @@ protected:
 
 TEST_F(DeviceTest, default_memory_size)
 {
-    DeviceSettings settings;
-    settings.available_heap = sizeof(uint32_t);
-
-    device = std::make_unique<Device>(settings);
     ASSERT_EQ(device->GetAvailableMemory(), settings.available_heap);
 }
 
 TEST_F(DeviceTest, allocate_object)
 {
-    DeviceSettings settings;
-    settings.available_heap = sizeof(uint32_t);
-
-    device = std::make_unique<Device>(settings);
     void* object = device->AllocateObject(sizeof(uint32_t));
     EXPECT_TRUE(nullptr != object);
     ASSERT_EQ(device->GetAvailableMemory(), 0);
@@ -41,10 +37,6 @@ TEST_F(DeviceTest, allocate_object)
 
 TEST_F(DeviceTest, allocated_object_valid)
 {
-    DeviceSettings settings;
-    settings.available_heap = sizeof(uint32_t);
-
-    device = std::make_unique<Device>(settings);
     int32_t* object = (int32_t*)device->AllocateObject(sizeof(uint32_t));
     EXPECT_TRUE(nullptr != object);
     *object = 0;
@@ -54,21 +46,59 @@ TEST_F(DeviceTest, allocated_object_valid)
 
 TEST_F(DeviceTest, allocate_invalid_object)
 {
-    DeviceSettings settings;
-    settings.available_heap = sizeof(uint32_t);
-
-    device = std::make_unique<Device>(settings);
     int32_t* object = (int32_t*)device->AllocateObject(sizeof(uint64_t));
     ASSERT_TRUE(nullptr == object);
 }
 
 TEST_F(DeviceTest, allocate_invalid_object_throw)
 {
-    DeviceSettings settings;
-    settings.available_heap = sizeof(uint32_t);
     settings.throw_out_of_memory = true;
-
     device = std::make_unique<Device>(settings);
     ASSERT_THROW(device->AllocateObject(sizeof(uint64_t)), OutOfMemoryException);
 }
 
+class DeviceSignalsTest : public ::testing::Test
+{
+protected:
+    std::unique_ptr<Device> device = nullptr;
+    DeviceSettings settings;
+
+    virtual void SetUp()
+    {
+        device = std::make_unique<Device>(settings);
+    }
+
+    virtual void TearDown()
+    {
+        device = nullptr;
+    }
+};
+
+TEST_F(DeviceSignalsTest, write_to_pin)
+{
+    device->WritePin(0, 1, GPIO_PIN_RESET);
+    ASSERT_EQ(device->GetPinState(0, 1), GPIO_PIN_RESET);
+}
+
+TEST_F(DeviceSignalsTest, write_to_pin_twice)
+{
+    device->WritePin(0, 1, GPIO_PIN_RESET);
+    device->WritePin(0, 1, GPIO_PIN_SET);
+    ASSERT_EQ(device->GetPinState(0, 1), GPIO_PIN_SET);
+}
+
+TEST_F(DeviceSignalsTest, toggle_pin)
+{
+    device->WritePin(0, 1, GPIO_PIN_RESET);
+    device->TogglePin(0, 1);
+    ASSERT_EQ(device->GetPinState(0, 1), GPIO_PIN_SET);
+}
+
+TEST_F(DeviceSignalsTest, toggle_pin_twice)
+{
+    device->WritePin(0, 1, GPIO_PIN_RESET);
+    device->TogglePin(0, 1);
+    EXPECT_EQ(device->GetPinState(0, 1), GPIO_PIN_SET);
+    device->TogglePin(0, 1);
+    ASSERT_EQ(device->GetPinState(0, 1), GPIO_PIN_RESET);
+}

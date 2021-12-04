@@ -4,6 +4,15 @@ Device::Device(const DeviceSettings& settings)
     : m_throw_exception(settings.throw_out_of_memory)
 {
     m_heap.resize(settings.available_heap);
+    m_ports.resize(settings.ports_count);
+
+    for (auto& port : m_ports)
+    {
+        for (auto& pin : port.pins)
+        {
+            pin = GPIO_PIN_SET;
+        }
+    }
 }
 
 size_t Device::GetAvailableMemory() const
@@ -34,3 +43,39 @@ void* Device::AllocateObject(size_t object_size)
     return ptr;
 }
 
+void Device::ValidatePortAndPin(uint32_t port, uint16_t pin)
+{
+    if (port >= m_ports.size())
+    {
+        throw InvalidPortException();
+    }
+    if (pin >= 0x10)
+    {
+        throw InvalidPinException();
+    }
+}
+
+void Device::WritePin(uint32_t port, uint16_t pin, GPIO_PinState state)
+{
+    ValidatePortAndPin(port, pin);
+    m_ports[port].pins[pin] = state;
+}
+
+void Device::TogglePin(uint32_t port, uint16_t pin)
+{
+    ValidatePortAndPin(port, pin);
+    if (GPIO_PIN_SET == m_ports[port].pins[pin])
+    {
+        m_ports[port].pins[pin] = GPIO_PIN_RESET;
+    }
+    else
+    {
+        m_ports[port].pins[pin] = GPIO_PIN_SET;
+    }
+}
+
+GPIO_PinState Device::GetPinState(uint32_t port, uint16_t pin)
+{
+    ValidatePortAndPin(port, pin);
+    return m_ports[port].pins[pin];
+}

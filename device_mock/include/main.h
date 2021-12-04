@@ -13,7 +13,8 @@ void DetachDevice();
 
 #endif
 
-void* device_alloc(size_t object_size);
+void* DeviceAlloc(size_t object_size);
+void DeviceFree(void* object);
 
 typedef size_t GPIO_TypeDef;
 
