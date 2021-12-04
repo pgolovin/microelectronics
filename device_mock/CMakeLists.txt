@@ -1,11 +1,13 @@
 # set the project name
 set(HEADERS
     "include/main.h"
-    "include/stm32f7xx_hal_spi.h")
+    "include/stm32f7xx_hal_spi.h"
+    "include/device_mock.h")
 
 set(SOURCES
     "src/main.cpp"
-    "src/stm32f7xx_hal_spi.cpp")
+    "src/stm32f7xx_hal_spi.cpp"
+    "src/device_mock.cpp")
 
 add_library(device_mock STATIC ${HEADERS} ${SOURCES})
 

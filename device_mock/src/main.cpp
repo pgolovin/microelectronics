@@ -1,11 +1,47 @@
 #include "main.h"
+#include "device_mock.h"
 
-void HAL_GPIO_WritePin(GPIO_TypeDef* /*port*/, uint16_t /*pin*/, GPIO_PinState /*value*/)
+#include <memory>
+
+static Device* g_device = nullptr;
+
+void AttachDevice(Device& device)
 {
-    //noop;
+    g_device = &device;
 }
 
-GPIO_PinState HAL_GPIO_TogglePin(GPIO_TypeDef* /*port*/, uint16_t /*pin*/)
+void DetachDevice()
 {
+    g_device = nullptr;
+}
+
+void HAL_GPIO_WritePin(GPIO_TypeDef* port, uint16_t pin, GPIO_PinState value)
+{
+    if (g_device)
+    {
+        g_device->WritePin(*port, pin, value);
+    }
+}
+
+GPIO_PinState HAL_GPIO_TogglePin(GPIO_TypeDef* port, uint16_t pin)
+{
+    if (g_device)
+    {
+        return g_device->TogglePin(*port, pin);
+    }
     return GPIO_PIN_RESET;
+}
+
+void* DeviceAlloc(size_t object_size)
+{
+    if (g_device)
+    {
+        return g_device->AllocateObject(object_size);
+    }
+    return nullptr;
+}
+
+void DeviceFree(void* /*object*/)
+{
+    //noop
 }

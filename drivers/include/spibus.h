@@ -4,6 +4,10 @@
 #ifndef __SPIBUS__
 #define __SPIBUS__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct SPI_BUS_type
 {
     uint32_t id;
@@ -22,5 +26,9 @@ void SPIBUS_UnselectAll(HSPIBUS hspi);
 HAL_StatusTypeDef SPIBUS_SetValue(HSPIBUS hspi, uint8_t* transmit_data, size_t size);
 HAL_StatusTypeDef SPIBUS_Transmit(HSPIBUS hspi, uint8_t* transmit_data, size_t size);
 HAL_StatusTypeDef SPIBUS_TransmitReceive(HSPIBUS hspi, uint8_t* transmit_data, uint8_t* receive_data, size_t size);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif //__SPIBUS__
