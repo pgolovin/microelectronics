@@ -19,7 +19,7 @@ typedef struct PWV_Internal_type
 
 PWM* PWMConfigure(GPIO_TypeDef* pin_array, uint16_t pin, int period)
 {
-	PWVInternal* pwm = malloc(sizeof(PWVInternal));
+	PWVInternal* pwm = DeviceAlloc(sizeof(PWVInternal));
 	
 	// configure pin settings for pwm
 	pwm->pin_array = pin_array;
@@ -40,7 +40,7 @@ PWM* PWMConfigure(GPIO_TypeDef* pin_array, uint16_t pin, int period)
 void PWMRelease(PWM* _pwm)
 {
 	PWVInternal* pwm = (PWVInternal*)_pwm;
-	free(pwm);
+	DeviceFree(pwm);
 }
 
 void PWMOn(PWM* _pwm)
@@ -72,7 +72,12 @@ void PWMToggle(PWM* _pwm)
 	pwm->led_state = pwm->led_state == GPIO_PIN_RESET ? GPIO_PIN_SET : GPIO_PIN_RESET;
 	HAL_GPIO_TogglePin(pwm->pin_array, pwm->pin);
 }
-	
+
+GPIO_PinState PWMGetState(PWM* _pwm)
+{
+	return ((PWVInternal*)_pwm)->led_state;
+}
+
 void PWMSetPeriod(PWM* _pwm, int period)
 {
 	PWVInternal* pwm = (PWVInternal*)_pwm;

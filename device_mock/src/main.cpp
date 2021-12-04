@@ -15,13 +15,20 @@ void DetachDevice()
     g_device = nullptr;
 }
 
-void HAL_GPIO_WritePin(GPIO_TypeDef* /*port*/, uint16_t /*pin*/, GPIO_PinState /*value*/)
+void HAL_GPIO_WritePin(GPIO_TypeDef* port, uint16_t pin, GPIO_PinState value)
 {
-    //noop;
+    if (g_device)
+    {
+        g_device->WritePin(*port, pin, value);
+    }
 }
 
-GPIO_PinState HAL_GPIO_TogglePin(GPIO_TypeDef* /*port*/, uint16_t /*pin*/)
+GPIO_PinState HAL_GPIO_TogglePin(GPIO_TypeDef* port, uint16_t pin)
 {
+    if (g_device)
+    {
+        return g_device->TogglePin(*port, pin);
+    }
     return GPIO_PIN_RESET;
 }
 

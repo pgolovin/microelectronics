@@ -43,7 +43,7 @@ void* Device::AllocateObject(size_t object_size)
     return ptr;
 }
 
-void Device::ValidatePortAndPin(uint32_t port, uint16_t pin)
+void Device::ValidatePortAndPin(size_t port, uint16_t pin)
 {
     if (port >= m_ports.size())
     {
@@ -55,13 +55,13 @@ void Device::ValidatePortAndPin(uint32_t port, uint16_t pin)
     }
 }
 
-void Device::WritePin(uint32_t port, uint16_t pin, GPIO_PinState state)
+void Device::WritePin(size_t port, uint16_t pin, GPIO_PinState state)
 {
     ValidatePortAndPin(port, pin);
     m_ports[port].pins[pin] = state;
 }
 
-void Device::TogglePin(uint32_t port, uint16_t pin)
+GPIO_PinState Device::TogglePin(size_t port, uint16_t pin)
 {
     ValidatePortAndPin(port, pin);
     if (GPIO_PIN_SET == m_ports[port].pins[pin])
@@ -72,9 +72,10 @@ void Device::TogglePin(uint32_t port, uint16_t pin)
     {
         m_ports[port].pins[pin] = GPIO_PIN_SET;
     }
+    return m_ports[port].pins[pin];
 }
 
-GPIO_PinState Device::GetPinState(uint32_t port, uint16_t pin)
+GPIO_PinState Device::GetPinState(size_t port, uint16_t pin)
 {
     ValidatePortAndPin(port, pin);
     return m_ports[port].pins[pin];

@@ -18,7 +18,8 @@ void PWMRelease(PWM* led);
 void PWMOn(PWM* led);
 void PWMOff(PWM* led);
 void PWMToggle(PWM* led);
-	
+GPIO_PinState PWMGetState(PWM* led);
+
 void PWMSetPeriod(PWM* led, int period);
 void PWMHandleTick(PWM* led);
 

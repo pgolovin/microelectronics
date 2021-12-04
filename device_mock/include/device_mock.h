@@ -38,14 +38,14 @@ public:
     void* AllocateObject(size_t object_size);
     size_t GetAvailableMemory() const;
 
-    void WritePin(uint32_t port, uint16_t pin, GPIO_PinState state);
-    void TogglePin(uint32_t port, uint16_t pin);
+    void WritePin(size_t port, uint16_t pin, GPIO_PinState state);
+    GPIO_PinState TogglePin(size_t port, uint16_t pin);
 
     // Diagnostics funtions. 
-    GPIO_PinState GetPinState(uint32_t port, uint16_t pin);
+    GPIO_PinState GetPinState(size_t port, uint16_t pin);
 
 private:
-    void ValidatePortAndPin(uint32_t port, uint16_t pin);
+    void ValidatePortAndPin(size_t port, uint16_t pin);
 
     std::vector<char> m_heap;
     size_t m_heap_position = 0;
