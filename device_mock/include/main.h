@@ -5,7 +5,15 @@
 
 #ifdef __cplusplus
 extern "C" {
+
+class Device;
+
+void AttachDevice(Device& device);
+void DetachDevice();
+
 #endif
+
+void* device_alloc(size_t object_size);
 
 typedef size_t GPIO_TypeDef;
 
