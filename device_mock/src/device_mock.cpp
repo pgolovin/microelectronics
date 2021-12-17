@@ -5,14 +5,6 @@ Device::Device(const DeviceSettings& settings)
 {
     m_heap.resize(settings.available_heap);
     m_ports.resize(settings.ports_count);
-
-    for (auto& port : m_ports)
-    {
-        for (auto& pin : port.pins)
-        {
-            pin = GPIO_PIN_SET;
-        }
-    }
 }
 
 size_t Device::GetAvailableMemory() const
@@ -43,7 +35,7 @@ void* Device::AllocateObject(size_t object_size)
     return ptr;
 }
 
-void Device::ValidatePortAndPin(size_t port, uint16_t pin)
+void Device::ValidatePortAndPin(size_t port, uint16_t pin) const
 {
     if (port >= m_ports.size())
     {
@@ -58,24 +50,35 @@ void Device::ValidatePortAndPin(size_t port, uint16_t pin)
 void Device::WritePin(size_t port, uint16_t pin, GPIO_PinState state)
 {
     ValidatePortAndPin(port, pin);
-    m_ports[port].pins[pin] = state;
+    auto& pin_state = m_ports[port].pins[pin];
+    ++pin_state.gpio_signals;
+    pin_state.state = state;
 }
 
 GPIO_PinState Device::TogglePin(size_t port, uint16_t pin)
 {
     ValidatePortAndPin(port, pin);
-    if (GPIO_PIN_SET == m_ports[port].pins[pin])
+    auto& pin_state = m_ports[port].pins[pin];
+    if (GPIO_PIN_SET == pin_state.state)
     {
-        m_ports[port].pins[pin] = GPIO_PIN_RESET;
+        pin_state.state = GPIO_PIN_RESET;
     }
     else
     {
-        m_ports[port].pins[pin] = GPIO_PIN_SET;
+        pin_state.state = GPIO_PIN_SET;
     }
-    return m_ports[port].pins[pin];
+    ++pin_state.gpio_signals;
+    return m_ports[port].pins[pin].state;
 }
 
-GPIO_PinState Device::GetPinState(size_t port, uint16_t pin)
+void Device::ResetPinGPIOCounters(GPIO_TypeDef port, uint16_t pin)
+{
+    ValidatePortAndPin(port, pin);
+    auto& pin_state = m_ports[port].pins[pin];
+    pin_state.gpio_signals = 0;
+}
+
+const Device::PinState& Device::GetPinState(GPIO_TypeDef port, uint16_t pin) const
 {
     ValidatePortAndPin(port, pin);
     return m_ports[port].pins[pin];

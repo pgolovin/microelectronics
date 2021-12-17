@@ -77,28 +77,55 @@ protected:
 TEST_F(DeviceSignalsTest, write_to_pin)
 {
     device->WritePin(0, 1, GPIO_PIN_RESET);
-    ASSERT_EQ(device->GetPinState(0, 1), GPIO_PIN_RESET);
+    ASSERT_EQ(device->GetPinState(0, 1).state, GPIO_PIN_RESET);
 }
 
 TEST_F(DeviceSignalsTest, write_to_pin_twice)
 {
     device->WritePin(0, 1, GPIO_PIN_RESET);
     device->WritePin(0, 1, GPIO_PIN_SET);
-    ASSERT_EQ(device->GetPinState(0, 1), GPIO_PIN_SET);
+    ASSERT_EQ(device->GetPinState(0, 1).state, GPIO_PIN_SET);
 }
 
 TEST_F(DeviceSignalsTest, toggle_pin)
 {
     device->WritePin(0, 1, GPIO_PIN_RESET);
     device->TogglePin(0, 1);
-    ASSERT_EQ(device->GetPinState(0, 1), GPIO_PIN_SET);
+    ASSERT_EQ(device->GetPinState(0, 1).state, GPIO_PIN_SET);
 }
 
 TEST_F(DeviceSignalsTest, toggle_pin_twice)
 {
     device->WritePin(0, 1, GPIO_PIN_RESET);
     device->TogglePin(0, 1);
-    EXPECT_EQ(device->GetPinState(0, 1), GPIO_PIN_SET);
+    EXPECT_EQ(device->GetPinState(0, 1).state, GPIO_PIN_SET);
     device->TogglePin(0, 1);
-    ASSERT_EQ(device->GetPinState(0, 1), GPIO_PIN_RESET);
+    ASSERT_EQ(device->GetPinState(0, 1).state, GPIO_PIN_RESET);
 }
+
+TEST_F(DeviceSignalsTest, signals_write_set_logged)
+{
+    device->WritePin(0, 1, GPIO_PIN_SET);
+
+    ASSERT_EQ(device->GetPinState(0, 1).gpio_signals, 1);
+}
+
+TEST_F(DeviceSignalsTest, signals_write_reset_logged)
+{
+    device->WritePin(0, 1, GPIO_PIN_RESET);
+
+    ASSERT_EQ(device->GetPinState(0, 1).gpio_signals, 1);
+}
+
+TEST_F(DeviceSignalsTest, signals_count)
+{
+    const size_t count = 10;
+    for (size_t i = 0; i < count; ++i)
+    { 
+        device->TogglePin(0, 1);
+    }
+
+    ASSERT_EQ(device->GetPinState(0, 1).gpio_signals, count);
+}
+
+

@@ -17,7 +17,7 @@ typedef struct PWV_Internal_type
 	GPIO_PinState led_state;
 } PWVInternal;
 
-PWM* PWMConfigure(GPIO_TypeDef* pin_array, uint16_t pin, int period)
+PWM* PWMConfigure(GPIO_TypeDef* pin_array, uint16_t pin)
 {
 	PWVInternal* pwm = DeviceAlloc(sizeof(PWVInternal));
 	
@@ -27,12 +27,10 @@ PWM* PWMConfigure(GPIO_TypeDef* pin_array, uint16_t pin, int period)
 	
 	//configure internal items
 	pwm->tick = 0;
-	pwm->loop = 10;
+	pwm->loop = 100;
 	
 	pwm->led_state = GPIO_PIN_RESET;
 	HAL_GPIO_WritePin(pwm->pin_array, pwm->pin, pwm->led_state);
-	// configure public powers
-	PWMSetPeriod((PWM*)pwm, period);
 	
 	return (PWM*)pwm;
 }
@@ -78,30 +76,56 @@ GPIO_PinState PWMGetState(PWM* _pwm)
 	return ((PWVInternal*)_pwm)->led_state;
 }
 
-void PWMSetPeriod(PWM* _pwm, int period)
+void PWMSetPower(PWM* _pwm, int power)
 {
+	if (0 == power)
+	{
+		PWMOff(_pwm);
+
+		return;
+	}
+	if (100 == power)
+	{
+		PWMOn(_pwm);
+		return;
+	}
+
 	PWVInternal* pwm = (PWVInternal*)_pwm;
-	pwm->period = period;
-	// change period means restart loop
+	int divider = power;
+	for (; divider > 0; --divider)
+	{
+		if ((0 == power % divider) && (0 == 100 % divider))
+			break;
+	}
+	pwm->loop = 100 / divider;
+	pwm->period = power / divider;
+	// change power means restart loop
 	pwm->tick = 0;
+	PWMOff(_pwm);
 }
 
 // manage blinks period to emulate light period
 void PWMHandleTick(PWM* _pwm)
 {
 	PWVInternal* pwm = (PWVInternal*)_pwm;
-	++pwm->tick;
-	// do not overflaw pwm loop
-	if (pwm->tick == pwm->loop)
+	if (pwm->period)
 	{
-		pwm->tick = 0;
-		if (pwm->period)
+		// do not overflaw pwm loop
+		if (pwm->tick == pwm->loop)
 		{
-			PWMOn(_pwm);
+			pwm->tick = 0;
 		}
+		if (0 == pwm->tick)
+		{
+			pwm->led_state = GPIO_PIN_SET;
+			HAL_GPIO_WritePin(pwm->pin_array, pwm->pin, pwm->led_state);
+		}
+		if (pwm->period == pwm->tick)
+		{
+			pwm->led_state = GPIO_PIN_RESET;
+			HAL_GPIO_WritePin(pwm->pin_array, pwm->pin, pwm->led_state);
+		}
+		++pwm->tick;
 	}
-	if (pwm->period == pwm->tick)
-	{
-		PWMOff(_pwm);
-	}
+	
 }
