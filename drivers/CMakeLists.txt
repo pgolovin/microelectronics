@@ -2,12 +2,14 @@
 set(HEADERS
     "include/pwm.h"
     "include/sdcard.h"
-    "include/spibus.h")
+    "include/spibus.h"
+    "include/pulse_engine.h")
 
 set(SOURCES
     "sources/pwm.c"
     "sources/sdcard.c"
-    "sources/spibus.c")
+    "sources/spibus.c"
+    "sources/pulse_engine.c")
 
     # add sub-project
 add_library(drivers STATIC ${HEADERS} ${SOURCES})

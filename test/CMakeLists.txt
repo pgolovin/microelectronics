@@ -5,6 +5,7 @@ find_package(gtest)
 set(SOURCES
     "tests.cpp"
     "drivers/pmw.cpp"
+    "drivers/pulse_engine.cpp"
     "device/device.cpp")
 # add sub-project
 add_executable(driver_tests ${SOURCES})

@@ -1,5 +1,6 @@
 #include <main.h>
 #include "include/pwm.h"
+#include "include/pulse_engine.h"
 #include <stdlib.h>
 
 // internal LED structure to hide pwm implementation from end user
@@ -8,15 +9,24 @@ typedef struct PWV_Internal_type
 {
 	GPIO_TypeDef* pin_array;
 	uint16_t pin;
-	
-	int period;
-	
-	int tick;
-	int loop;
+
+	HPULSE pulse_engine;
 	
 	GPIO_PinState led_state;
 } PWVInternal;
 
+// Pulse engine callbacks
+static void PWM_On_Callback(void* _pwm)
+{
+	PWMOn(_pwm);
+}
+
+static void PWM_Off_Callback(void* _pwm)
+{
+	PWMOff(_pwm);
+}
+
+// PWM body
 PWM* PWMConfigure(GPIO_TypeDef* pin_array, uint16_t pin)
 {
 	PWVInternal* pwm = DeviceAlloc(sizeof(PWVInternal));
@@ -25,9 +35,8 @@ PWM* PWMConfigure(GPIO_TypeDef* pin_array, uint16_t pin)
 	pwm->pin_array = pin_array;
 	pwm->pin = pin;
 	
-	//configure internal items
-	pwm->tick = 0;
-	pwm->loop = 100;
+	pwm->pulse_engine = PULSE_Configure(PWM_On_Callback, PWM_Off_Callback, pwm);
+	PULSE_SetPeriod(pwm->pulse_engine, 100);
 	
 	pwm->led_state = GPIO_PIN_RESET;
 	HAL_GPIO_WritePin(pwm->pin_array, pwm->pin, pwm->led_state);
@@ -45,6 +54,8 @@ void PWMOn(PWM* _pwm)
 {
 	PWVInternal* pwm = (PWVInternal*)_pwm;
 	
+	//TODO: not sure that setting power slower than check state with if...
+	//      need to confirm it with device experiment
 	if (GPIO_PIN_SET == pwm->led_state)
 		return;
 	
@@ -56,6 +67,8 @@ void PWMOff(PWM* _pwm)
 {
 	PWVInternal* pwm = (PWVInternal*)_pwm;
 	
+	//TODO: not sure that setting power slower than check state with if...
+	//      need to confirm it with device experiment
 	if (GPIO_PIN_RESET == pwm->led_state)
 		return;
 	
@@ -78,54 +91,14 @@ GPIO_PinState PWMGetState(PWM* _pwm)
 
 void PWMSetPower(PWM* _pwm, int power)
 {
-	if (0 == power)
-	{
-		PWMOff(_pwm);
-
-		return;
-	}
-	if (100 == power)
-	{
-		PWMOn(_pwm);
-		return;
-	}
-
 	PWVInternal* pwm = (PWVInternal*)_pwm;
-	int divider = power;
-	for (; divider > 0; --divider)
-	{
-		if ((0 == power % divider) && (0 == 100 % divider))
-			break;
-	}
-	pwm->loop = 100 / divider;
-	pwm->period = power / divider;
-	// change power means restart loop
-	pwm->tick = 0;
-	PWMOff(_pwm);
+	PULSE_SetPower(pwm->pulse_engine, power);
 }
 
 // manage blinks period to emulate light period
 void PWMHandleTick(PWM* _pwm)
 {
 	PWVInternal* pwm = (PWVInternal*)_pwm;
-	if (pwm->period)
-	{
-		// do not overflaw pwm loop
-		if (pwm->tick == pwm->loop)
-		{
-			pwm->tick = 0;
-		}
-		if (0 == pwm->tick)
-		{
-			pwm->led_state = GPIO_PIN_SET;
-			HAL_GPIO_WritePin(pwm->pin_array, pwm->pin, pwm->led_state);
-		}
-		if (pwm->period == pwm->tick)
-		{
-			pwm->led_state = GPIO_PIN_RESET;
-			HAL_GPIO_WritePin(pwm->pin_array, pwm->pin, pwm->led_state);
-		}
-		++pwm->tick;
-	}
+	PULSE_HandleTick(pwm->pulse_engine);
 	
 }
