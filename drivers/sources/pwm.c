@@ -1,11 +1,11 @@
 #include <main.h>
-#include "include/pwm.h"
+#include "include/led.h"
 #include "include/pulse_engine.h"
 #include <stdlib.h>
 
-// internal LED structure to hide pwm implementation from end user
+// internal LED structure to hide led implementation from end user
 // doh we cannot use classes, so will work with this
-typedef struct PWV_Internal_type
+typedef struct PED_Internal_type
 {
 	GPIO_TypeDef* pin_array;
 	uint16_t pin;
@@ -13,92 +13,92 @@ typedef struct PWV_Internal_type
 	HPULSE pulse_engine;
 	
 	GPIO_PinState led_state;
-} PWVInternal;
+} LED_Internal;
 
 // Pulse engine callbacks
-static void PWM_On_Callback(void* _pwm)
+static void LED__On_Callback(void* _led)
 {
-	PWMOn(_pwm);
+	LED_On(_led);
 }
 
-static void PWM_Off_Callback(void* _pwm)
+static void LED__Off_Callback(void* _led)
 {
-	PWMOff(_pwm);
+	LED_Off(_led);
 }
 
-// PWM body
-PWM* PWMConfigure(GPIO_TypeDef* pin_array, uint16_t pin)
+// LED_ body
+LED* LED_Configure(GPIO_TypeDef* pin_array, uint16_t pin)
 {
-	PWVInternal* pwm = DeviceAlloc(sizeof(PWVInternal));
+	LED_Internal* led = DeviceAlloc(sizeof(LED_Internal));
 	
-	// configure pin settings for pwm
-	pwm->pin_array = pin_array;
-	pwm->pin = pin;
+	// configure pin settings for led
+	led->pin_array = pin_array;
+	led->pin = pin;
 	
-	pwm->pulse_engine = PULSE_Configure(PWM_On_Callback, PWM_Off_Callback, pwm);
-	PULSE_SetPeriod(pwm->pulse_engine, 100);
+	led->pulse_engine = PULSE_Configure(LED__On_Callback, LED__Off_Callback, led);
+	PULSE_SetPeriod(led->pulse_engine, 100);
 	
-	pwm->led_state = GPIO_PIN_RESET;
-	HAL_GPIO_WritePin(pwm->pin_array, pwm->pin, pwm->led_state);
+	led->led_state = GPIO_PIN_RESET;
+	HAL_GPIO_WritePin(led->pin_array, led->pin, led->led_state);
 	
-	return (PWM*)pwm;
+	return (LED*)led;
 }
 
-void PWMRelease(PWM* _pwm)
+void LED_Release(LED* _led)
 {
-	PWVInternal* pwm = (PWVInternal*)_pwm;
-	DeviceFree(pwm);
+	LED_Internal* led = (LED_Internal*)_led;
+	DeviceFree(led);
 }
 
-void PWMOn(PWM* _pwm)
+void LED_On(LED* _led)
 {
-	PWVInternal* pwm = (PWVInternal*)_pwm;
+	LED_Internal* led = (LED_Internal*)_led;
 	
 	//TODO: not sure that setting power slower than check state with if...
 	//      need to confirm it with device experiment
-	if (GPIO_PIN_SET == pwm->led_state)
+	if (GPIO_PIN_SET == led->led_state)
 		return;
 	
-	pwm->led_state = GPIO_PIN_SET;
-	HAL_GPIO_WritePin(pwm->pin_array, pwm->pin, pwm->led_state);
+	led->led_state = GPIO_PIN_SET;
+	HAL_GPIO_WritePin(led->pin_array, led->pin, led->led_state);
 }
 
-void PWMOff(PWM* _pwm)
+void LED_Off(LED* _led)
 {
-	PWVInternal* pwm = (PWVInternal*)_pwm;
+	LED_Internal* led = (LED_Internal*)_led;
 	
 	//TODO: not sure that setting power slower than check state with if...
 	//      need to confirm it with device experiment
-	if (GPIO_PIN_RESET == pwm->led_state)
+	if (GPIO_PIN_RESET == led->led_state)
 		return;
 	
-	pwm->led_state = GPIO_PIN_RESET;
-	HAL_GPIO_WritePin(pwm->pin_array, pwm->pin, pwm->led_state);
+	led->led_state = GPIO_PIN_RESET;
+	HAL_GPIO_WritePin(led->pin_array, led->pin, led->led_state);
 }
 
-void PWMToggle(PWM* _pwm)
+void LED_Toggle(LED* _led)
 {
-	PWVInternal* pwm = (PWVInternal*)_pwm;
+	LED_Internal* led = (LED_Internal*)_led;
 	
-	pwm->led_state = pwm->led_state == GPIO_PIN_RESET ? GPIO_PIN_SET : GPIO_PIN_RESET;
-	HAL_GPIO_TogglePin(pwm->pin_array, pwm->pin);
+	led->led_state = led->led_state == GPIO_PIN_RESET ? GPIO_PIN_SET : GPIO_PIN_RESET;
+	HAL_GPIO_TogglePin(led->pin_array, led->pin);
 }
 
-GPIO_PinState PWMGetState(PWM* _pwm)
+GPIO_PinState LED_GetState(LED* _led)
 {
-	return ((PWVInternal*)_pwm)->led_state;
+	return ((LED_Internal*)_led)->led_state;
 }
 
-void PWMSetPower(PWM* _pwm, int power)
+void LED_SetPower(LED* _led, int power)
 {
-	PWVInternal* pwm = (PWVInternal*)_pwm;
-	PULSE_SetPower(pwm->pulse_engine, power);
+	LED_Internal* led = (LED_Internal*)_led;
+	PULSE_SetPower(led->pulse_engine, power);
 }
 
 // manage blinks period to emulate light period
-void PWMHandleTick(PWM* _pwm)
+void LED_HandleTick(LED* _led)
 {
-	PWVInternal* pwm = (PWVInternal*)_pwm;
-	PULSE_HandleTick(pwm->pulse_engine);
+	LED_Internal* led = (LED_Internal*)_led;
+	PULSE_HandleTick(led->pulse_engine);
 	
 }
