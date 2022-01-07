@@ -4,7 +4,7 @@ find_package(gtest)
 # set the project name
 set(SOURCES
     "tests.cpp"
-    "drivers/pmw.cpp"
+    "drivers/led.cpp"
     "drivers/pulse_engine.cpp"
     "device/device.cpp")
 # add sub-project
