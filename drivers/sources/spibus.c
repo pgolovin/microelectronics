@@ -20,7 +20,7 @@ typedef struct SPIBUS_Internal_type
 
 HSPIBUS SPIBUS_Configure(SPI_HandleTypeDef* hspi, uint32_t timeout)
 {
-    SPIBUS* spibus = malloc(sizeof(SPIBUS));
+    SPIBUS* spibus = DeviceAlloc(sizeof(SPIBUS));
     spibus->hspi = hspi;
     spibus->device_count = 0;
     spibus->timeout = timeout;
@@ -28,13 +28,19 @@ HSPIBUS SPIBUS_Configure(SPI_HandleTypeDef* hspi, uint32_t timeout)
     return (HSPIBUS)spibus;
 }
 
-uint8_t SPIBUS_AddPeripherialDevice(HSPIBUS hspi, GPIO_TypeDef* cs_port_array, uint16_t sc_port)
+void SPIBUS_Release(HSPIBUS hspi)
 {
     SPIBUS* spibus = (SPIBUS*)hspi;
-    if (spibus->device_count >= 10)
+    DeviceFree(spibus);
+}
+
+SPIBUS_Status SPIBUS_AddPeripherialDevice(HSPIBUS hspi, GPIO_TypeDef* cs_port_array, uint16_t sc_port)
+{
+    SPIBUS* spibus = (SPIBUS*)hspi;
+    if (spibus->device_count >= SPIBUS_DeviceLimit)
     {
         // means error;
-        return 0xFF;
+        return SPIBUS_FAIL;
     }
     spibus->devices[spibus->device_count].cs_port_array = cs_port_array;
     spibus->devices[spibus->device_count].sc_port = sc_port;
@@ -42,27 +48,29 @@ uint8_t SPIBUS_AddPeripherialDevice(HSPIBUS hspi, GPIO_TypeDef* cs_port_array, u
     return spibus->device_count++;
 }
 
-void SPIBUS_SelectDevice(HSPIBUS hspi, uint32_t id)
+SPIBUS_Status SPIBUS_SelectDevice(HSPIBUS hspi, uint32_t id)
 {
     SPIBUS* spibus = (SPIBUS*)hspi;
     if (id >= spibus->device_count)
     {
-        return;
+        return SPIBUS_FAIL;
     }
     SPIBUS_UnselectAll(hspi);
 	HAL_GPIO_WritePin(spibus->devices[id].cs_port_array, spibus->devices[id].sc_port, GPIO_PIN_RESET);
-}	
+    return id;
+}
 
-void SPIBUS_UnselectDevice(HSPIBUS hspi, uint32_t id)
+SPIBUS_Status SPIBUS_UnselectDevice(HSPIBUS hspi, uint32_t id)
 {
     SPIBUS* spibus = (SPIBUS*)hspi;
     if (id >= spibus->device_count)
     {
-        return;
+        return SPIBUS_FAIL;
     }
     
 	HAL_GPIO_WritePin(spibus->devices[id].cs_port_array, spibus->devices[id].sc_port, GPIO_PIN_SET);
-}	
+    return id;
+}
 
 void SPIBUS_UnselectAll(HSPIBUS hspi)
 {
