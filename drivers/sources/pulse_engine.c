@@ -12,8 +12,7 @@ typedef struct PulseInternal_type
 	uint32_t period;
 	uint32_t power;
 
-	uint32_t sub_period;
-	uint32_t sub_power;
+	uint32_t signal_tick;
 	uint32_t tick;
 
 } PulseInternal;
@@ -44,50 +43,51 @@ void PULSE_Release(HPULSE pulse)
 void PULSE_SetPeriod(HPULSE pulse, uint32_t period)
 {
 	PulseInternal* internal_pulse = (PulseInternal*)pulse;
-	internal_pulse->period = period < 1 ? 1 : period;
-	PULSE_SetPower(pulse, internal_pulse->power);
+	internal_pulse->period = period > 0 ? period : 1;
+	// Reset internal signal counters
+	internal_pulse->signal_tick = 0;
+	internal_pulse->tick = 0;
 }
 
 void PULSE_SetPower(HPULSE pulse, uint32_t power)
 {
 	PulseInternal* internal_pulse = (PulseInternal*)pulse;
 	internal_pulse->power = power;
-	if (power)
-	{
-		int divider = power;
-		for (; divider > 0; --divider)
-		{
-			if ((0 == power % divider) && (0 == 100 % divider))
-				break;
-		}
-		internal_pulse->sub_period = internal_pulse->period / divider;
-		internal_pulse->sub_power = power / divider;
-		// change power means restart loop
-		internal_pulse->tick = 0;
-	}
-	else
-	{
-		internal_pulse->sub_period = 0;
-	}
+	// Reset internal signal counters
+	internal_pulse->signal_tick = 0;
+	internal_pulse->tick = 0;
 }
 
 void PULSE_HandleTick(HPULSE pulse)
 {
 	PulseInternal* internal_pulse = (PulseInternal*)pulse;
 
-	// do not overflaw pwm loop
-	if (internal_pulse->tick == internal_pulse->sub_period)
+	// Calculate signal state
+	//
+	// n > 0
+	// on = (n + 1) * P / T, signal if on == prev + 1
+	//
+	// this gave us constant density across whole signal
+
+	++internal_pulse->tick;
+
+	uint32_t signal_tick = (internal_pulse->tick * internal_pulse->power) / internal_pulse->period;
+	if (signal_tick > internal_pulse->signal_tick)
 	{
-		internal_pulse->tick = 0;
-	}
-	if (internal_pulse->tick < internal_pulse->sub_power)
-	{
+		++internal_pulse->signal_tick;
 		internal_pulse->on(internal_pulse->parameter);
 	}
 	else
 	{
 		internal_pulse->off(internal_pulse->parameter);
 	}
-	++internal_pulse->tick;
+
+	// Zeroing valuese is not necessary here
+	// doing it to avoid any potential overflows.
+	if (internal_pulse->tick == internal_pulse->period)
+	{
+		internal_pulse->tick = 0;
+		internal_pulse->signal_tick = 0;
+	}
 }
 
