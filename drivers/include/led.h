@@ -12,16 +12,16 @@ typedef struct LED_type
     uint32_t id;
 } LED;
 
-LED* LEDConfigure(GPIO_TypeDef* pin_array, uint16_t pin);
-void LEDRelease(LED* led);
+LED* LED_Configure(GPIO_TypeDef* pin_array, uint16_t pin);
+void LED_Release(LED* led);
 
-void LEDOn(LED* led);
-void LEDOff(LED* led);
-void LEDToggle(LED* led);
-GPIO_PinState LEDGetState(LED* led);
+void LED_On(LED* led);
+void LED_Off(LED* led);
+void LED_Toggle(LED* led);
+GPIO_PinState LED_GetState(LED* led);
 
-void LEDSetPower(LED* led, int power);
-void LEDHandleTick(LED* led);
+void LED_SetPower(LED* led, int power);
+void LED_HandleTick(LED* led);
 
 #ifdef __cplusplus
 }
