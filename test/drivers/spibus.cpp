@@ -195,7 +195,7 @@ TEST_F(SPIBUS_DevicesTest, only_one_device_selected_at_a_time)
             ASSERT_EQ(device->GetPinState(port, pin).state, GPIO_PIN_SET);
         }
         else
-        {
+{
             ASSERT_EQ(device->GetPinState(port, pin).state, GPIO_PIN_RESET);
         }
     }
