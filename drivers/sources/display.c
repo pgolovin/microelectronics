@@ -15,8 +15,8 @@ typedef struct
 
 typedef struct DISPLAY_Internal_type
 {
-	// SD CARD protocol
-	HSPIBUS hspi;
+    // DISPLAY protocol
+    HSPIBUS hspi;
     uint8_t spi_id;
     // SPI 4 data/commands select protocol pin
     GPIO_TypeDef* ds_port_array;
@@ -24,15 +24,14 @@ typedef struct DISPLAY_Internal_type
     // ILI9341 HW reset pin
     GPIO_TypeDef* reset_port_array;
     uint16_t reset_port;
-    
-	bool initialized;
-    
+
+    bool initialized;
+
     Rect               text_area;
     CharacterPlacement c_placement;
-    
+
     uint16_t font_color;
     uint16_t background_color;
-	
 } DISPLAY;
 
 enum DISPLAY_FORMAT
@@ -40,7 +39,7 @@ enum DISPLAY_FORMAT
     MADCTL_RGB = 0x00,
     MADCTL_MH  = 0x04,
     MADCTL_BGR = 0x08,
-    
+
     MADCTL_ML  = 0x10,
     MADCTL_MV  = 0x20,
     MADCTL_MX  = 0x40,
@@ -332,23 +331,23 @@ DISPLAY_Status DISPLAY_Init(HDISPLAY hdisplay)
             return AbortProcedure(display, DISPLAY_FAILURE);
         }
     }
-     
+
     if (HAL_OK != SendCommand(display, CMD_EXIT_SLEEP))
     {
         return AbortProcedure(display, DISPLAY_FAILURE);
     }
-    
+
     HAL_Delay(120);
-    
+
     if (HAL_OK != SendCommand(display, CMD_TURN_ON_DISPLAY))
     {
         return AbortProcedure(display, DISPLAY_FAILURE);
     }
-    
+
     HAL_Delay(120);
-    
+
     SPIBUS_UnselectAll(display->hspi);
-    
+
     ResetDisplaySettings(display);
     display->initialized = true;
 

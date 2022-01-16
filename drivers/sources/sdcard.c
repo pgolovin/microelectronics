@@ -18,6 +18,8 @@ typedef struct SDCARD_Internal_type
 #define FAT_DRIVES 10
 static HSDCARD s_fat_drives[FAT_DRIVES] = {0};
 
+#define INVERT_INT(buffer) buffer[0] << 24 | buffer[1] << 16 | buffer[2] << 8 | buffer[3]
+
 // list of sdcard commands supported by V2 SDCARD protocol
 // http://chlazza.nfshost.com/sdcardinfo.html
 enum SDCARD_Commands
@@ -245,7 +247,7 @@ static size_t WriteSingleDataChunk(SDCARD* sdcard, uint8_t token, const uint8_t*
     {
         /*
             010 - Data accepted
-      101 - Data rejected due to CRC error
+            101 - Data rejected due to CRC error
             110 - Data rejected due to write error
         */
         return 0;
@@ -261,14 +263,14 @@ static ReturnValueR1 SendCommand(SDCARD* sdcard, uint8_t command, uint32_t param
     uint8_t crc = 0x00;
     switch (command)
     {
-        case GO_IDLE_STATE: crc = 0x4A;    break;
+        case GO_IDLE_STATE:    crc = 0x4A; break;
         case SEND_IF_COND:     crc = 0x43; break;
         case SEND_OP_COND:     crc = 0xF9; break;
         case READ_OCR:         crc = 0x25; break;
         case SEND_CSD:         crc = 0xAF; break;
         case SET_BLOCKLEN:
         case WRITE_BLOCK:
-        case WRITE_MULTIPLE_BLOCK:    
+        case WRITE_MULTIPLE_BLOCK:
             crc = 0xFF; 
         break;
         default:
@@ -346,7 +348,7 @@ SDCARD_Status SDCARD_Init(HSDCARD hsdcard)
     // one Transmission op requires 8 clocks from SD card, so 10 is enougth
     
     SPIBUS_UnselectAll(sdcard->hspi);
-    uint8_t transmission_guard = 0xFF;    
+    uint8_t transmission_guard = 0xFF;
     for(uint32_t i = 0; i < 10; ++i)
     {
         SPIBUS_Transmit(sdcard->hspi, &transmission_guard, sizeof(transmission_guard));
@@ -376,7 +378,7 @@ SDCARD_Status SDCARD_Init(HSDCARD hsdcard)
     // otherwise this card is not HC/XC, and should be rejected
     uint8_t buffer[4] = {0x0};
     status = ReadData(sdcard, buffer, sizeof(buffer));
-    uint32_t respond = buffer[0] << 24 | buffer[1] << 16 | buffer[2] << 8 | buffer[3];
+    uint32_t respond = INVERT_INT(buffer);
     if (status != HAL_OK || (respond & 0x0000FFFF) != 0x000001AA)
     {
         return AbortProcedure(sdcard, SDCARD_NOT_SUPPORTED);
@@ -418,7 +420,7 @@ SDCARD_Status SDCARD_Init(HSDCARD hsdcard)
     //   bit 31: is set to 1, that means that card is powered up
     status = ReadData(sdcard, buffer, sizeof(buffer));
     
-    respond = buffer[0] << 24 | buffer[1] << 16 | buffer[2] << 8 | buffer[3];
+    respond = INVERT_INT(buffer);
     if (status != HAL_OK || (respond & 0xFF000000) != 0xC0000000)
     {
         return AbortProcedure(sdcard, SDCARD_NOT_SUPPORTED);
@@ -450,7 +452,7 @@ SDCARD_Status SDCARD_IsInitialized(HSDCARD hsdcard)
     // todo replace all timeouts to a setting for driver;
     uint8_t buffer[4] = {0x0};
     uint16_t status = ReadData(sdcard, buffer, sizeof(buffer));
-    uint32_t respond = buffer[0] << 24 | buffer[1] << 16 | buffer[2] << 8 | buffer[3];
+    uint32_t respond = INVERT_INT(buffer);
     if (status != HAL_OK || (respond & 0xFF000000) != 0xC0000000)
     {
         return AbortProcedure(sdcard, SDCARD_NOT_READY);
@@ -510,7 +512,7 @@ SDCARD_Status SDCARD_ReadBlocksNumber(HSDCARD hsdcard)
         }
     }
     sdcard->block_size = 512;
-    
+
     //  ref: https://docs-emea.rs-online.com/webdocs/1111/0900766b811118fa.pdf
     //    memory capacity = (C_SIZE+1) * 512K
     
@@ -598,7 +600,7 @@ SDCARD_Status SDCARD_Read(HSDCARD hsdcard,  uint8_t *buffer, uint32_t sector, ui
             return AbortProcedure(sdcard, SDCARD_CARD_FAILURE);
         }
     }
-    
+
     //Stop transmission is R1b command
     uint8_t r1b = 0;
     return_value = SendCommand(sdcard, STOP_TRANSMISSION, 0, &r1b);
@@ -606,7 +608,7 @@ SDCARD_Status SDCARD_Read(HSDCARD hsdcard,  uint8_t *buffer, uint32_t sector, ui
     {
         return AbortProcedure(sdcard, SDCARD_CARD_FAILURE);
     }
-    
+
     SPIBUS_UnselectDevice(sdcard->hspi, sdcard->spi_id);
     
     return SDCARD_OK;
@@ -621,7 +623,7 @@ SDCARD_Status SDCARD_WriteSingleBlock(HSDCARD hsdcard, const uint8_t *data, uint
         return SDCARD_INCORRECT_STATE;
     }
     SPIBUS_SelectDevice(sdcard->hspi, sdcard->spi_id);
-    
+
     // send command to card that next transmission is the data to write
     ReturnValueR1 return_value = {0xff, HAL_OK};
     return_value = SendCommand(sdcard, WRITE_BLOCK, sector, 0);
@@ -629,7 +631,7 @@ SDCARD_Status SDCARD_WriteSingleBlock(HSDCARD hsdcard, const uint8_t *data, uint
     {
         return AbortProcedure(sdcard, SDCARD_CARD_FAILURE);
     }
-    
+
     // Write single block of data to the SD card
     uint8_t respond = 0;
     size_t bites_written = WriteSingleDataChunk(sdcard, COMMAND_TOKEN_WRITE_BLOCK, data, sdcard->block_size, &respond);
@@ -637,7 +639,7 @@ SDCARD_Status SDCARD_WriteSingleBlock(HSDCARD hsdcard, const uint8_t *data, uint
     {
         return AbortProcedure(sdcard, ((respond & 0x1F) != 5) ? SDCARD_WRITE_REJECTED : SDCARD_CARD_FAILURE);
     }
-    
+
     SPIBUS_UnselectDevice(sdcard->hspi, sdcard->spi_id);
     return SDCARD_OK;
 }
@@ -652,7 +654,7 @@ size_t SDCARD_Write(HSDCARD hsdcard, const uint8_t *buffer, uint32_t sector, uin
         return 0;
     }
     SPIBUS_SelectDevice(sdcard->hspi, sdcard->spi_id);
-    
+
     // To start writing multiple blocks of data send the Write Multiple data command
     ReturnValueR1 return_value = {0xff, HAL_OK};
     return_value = SendCommand(sdcard, WRITE_MULTIPLE_BLOCK, sector, 0);  
@@ -678,7 +680,7 @@ size_t SDCARD_Write(HSDCARD hsdcard, const uint8_t *buffer, uint32_t sector, uin
         data_written += bites_written;
         buffer += bites_written;
     }
-    
+
     // stop writting data by sending STOP_WRITE_MULTIPLE_BLOCK data token
     uint8_t stop_transaction = COMMAND_TOKEN_STOP_WRITE_MULTIPLE_BLOCK;
     return_value.command_status = SPIBUS_Transmit(sdcard->hspi, &stop_transaction, 1);
@@ -686,14 +688,14 @@ size_t SDCARD_Write(HSDCARD hsdcard, const uint8_t *buffer, uint32_t sector, uin
     {
         return AbortTransmission(sdcard, data_written);
     }
-    
+
     uint8_t busy_byte = 0;
     return_value.command_status = ReadData(sdcard, &busy_byte, 1);
     if (return_value.command_status != HAL_OK)
     {
         return AbortTransmission(sdcard, data_written);
     }
-    
+
     return_value.command_status = WaitReady(sdcard);
     SPIBUS_UnselectDevice(sdcard->hspi, sdcard->spi_id);
     sdcard->initialized = (return_value.command_status == HAL_OK);

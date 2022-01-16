@@ -2,12 +2,14 @@
 set(HEADERS
     "include/led.h"
     "include/sdcard.h"
+    "include/display.h"
     "include/spibus.h"
     "include/pulse_engine.h")
 
 set(SOURCES
     "sources/led.c"
     "sources/sdcard.c"
+    "sources/display.c"
     "sources/spibus.c"
     "sources/pulse_engine.c")
 
