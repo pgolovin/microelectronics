@@ -145,6 +145,18 @@ static HAL_StatusTypeDef WriteData(DISPLAY* display, uint8_t* data, size_t size)
     return status;
 }
 
+static HAL_StatusTypeDef WriteDataDMA(DISPLAY* display, uint8_t* data, size_t line_size, size_t lines_count)
+{
+    // switch Display to data receiveing mode by setting high to DC port
+    HAL_GPIO_WritePin(display->ds_port_array, display->ds_port, GPIO_PIN_SET);
+    
+    HAL_StatusTypeDef status = HAL_OK;
+    
+    status = SPIBUS_TransmitDMA(display->hspi, data, line_size, lines_count);
+    
+    return status;
+}
+
 static HAL_StatusTypeDef SendCommandWithParameters(DISPLAY* display, uint8_t command, uint8_t* parameters, size_t size)
 {
     HAL_StatusTypeDef status = HAL_OK;
@@ -273,14 +285,13 @@ HDISPLAY DISPLAY_Configure(const DisplayConfig* config)
     
     display->reset_port_array = config->reset_port_array;
     display->reset_port = config->reset_port;
-		
+    
 	display->initialized = false;
 
 	return (HDISPLAY)display;
 }
 
-// Initialize SD card.
-// according to SD CARD protocol: http://elm-chan.org/docs/mmc/mmc_e.html#spiinit
+// Initialize display
 DISPLAY_Status DISPLAY_Init(HDISPLAY hdisplay)
 {
 	DISPLAY* display = (DISPLAY*)hdisplay;
