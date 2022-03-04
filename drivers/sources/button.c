@@ -22,7 +22,7 @@ Button* BtnConfigure(GPIO_TypeDef* pin_array, uint16_t pin)
 	btn->pin = pin;
 	btn->state_changed = false;
 	
-	ConfigureInputPin(btn->pin_array, btn->pin, GPIO_PULLUP);
+//	ConfigureInputPin(btn->pin_array, btn->pin, GPIO_PULLUP);
 	
 	btn->state = (GPIO_PIN_SET == HAL_GPIO_ReadPin(btn->pin_array, btn->pin));
 	
