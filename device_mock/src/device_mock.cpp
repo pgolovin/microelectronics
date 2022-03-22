@@ -5,6 +5,10 @@ Device::Device(const DeviceSettings& settings)
 {
     m_heap.resize(settings.available_heap);
     m_ports.resize(settings.ports_count);
+    for (auto& adc : m_adc)
+    {
+        adc = 0;
+    }
 }
 
 size_t Device::GetAvailableMemory() const
@@ -69,6 +73,11 @@ GPIO_PinState Device::TogglePin(size_t port, uint16_t pin)
     }
     ++pin_state.gpio_signals;
     return m_ports[port].pins[pin].state;
+}
+
+int Device::ADC_GetValue(ADC_HandleTypeDef* adc)
+{
+    return m_adc[*adc];
 }
 
 void Device::ResetPinGPIOCounters(GPIO_TypeDef port, uint16_t pin)

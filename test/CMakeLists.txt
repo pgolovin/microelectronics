@@ -7,6 +7,7 @@ set(SOURCES
     "drivers/led.cpp"
     "drivers/pulse_engine.cpp"
     "drivers/spibus.cpp"
+    "drivers/equalizer.cpp"
     "device/device.cpp")
 # add sub-project
 add_executable(driver_tests ${SOURCES})

@@ -47,8 +47,12 @@ public:
     void* AllocateObject(size_t object_size);
     size_t GetAvailableMemory() const;
 
+    // single pin emulation
     void WritePin(GPIO_TypeDef port, uint16_t pin, GPIO_PinState state);
     GPIO_PinState TogglePin(GPIO_TypeDef port, uint16_t pin);
+
+    // adc emulation
+    int ADC_GetValue(ADC_HandleTypeDef* adc);
 
     // Diagnostics funtions. 
     void ResetPinGPIOCounters(GPIO_TypeDef port, uint16_t pin);
@@ -68,6 +72,7 @@ private:
         std::array<PinState, 16> pins;
     };
     std::vector<Port> m_ports;
+    std::array<int, 3> m_adc; // values on ADCs
 
 // no defaults, no copy
     Device() = delete;

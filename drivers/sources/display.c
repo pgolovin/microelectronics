@@ -145,18 +145,6 @@ static HAL_StatusTypeDef WriteData(DISPLAY* display, uint8_t* data, size_t size)
     return status;
 }
 
-static HAL_StatusTypeDef WriteDataDMA(DISPLAY* display, uint8_t* data, size_t line_size, size_t lines_count)
-{
-    // switch Display to data receiveing mode by setting high to DC port
-    HAL_GPIO_WritePin(display->ds_port_array, display->ds_port, GPIO_PIN_SET);
-    
-    HAL_StatusTypeDef status = HAL_OK;
-    
-    status = SPIBUS_TransmitDMA(display->hspi, data, line_size, lines_count);
-    
-    return status;
-}
-
 static HAL_StatusTypeDef SendCommandWithParameters(DISPLAY* display, uint8_t command, uint8_t* parameters, size_t size)
 {
     HAL_StatusTypeDef status = HAL_OK;
@@ -428,7 +416,7 @@ DISPLAY_Status DISPLAY_FillRect(HDISPLAY hdisplay, Rect rectangle, uint16_t colo
 	}
   
     uint16_t line_width = rectangle.x1 - rectangle.x0;
-    uint8_t lines_count = rectangle.y1 - rectangle.y0;
+    uint16_t lines_count = rectangle.y1 - rectangle.y0;
     
     // draw line by line
     uint16_t display_line[320];
