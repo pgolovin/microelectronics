@@ -32,6 +32,20 @@ GPIO_PinState HAL_GPIO_TogglePin(GPIO_TypeDef* port, uint16_t pin)
     return GPIO_PIN_RESET;
 }
 
+int HAL_ADC_GetValue(ADC_HandleTypeDef* adc)
+{
+    if (g_device)
+    {
+        return g_device->ADC_GetValue(adc);
+    }
+    return 0;
+}
+
+void HAL_Delay(int)
+{
+
+}
+
 void* DeviceAlloc(size_t object_size)
 {
     if (g_device)

@@ -96,6 +96,7 @@ HAL_StatusTypeDef SPIBUS_Transmit(HSPIBUS hspi, uint8_t* transmit_data, size_t s
     return HAL_SPI_Transmit(spibus->hspi, transmit_data, size, spibus->timeout);
 }
 
+/*
 HAL_StatusTypeDef SPIBUS_TransmitDMA(HSPIBUS hspi, uint8_t* transmit_data, size_t size, size_t lines_count)
 {
     SPIBUS* spibus = (SPIBUS*)hspi;
@@ -144,6 +145,7 @@ HAL_StatusTypeDef SPIBUS_CallbackDMA(HSPIBUS hspi)
     }
     return status;
 }
+*/
 
 HAL_StatusTypeDef SPIBUS_TransmitReceive(HSPIBUS hspi, uint8_t* transmit_data, uint8_t* receive_data, size_t size)
 {

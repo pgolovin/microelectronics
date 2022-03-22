@@ -17,6 +17,7 @@
 
 struct DISPLAY_type
 {
+    uint32_t id;
 };
 typedef struct DISPLAY_type * HDISPLAY;
 
