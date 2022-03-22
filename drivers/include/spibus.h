@@ -35,9 +35,10 @@ void SPIBUS_UnselectAll(HSPIBUS hspi);
 // fasade on HAL_SPI functions to hide internal implementation of SPIBUS 'class'
 HAL_StatusTypeDef SPIBUS_SetValue(HSPIBUS hspi, uint8_t* transmit_data, size_t size);
 HAL_StatusTypeDef SPIBUS_Transmit(HSPIBUS hspi, uint8_t* transmit_data, size_t size);
-HAL_StatusTypeDef SPIBUS_TransmitDMA(HSPIBUS hspi, uint8_t* transmit_data, size_t size, size_t lines_count);
 HAL_StatusTypeDef SPIBUS_TransmitReceive(HSPIBUS hspi, uint8_t* transmit_data, uint8_t* receive_data, size_t size);
 
+//TODO: understand why DMA was not working with the display
+HAL_StatusTypeDef SPIBUS_TransmitDMA(HSPIBUS hspi, uint8_t* transmit_data, size_t size, size_t lines_count);
 HAL_StatusTypeDef SPIBUS_CallbackDMA(HSPIBUS hspi);
 
 #ifdef __cplusplus
