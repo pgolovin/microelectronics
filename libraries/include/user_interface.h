@@ -6,21 +6,25 @@
 
 struct UI_type
 {
+    uint32_t id;
 };
 typedef struct UI_type * UI;
 
 struct Frame_type
 {
+    uint32_t id;
 };
 typedef struct Frame_type * HFrame;
 
 struct Indicator_type
 {
+    uint32_t id;
 };
 typedef struct Indicator_type * HIndicator;
 
 struct Button_type
 {
+    uint32_t id;
 };
 typedef struct Button_type * HButton;
 

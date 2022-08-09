@@ -27,6 +27,31 @@ enum TOUCH_Commands_Rotated
 	READ_Y = 0xD0
 };
 
+static uint16_t GetRawPosition(TOUCH* touch, uint8_t command, uint8_t samples, uint16_t min, uint16_t max, uint16_t scale)
+{
+    uint8_t position[2];
+    uint8_t receive_guard[2] = {0,0};
+    uint16_t sample = 0;
+    
+    SPIBUS_SelectDevice(touch->hspi, touch->spi_id);
+
+    HAL_StatusTypeDef status = SPIBUS_Transmit(touch->hspi, &command, 1);
+    if (status != HAL_OK)
+    {
+        return 0xFFFF;
+    }
+    status = SPIBUS_TransmitReceive(touch->hspi, receive_guard, position, sizeof(position));
+    if (status != HAL_OK)
+    {
+        return 0xFFFF;
+    }
+    sample = ((uint16_t)position[0] << 8) | position[1];
+       
+    SPIBUS_UnselectDevice(touch->hspi, touch->spi_id);
+       
+    return sample;
+}
+
 static uint16_t GetPosition(TOUCH* touch, uint8_t command, uint8_t samples, uint16_t min, uint16_t max, uint16_t scale)
 {
     uint32_t raw_result = 0;
@@ -104,4 +129,24 @@ uint16_t TOUCH_GetY(HTOUCH htouch)
         return 0xFFFF;
     }
     return GetPosition(touch, READ_Y, 16, Y_VOLTAGE_MIN, Y_VOLTAGE_MAX, SCREEN_HEIGH);
+}
+
+uint16_t TOUCH_GetRawX(HTOUCH htouch)
+{
+    TOUCH* touch = (TOUCH*)htouch;
+    if (!TOUCH_Pressed(htouch))
+    {
+        return 0xFFFF;
+    }
+    return GetRawPosition(touch, READ_X, 16, X_VOLTAGE_MIN, X_VOLTAGE_MAX, SCREEN_WIDTH);    
+}
+
+uint16_t TOUCH_GetRawY(HTOUCH htouch)
+{
+    TOUCH* touch = (TOUCH*)htouch;
+    if (!TOUCH_Pressed(htouch))
+    {
+        return 0xFFFF;
+    }
+    return GetRawPosition(touch, READ_Y, 16, Y_VOLTAGE_MIN, Y_VOLTAGE_MAX, SCREEN_HEIGH);
 }

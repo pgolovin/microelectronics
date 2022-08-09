@@ -12,9 +12,10 @@ protected:
 
     std::unique_ptr<Device> device;
 
-    int16_t increment = 0;
-    int16_t decrement = 0;
-    int16_t current_t = 100;
+    uint16_t increment = 0;
+    uint16_t decrement = 0;
+    uint16_t current_t = 100;
+    uint16_t done_count = 0;
 
     virtual void SetUp()
     {
@@ -39,6 +40,11 @@ protected:
         EqualizerBasicTest* test = static_cast<EqualizerBasicTest*>(param);
         test->current_t -= test->decrement;
     };
+    static void done(void* param)
+    {
+        EqualizerBasicTest* test = static_cast<EqualizerBasicTest*>(param);
+        ++test->done_count;
+    }
 };
 
 TEST_F(EqualizerBasicTest, cannot_create_equalizer_wo_config)
@@ -49,23 +55,102 @@ TEST_F(EqualizerBasicTest, cannot_create_equalizer_wo_config)
 
 TEST_F(EqualizerBasicTest, cannot_create_equalizer_wo_pulse_on)
 {
-    EqualizerConfig config = { 0, nullptr, off };
+    EqualizerConfig config = { 0, nullptr, off, nullptr };
     HEQUALIZER eq = EQ_Configure(&config);
     ASSERT_TRUE(eq == nullptr);
 }
 
 TEST_F(EqualizerBasicTest, cannot_create_equalizer_wo_pulse_off)
 {
-    EqualizerConfig config = { 0, on, nullptr };
+    EqualizerConfig config = { 0, on, nullptr, nullptr };
     HEQUALIZER eq = EQ_Configure(&config);
     ASSERT_TRUE(eq == nullptr);
 }
 
 TEST_F(EqualizerBasicTest, can_create_equalizer)
 {
-    EqualizerConfig config = { 0, on, off };
+    EqualizerConfig config = { 0, on, off, done };
     HEQUALIZER eq = EQ_Configure(&config);
     ASSERT_TRUE(eq != nullptr);
+}
+
+TEST_F(EqualizerBasicTest, reaching_value_up)
+{
+    increment = 1;
+    decrement = 1;
+    current_t = 0;
+    EqualizerConfig config = { 100, on, off, done, this };
+    HEQUALIZER eq = EQ_Configure(&config);
+
+    for (uint32_t i = 0; i < 200; ++i)
+    {
+        EQ_HandleTick(eq, current_t);
+    }
+    ASSERT_EQ(100, current_t);
+}
+
+TEST_F(EqualizerBasicTest, reaching_value_down)
+{
+    increment = 1;
+    decrement = 1;
+    current_t = 100;
+    EqualizerConfig config = { 10, on, off, done, this };
+    HEQUALIZER eq = EQ_Configure(&config);
+
+    for (uint32_t i = 0; i < 200; ++i)
+    {
+        EQ_HandleTick(eq, current_t);
+    }
+
+    ASSERT_EQ(10, current_t);
+}
+
+TEST_F(EqualizerBasicTest, callback_called_up)
+{
+    increment = 1;
+    decrement = 1;
+    current_t = 0;
+    EqualizerConfig config = { 100, on, off, done, this };
+    HEQUALIZER eq = EQ_Configure(&config);
+
+    for (uint32_t i = 0; i < 200; ++i)
+    {
+        EQ_HandleTick(eq, current_t);
+    }
+
+    ASSERT_EQ(1, done_count);
+}
+
+TEST_F(EqualizerBasicTest, callback_called_down)
+{
+    increment = 1;
+    decrement = 1;
+    current_t = 100;
+    EqualizerConfig config = { 10, on, off, done, this };
+    HEQUALIZER eq = EQ_Configure(&config);
+
+    for (uint32_t i = 0; i < 200; ++i)
+    {
+        EQ_HandleTick(eq, current_t);
+    }
+
+    ASSERT_EQ(1, done_count);
+}
+
+TEST_F(EqualizerBasicTest, callback_called_once)
+{
+    increment = 1;
+    decrement = 10;
+    current_t = 0;
+    EqualizerConfig config = { 100, on, off, done, this };
+    HEQUALIZER eq = EQ_Configure(&config);
+
+    for (uint32_t i = 0; i < 200; ++i)
+    {
+        EQ_HandleTick(eq, current_t);
+    }
+
+    ASSERT_EQ(1, done_count);
 }
 
 struct EqualizerParams
@@ -111,7 +196,7 @@ protected:
         current_value = params.initial_t;
         trend_value = params.initial_t;
 
-        EqualizerConfig config = { params.target_t, on, off, this };
+        EqualizerConfig config = { params.target_t, on, off, nullptr, this };
         eq = EQ_Configure(&config);
     }
 

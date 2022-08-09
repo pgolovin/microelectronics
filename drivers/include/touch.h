@@ -12,9 +12,10 @@
   CRCPolynomial = 10;
 */
 
-struct TOUCH_type
+typedef struct TOUCH_T
 {
-};
+    uint32_t id;
+} TOUCH_type;
 typedef struct TOUCH_type * HTOUCH;
 
 typedef struct 
@@ -35,6 +36,9 @@ bool TOUCH_Pressed(HTOUCH htouch);
 
 uint16_t TOUCH_GetX(HTOUCH htouch);
 uint16_t TOUCH_GetY(HTOUCH htouch);
+
+uint16_t TOUCH_GetRawX(HTOUCH htouch);
+uint16_t TOUCH_GetRawY(HTOUCH htouch);
 
 
 #endif //__TOUCH__

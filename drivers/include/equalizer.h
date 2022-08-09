@@ -20,15 +20,18 @@ typedef struct
 
     pulse_callback *increment;
     pulse_callback *decrement;
+    pulse_callback *onValueReached;
     void *parameter;
 
 } EqualizerConfig;
 
-HEQUALIZER EQ_Configure(EqualizerConfig* config);
-void    EQ_Release(HEQUALIZER equalizer);
-void    EQ_Reset(EqualizerConfig* config);
+HEQUALIZER  EQ_Configure(EqualizerConfig* config);
+void        EQ_Release(HEQUALIZER equalizer);
+void        EQ_Reset(EqualizerConfig* config);
+void        EQ_SetTargetValue(HEQUALIZER equalizer, uint16_t value);
+uint16_t    EQ_GetTargetValue(HEQUALIZER equalizer);
 
-void    EQ_HandleTick(HEQUALIZER eq, uint16_t value);
+void        EQ_HandleTick(HEQUALIZER equalizer, uint16_t value);
 
 #ifdef __cplusplus
 }

@@ -66,11 +66,11 @@ enum SDCARD_Application_Commands
 enum SDCARD_Command_Tokens
 {
     COMMAND_TOKEN_WRITE_MULTIPLE_BLOCK         = 0xFC,
-    COMMAND_TOKEN_STOP_WRITE_MULTIPLE_BLOCK = 0xFD,
-    COMMAND_TOKEN_SEND_CSD                  = 0xFE,
-    COMMAND_TOKEN_READ_SINGLE_BLOCK         = 0xFE,
-    COMMAND_TOKEN_READ_MULTIPLE_BLOCK         = 0xFE,
-    COMMAND_TOKEN_WRITE_BLOCK                 = 0xFE,
+    COMMAND_TOKEN_STOP_WRITE_MULTIPLE_BLOCK    = 0xFD,
+    COMMAND_TOKEN_SEND_CSD                     = 0xFE,
+    COMMAND_TOKEN_READ_SINGLE_BLOCK            = 0xFE,
+    COMMAND_TOKEN_READ_MULTIPLE_BLOCK          = 0xFE,
+    COMMAND_TOKEN_WRITE_BLOCK                  = 0xFE,
 };
 
 // private functions
