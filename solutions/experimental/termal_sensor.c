@@ -6,6 +6,7 @@
 #include "include/display.h"
 #include "include/touch.h"
 #include "include/user_interface.h"
+#include "include/gcode.h"
 #include "ff.h"
 #include "diskio.h"
 
@@ -62,6 +63,7 @@ typedef struct
     HSDCARD ram;
     bool ram_state;
 
+    HGCODE      gcode;
     UI ui;
     HIndicator  sdcard_indicator;
     HIndicator  ram_indicator;
@@ -622,6 +624,10 @@ HEXPERIMENTAL EXPERIMENTAL_Configure(SPI_HandleTypeDef* hspi, SPI_HandleTypeDef*
         (void*)exp
     };
     exp->table.equlizer = EQ_Configure(&table_eq_config);
+    
+    GCodeAxisConfig cfg = {100, 100, 100, 100};
+    exp->gcode = GC_Configure(&cfg);
+    GC_ParseCommand(exp->gcode, "G0 X100 Y20 F6400 Z0.1");
     
     exp->timer_value = 0;
     exp->timer_updated = false;
