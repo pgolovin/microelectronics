@@ -17,7 +17,7 @@ typedef enum  GCODE_COMMAND_TYPE_Type
 typedef enum GCODE_ERROR_Type
 {
     GCODE_OK_COMMAND_CREATED = 0,
-    GCODE_OK_NO_VALID_DATA, // comment or empty line
+    GCODE_OK_NO_COMMAND, // comment or empty line
     GCODE_ERROR_UNKNOWN_PARAM,
     GCODE_ERROR_UNKNOWN_COMMAND,
     GCODE_ERROR_UNKNOWN,

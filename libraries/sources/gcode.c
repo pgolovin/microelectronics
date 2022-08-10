@@ -168,7 +168,7 @@ GCODE_ERROR GC_ParseCommand(HGCODE hcode, char* command_line)
 {
     GCode* gcode = (GCode*)hcode;
     
-    GCODE_ERROR result = GCODE_OK_NO_VALID_DATA;
+    GCODE_ERROR result = GCODE_OK_NO_COMMAND;
     GCodeCommand cmd = gcode->command;
 
     command_line = trimSpaces(command_line);
@@ -193,7 +193,7 @@ GCODE_ERROR GC_ParseCommand(HGCODE hcode, char* command_line)
         break;
     case ';':
     case 0:
-        result = GCODE_OK_NO_VALID_DATA;
+        result = GCODE_OK_NO_COMMAND;
         break;
     default:
         result = GCODE_ERROR_UNKNOWN_COMMAND; 
