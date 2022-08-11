@@ -628,6 +628,8 @@ HEXPERIMENTAL EXPERIMENTAL_Configure(SPI_HandleTypeDef* hspi, SPI_HandleTypeDef*
     GCodeAxisConfig cfg = {100, 100, 100, 100};
     exp->gcode = GC_Configure(&cfg);
     GC_ParseCommand(exp->gcode, "G0 X100 Y20 F6400 Z0.1");
+    uint8_t buffer[GCODE_CHUNK_SIZE];
+    GC_CompressCommand(exp->gcode, buffer);
     
     exp->timer_value = 0;
     exp->timer_updated = false;

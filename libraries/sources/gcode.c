@@ -233,3 +233,70 @@ GCodeSubCommandParams* GC_GetCurrentSubCommand(HGCODE hcode)
     }
     return 0;
 }
+
+uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
+{
+    GCode* gcode = (GCode*)hcode;
+    if (GCODE_COMMAND_NOOP == gcode->command.code)
+    {
+        return 0;
+    }
+
+    if (gcode->command.code & GCODE_COMMAND)
+    {
+        // current implementation supports necessary commands only. 
+        // Absolute mode is used and cannot be overrided
+        // Metric coordinates are suported
+        uint16_t index = GCODE_MOVE;
+        switch (gcode->command.code & 0x00FF)
+        {
+        case 0:
+        case 1:
+            index = GCODE_MOVE;
+            break;
+        case 28:
+            index = GCODE_HOME;
+            break;
+        case 92:
+            index = GCODE_SET;
+            break;
+        default:
+            //G90 and G21 are ignored
+            return 0;
+        }
+        *(GCodeCommandParams*)(buffer + sizeof(uint16_t)) = gcode->command.g;
+        *(uint16_t*)buffer = GCODE_COMMAND | index;
+    }
+    else if (gcode->command.code & GCODE_SUBCOMMAND)
+    {
+        uint16_t index = GCODE_SET_NOZZLE_TEMPERATURE;
+        switch (gcode->command.code & 0x00FF)
+        {
+        case 104:
+            index = GCODE_SET_NOZZLE_TEMPERATURE;
+            break;
+        case 106:
+            index = GCODE_SET_COOLER_SPEED;
+            break;
+        case 107:
+            index = GCODE_DISABLE_COOLER;
+            break;
+        case 109:
+            index = GCODE_WAIT_NOZZLE;
+            break;
+        case 140:
+            index = GCODE_SET_TABLE_TEMPERATURE;
+            break;
+        case 190:
+            index = GCODE_WAIT_TABLE;
+            break;
+        
+        default:
+            //others are just ignored
+            return 0;
+        }
+        *(GCodeSubCommandParams*)(buffer + sizeof(uint16_t)) = gcode->command.m;
+        *(uint16_t*)buffer = GCODE_SUBCOMMAND | index;
+    }
+    return GCODE_CHUNK_SIZE;
+}

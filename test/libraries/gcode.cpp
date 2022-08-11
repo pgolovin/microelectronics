@@ -154,6 +154,12 @@ TEST_F(GCodeParserTest, command_G_rejects_M_params)
     ASSERT_EQ((int)GCODE_ERROR_UNKNOWN_PARAM, (int)GC_ParseCommand(code, const_cast<char*>(command.c_str())));
 }
 
+TEST_F(GCodeParserTest, compress_nothing)
+{
+    ASSERT_EQ(0U, GC_CompressCommand(code, nullptr));
+}
+
+
 class GCodeParserCommandTest : public ::testing::Test
 {
 protected:
@@ -425,6 +431,124 @@ TEST_F(GCodeParserSubCommandTest, comman_G_doesnt_override_M_state)
     ASSERT_EQ(4, m->r);
 }
 
+class GCodeCompilerTest : public ::testing::Test
+{
+protected:
+    std::unique_ptr<Device> device;
+    HGCODE code = nullptr;
+    GCodeAxisConfig cfg = { 100, 101, 100, 100 };
+
+    std::string secondary_command = "G1 X-1.45 Z+0.3 E-1.11";
+
+    virtual void SetUp()
+    {
+        DeviceSettings ds;
+        device = std::make_unique<Device>(ds);
+        AttachDevice(*device);
+
+        code = GC_Configure(&cfg);
+
+        std::string command = "G1 F6200 X2.45 Y1.00 Z0.1 E1.764";
+        GC_ParseCommand(code, const_cast<char*>(command.c_str()));
+    }
+
+    virtual void TearDown()
+    {
+        DetachDevice();
+        device = nullptr;
+    }
+};
+
+TEST_F(GCodeCompilerTest, compress_command)
+{
+    std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
+    ASSERT_EQ(GCODE_CHUNK_SIZE, GC_CompressCommand(code, data.data()));
+}
+
+TEST_F(GCodeCompilerTest, compress_command_data)
+{
+    std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
+    GC_CompressCommand(code, data.data());
+    GCodeCommandParams* params = reinterpret_cast<GCodeCommandParams*>(data.data() + sizeof(uint16_t));
+    GCodeCommandParams* g = GC_GetCurrentCommand(code);
+    ASSERT_EQ(g->fetch_speed, params->fetch_speed);
+    ASSERT_EQ(g->x, params->x);
+    ASSERT_EQ(g->y, params->y);
+    ASSERT_EQ(g->z, params->z);
+    ASSERT_EQ(g->e, params->e);
+}
+
+
+struct CompilerCommand
+{
+    std::string         test_name;
+    std::string         command_line;
+    GCODE_COMMAND_TYPE  type;
+    uint16_t            code;
+};
+
+class GCodeCommandCompilerTest : public ::testing::TestWithParam<CompilerCommand>
+{
+public:
+
+protected:
+    std::unique_ptr<Device> device;
+    HGCODE code = nullptr;
+    GCodeAxisConfig cfg = { 100, 101, 100, 100 };
+
+    std::vector<uint8_t> data;
+
+    virtual void SetUp()
+    {
+        DeviceSettings ds;
+        device = std::make_unique<Device>(ds);
+        AttachDevice(*device);
+
+        code = GC_Configure(&cfg);
+
+        data.resize(GCODE_CHUNK_SIZE);
+    }
+
+    virtual void TearDown()
+    {
+        DetachDevice();
+        device = nullptr;
+    }
+};
+
+TEST_P(GCodeCommandCompilerTest, command_code)
+{
+    const auto& params = GetParam();
+    std::string command = params.command_line;
+    GC_ParseCommand(code, const_cast<char*>(command.c_str()));
+    GC_CompressCommand(code, data.data());
+    uint16_t command_code = *reinterpret_cast<uint16_t*>(data.data());
+    ASSERT_TRUE(0 != (params.type & command_code));
+    ASSERT_TRUE(params.code == (command_code & 0x00ff));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    CommandCodeTest, GCodeCommandCompilerTest,
+    ::testing::Values(
+        CompilerCommand{ "idling_move", "G0 F6200 X2.45 Y1.00 Z0.1 E1.764", GCODE_COMMAND, GCODE_MOVE },
+        CompilerCommand{ "working_move", "G1 F6200 X2.45 Y1.00 Z0.1 E1.764", GCODE_COMMAND, GCODE_MOVE },
+        CompilerCommand{ "homing_move", "G28 X2.45 Y1.00", GCODE_COMMAND, GCODE_HOME },
+        CompilerCommand{ "set_value", "G92 X0 Y0", GCODE_COMMAND, GCODE_SET },
+        CompilerCommand{ "heat_nozzle", "M104 S256", GCODE_SUBCOMMAND, GCODE_SET_NOZZLE_TEMPERATURE },
+        CompilerCommand{ "heat_table", "M140 S256", GCODE_SUBCOMMAND, GCODE_SET_TABLE_TEMPERATURE },
+        CompilerCommand{ "enable_cooler", "M106 S256", GCODE_SUBCOMMAND, GCODE_SET_COOLER_SPEED },
+        CompilerCommand{ "disable_cooler", "M107", GCODE_SUBCOMMAND, GCODE_DISABLE_COOLER },
+        CompilerCommand{ "wait_nozzle_to_heat", "M109 S256", GCODE_SUBCOMMAND, GCODE_WAIT_NOZZLE },
+        CompilerCommand{ "wait_table_to_heat", "M190 S256", GCODE_SUBCOMMAND, GCODE_WAIT_TABLE }
+
+    ),
+    [](const ::testing::TestParamInfo<GCodeCommandCompilerTest::ParamType>& info)
+    {
+        std::ostringstream out;
+        return info.param.test_name;
+    }
+);
+
 class GCodeParserDialectTest : public ::testing::Test
 {
 protected:
@@ -494,6 +618,79 @@ TEST_F(GCodeParserDialectTest, wanhao)
         << "    Commands: " << commands << std::endl 
         << "    Comments and empty lines: " << comments << std::endl
         << "    Max line length: " << line_length << std::endl;
+
+    fclose(f);
+}
+
+TEST_F(GCodeParserDialectTest, wanhao_compiled)
+{
+    FILE* f = nullptr;
+    fopen_s(&f, "wanhao.gcode", "r");
+    ASSERT_TRUE(nullptr != f) << "required file not found";
+
+    std::vector<uint8_t> data(GCODE_CHUNK_SIZE, 0);
+    std::vector<uint8_t> compiled_file;
+
+    size_t commands = 0;
+    size_t comments = 0;
+    size_t data_excess = 0;
+    size_t line_length = 0;
+
+    char symbol = ' ';
+    while (!feof(f))
+    {
+        std::string line = "";
+        while (symbol)
+        {
+            fread_s(&symbol, 1, 1, 1, f);
+            if (symbol == '\n' || symbol == '\r')
+            {
+                break;
+            }
+            line.append(&symbol, 1);
+        }
+        if (line.size())
+        {
+            uint32_t excess = 0;
+            GCODE_ERROR result = GC_ParseCommand(code, const_cast<char*>(line.c_str()));
+            line_length = std::max(line_length, line.size());
+            if (GC_GetCurrentCommandCode(code) & GCODE_COMMAND)
+            {
+                excess = GCODE_CHUNK_SIZE - sizeof(GCodeCommandParams) - sizeof(uint16_t);
+            }
+            else if (GC_GetCurrentCommandCode(code) & GCODE_COMMAND)
+            {
+                excess = GCODE_CHUNK_SIZE - sizeof(GCodeSubCommandParams) - sizeof(uint16_t);
+            }
+
+            if (0 != GC_CompressCommand(code, data.data()))
+            {
+                compiled_file.insert(compiled_file.end(), data.begin(), data.end());
+                data_excess += excess;
+            }
+            switch (result)
+            {
+            case GCODE_OK_COMMAND_CREATED:
+                ++commands;
+                break;
+            case GCODE_OK_NO_COMMAND:
+                ++comments;
+                break;
+            default:
+                break;
+            }
+        }
+    }
+    ASSERT_GE(commands, compiled_file.size() / GCODE_CHUNK_SIZE);
+    ASSERT_EQ(0, compiled_file.size() % GCODE_CHUNK_SIZE);
+
+    std::cout << "Wanhao dialect file compiled successfully. " << std::endl
+        << "    Total lines: " << comments + commands << std::endl
+        << "    Commands: " << commands << std::endl
+        << "    Compiled commands: " << compiled_file.size() / GCODE_CHUNK_SIZE << std::endl
+        << "    Size of compiled file: " << compiled_file.size() << std::endl
+        << "    Data Excess: " << data_excess << " / "<< (size_t)round(100.0 * data_excess/ compiled_file.size() ) << "% of total" << std::endl
+        << "    Allocated data chunks: " << compiled_file.size() / 512 + 1 << std::endl;
 
     fclose(f);
 }
