@@ -300,3 +300,25 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
     }
     return GCODE_CHUNK_SIZE;
 }
+
+GCODE_COMMAND_STATE GC_ExecuteFromBuffer(GCodeFunctionList* functions, uint8_t* buffer)
+{
+    if (!functions)
+    {
+        return GCODE_FATAL_ERROR_NO_COMMAND;
+    }
+    if (!buffer)
+    {
+        return GCODE_FATAL_ERROR_NO_DATA;
+    }
+    uint16_t code = *(uint16_t*)buffer;
+    if (code & GCODE_COMMAND)
+    {
+        return functions->commands[buffer[0]]((GCodeCommandParams*)(buffer + 2));
+    }
+    if (code & GCODE_SUBCOMMAND)
+    {
+        return functions->subcommands[buffer[0]]((GCodeSubCommandParams*)(buffer + 2));
+    }
+    return GCODE_FATAL_ERROR_UNKNOWN_COMMAND;
+}
