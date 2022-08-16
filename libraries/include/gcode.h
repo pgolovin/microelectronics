@@ -19,6 +19,7 @@ typedef enum GCODE_COMMAND_LIST_Type
     GCODE_MOVE = 0,
     GCODE_HOME,
     GCODE_SET,
+    GCODE_COMMAND_COUNT,
 } GCODE_COMMAND_LIST;
 
 typedef enum GCODE_SUBCOMMAND_LIST_Type
@@ -29,7 +30,17 @@ typedef enum GCODE_SUBCOMMAND_LIST_Type
     GCODE_WAIT_TABLE,
     GCODE_SET_COOLER_SPEED,
     GCODE_DISABLE_COOLER,
+    GCODE_SUBCOMMAND_COUNT,
 } GCODE_SUBCOMMAND_LIST;
+
+typedef enum GCODE_COMMAND_STATE_Type
+{
+    GCODE_OK = 0,
+    GCODE_INCOMPLETE,
+    GCODE_FATAL_ERROR_NO_COMMAND,
+    GCODE_FATAL_ERROR_NO_DATA,
+    GCODE_FATAL_ERROR_UNKNOWN_COMMAND,
+} GCODE_COMMAND_STATE;
 
 typedef enum GCODE_ERROR_Type
 {
@@ -62,6 +73,14 @@ typedef struct GCodeParamsM_type
     int16_t i;
 } GCodeSubCommandParams;
 
+typedef GCODE_COMMAND_STATE(GCodeCommandFunction)(GCodeCommandParams* parameters);
+typedef GCODE_COMMAND_STATE(GCodeSubCommandFunction)(GCodeSubCommandParams* parameters);
+typedef struct GCodeFunctionList_type
+{
+    GCodeCommandFunction*    commands[GCODE_COMMAND_COUNT];
+    GCodeSubCommandFunction* subcommands[GCODE_SUBCOMMAND_COUNT];
+} GCodeFunctionList;
+
 //command type + command index + parameters + alignment
 //due to memory alignment in 512 bytes we should have integer
 //number of elements. so chunk size is bigger than both commands.
@@ -84,6 +103,7 @@ GCODE_ERROR             GC_ParseCommand(HGCODE hcode, char* command_line);
 
 //compressor and validator
 uint32_t                GC_CompressCommand(HGCODE hcode, uint8_t* buffer);
+GCODE_COMMAND_STATE     GC_ExecuteFromBuffer(GCodeFunctionList* functions, uint8_t* buffer);
 
 //diagnostics
 uint16_t                GC_GetCurrentCommandCode(HGCODE hcode);
