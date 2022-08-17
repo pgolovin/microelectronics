@@ -9,7 +9,7 @@ set(HEADERS
 
 set(SOURCES
     "sources/led.c"
-    "sources/sdcard.c"
+    #"sources/sdcard.c"
     "sources/display.c"
     "sources/spibus.c"
     "sources/pulse_engine.c"

@@ -9,15 +9,15 @@ set(SOURCES
     "drivers/spibus.cpp"
     "drivers/equalizer.cpp"
     "device/device.cpp"
-    "libraries/gcode.cpp")
+    "device/sdcard.cpp"
+    "libraries/gcode.cpp"
+    "solutions/gcode_driver.cpp")
 # add sub-project
 add_executable(driver_tests ${SOURCES})
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/resources/wanhao.gcode" "${CMAKE_BINARY_DIR}/bin/wanhao.gcode" COPYONLY)
 
-message(STATUS "${CMAKE_BINARY_DIR}/bin/wanhao.gcode")
-#target_include_directories(driver_tests PRIVATE ${GTest_INCLUDE_DIRS})
-target_link_libraries(driver_tests PUBLIC device_mock drivers libraries GTest::gtest)
+target_link_libraries(driver_tests PUBLIC device_mock drivers libraries solutions GTest::gtest)
 
 add_test(NAME drivers 
          COMMAND driver_tests.exe)
