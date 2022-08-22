@@ -5,7 +5,6 @@
 #include <gtest/gtest.h>
 #include <memory>
 
-
 TEST(SDCardMockBasicTest, cannot_create_without_size)
 {
     std::unique_ptr<SDcardMock> sdcard;

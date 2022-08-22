@@ -1,6 +1,7 @@
 #include "main.h"
 #include "stm32f7xx_hal_spi.h"
 #include "sdcard.h"
+#include "printer/printer_entities.h"
 
 #ifndef __PRINTER_GCODE_DRIVER__
 #define __PRINTER_GCODE_DRIVER__
@@ -14,7 +15,21 @@ typedef struct PrinterDriver_type
     uint32_t id;
 } *HPRINTER;
 
-HPRINTER PrinterConfigure(HSDCARD bytecode_storage);
+typedef enum PRINTER_STATUS_Type
+{
+    PRINTER_OK = 0,
+    PRINTER_FINISHED,
+    PRINTER_INVALID_CONTROL_BLOCK,
+    PRINTER_INVALID_PARAMETER,
+    PRINTER_ALREADY_STARTED,
+} PRINTER_STATUS;
+
+HPRINTER PrinterConfigure(HSDCARD bytecode_storage, uint32_t control_block_sector);
+PRINTER_STATUS PrinterReadControlBlock(HPRINTER hprinter, PrinterControlBlock* control_block);
+
+PRINTER_STATUS PrinterStart(HPRINTER hprinter);
+uint32_t PrinterGetCommandsCount(HPRINTER hprinter);
+PRINTER_STATUS PrinterRunCommand(HPRINTER hprinter);
 
 #ifdef __cplusplus
 }

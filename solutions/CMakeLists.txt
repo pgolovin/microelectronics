@@ -1,5 +1,6 @@
 
 set(HEADERS
+    "printer/printer_entities.h"
     "printer/printer_gcode_driver.h")
 
 set(SOURCES

@@ -263,7 +263,7 @@ static HAL_StatusTypeDef DrawString(DISPLAY* display, CharacterPlacement* placem
 // create SDCARD handle and configure ports
 HDISPLAY DISPLAY_Configure(const DisplayConfig* config)
 {
-	DISPLAY* display = malloc(sizeof(DISPLAY));
+	DISPLAY* display = DeviceAlloc(sizeof(DISPLAY));
 	
 	display->hspi = config->hspi;
 	display->spi_id = SPIBUS_AddPeripherialDevice(config->hspi, config->cs_port_array, config->cs_port);
