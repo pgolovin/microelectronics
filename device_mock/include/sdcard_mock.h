@@ -10,8 +10,9 @@ class SDcardMock
 public:
 
 	static const size_t s_sector_size = 512;
+	static const char s_initial_symbol = 'F';
 
-	SDcardMock(size_t sectors_count, std::vector<uint8_t>&& new_data);
+	SDcardMock(size_t sectors_count);
 	~SDcardMock() {};
 
 	SDCARD_Status IsInitialized() const;

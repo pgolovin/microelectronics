@@ -20,8 +20,7 @@ TEST(GCodeDriverBasicTest, printer_can_create_with_storage)
     Device device(ds);
     AttachDevice(device);
 
-    std::vector<uint8_t> buffer(SDcardMock::s_sector_size * 1024);
-    SDcardMock storage(1024, std::move(buffer));
+    SDcardMock storage(1024);
 
     ASSERT_TRUE(nullptr != PrinterConfigure(&storage, 0));
 }
@@ -42,12 +41,9 @@ protected:
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
 
-        buffer.resize(SDcardMock::s_sector_size * 1024);
-        storage = std::make_unique<SDcardMock>(1024, std::move(buffer));
+        storage = std::make_unique<SDcardMock>(1024);
 
         printer_driver = PrinterConfigure(storage.get(), CONTROL_BLOCK_POSITION);
-
-        //ASSERT_NO_FATAL_FAILURE(CreateGCodeData(gcode_command_list));
     }
 
     virtual void CreateGCodeData(const std::vector<std::string>& gcode_command_list)

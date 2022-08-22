@@ -3,14 +3,14 @@
 #include <vector>
 
 
-SDcardMock::SDcardMock(size_t sectors_count, std::vector<uint8_t>&& new_data)
+SDcardMock::SDcardMock(size_t sectors_count)
     : m_status(SDCARD_OK)
 {
-    if (!sectors_count || new_data.size() != sectors_count*s_sector_size)
+    if (!sectors_count)
     {
         throw std::exception();
     }
-    m_data = std::move(new_data);
+    m_data.resize(sectors_count * s_sector_size, s_initial_symbol);
 }
 
 SDCARD_Status SDcardMock::IsInitialized() const

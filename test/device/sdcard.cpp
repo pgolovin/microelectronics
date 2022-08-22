@@ -9,23 +9,14 @@ TEST(SDCardMockBasicTest, cannot_create_without_size)
 {
     std::unique_ptr<SDcardMock> sdcard;
     std::vector<uint8_t> data(100);
-    ASSERT_THROW(sdcard = std::make_unique<SDcardMock>(0, std::move(data)), std::exception);
-    ASSERT_TRUE(nullptr == sdcard);
-}
-
-TEST(SDCardMockBasicTest, cannot_create_with_incorrect_data_size)
-{
-    std::unique_ptr<SDcardMock> sdcard;
-    std::vector<uint8_t> data(100);
-    ASSERT_THROW(sdcard = std::make_unique<SDcardMock>(1024, std::move(data)), std::exception);
+    ASSERT_THROW(sdcard = std::make_unique<SDcardMock>(0), std::exception);
     ASSERT_TRUE(nullptr == sdcard);
 }
 
 TEST(SDCardMockBasicTest, can_create_with_proper_size)
 {
     std::unique_ptr<SDcardMock> sdcard;
-    std::vector<uint8_t> data(1024*SDcardMock::s_sector_size, 0);
-    ASSERT_NO_THROW(sdcard = std::make_unique<SDcardMock>(1024, std::move(data)));
+    ASSERT_NO_THROW(sdcard = std::make_unique<SDcardMock>(1024));
     ASSERT_TRUE(nullptr != sdcard);
 }
 
@@ -34,11 +25,9 @@ class SDcardMockTest : public ::testing::Test
 protected:
     std::unique_ptr<SDcardMock> sdcard = nullptr;
     const size_t blocks_count = 1024;
-    const uint8_t default_symbol = 'F';
     virtual void SetUp()
     {
-        std::vector<uint8_t> data(blocks_count * SDcardMock::s_sector_size, default_symbol);
-        sdcard = std::make_unique<SDcardMock>(blocks_count, std::move(data));
+        sdcard = std::make_unique<SDcardMock>(blocks_count);
     }
 
     virtual void TearDown()
@@ -86,7 +75,7 @@ TEST_F(SDcardMockTest, sdcard_can_data_is_valid)
     SDCARD_ReadSingleBlock(sdcard.get(), read_data.data(), 0);
     for (const auto& byte : read_data)
     {
-        ASSERT_EQ(default_symbol, byte);
+        ASSERT_EQ(SDcardMock::s_initial_symbol, byte);
     }
 }
 
@@ -119,7 +108,7 @@ TEST_F(SDcardMockTest, sdcard_validate_read_multiple_data)
     SDCARD_Read(sdcard.get(), read_data.data(), 2, 2);
     for (const auto& byte : read_data)
     {
-        ASSERT_EQ(default_symbol, byte);
+        ASSERT_EQ(SDcardMock::s_initial_symbol, byte);
     }
 }
 
