@@ -33,6 +33,8 @@ protected:
     HPRINTER printer_driver;
     std::vector<uint8_t> buffer;
 
+    GCodeFunctionList dummy;
+
     static const size_t data_position = CONTROL_BLOCK_POSITION + 5;
 
     virtual void SetUp()
@@ -41,9 +43,16 @@ protected:
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
 
+        dummy.commands[0] = dummy_call;
+
         storage = std::make_unique<SDcardMock>(1024);
 
         printer_driver = PrinterConfigure(storage.get(), CONTROL_BLOCK_POSITION);
+    }
+
+    static GCODE_COMMAND_STATE dummy_call(GCodeCommandParams*)
+    {
+        return GCODE_OK;
     }
 
     virtual void CreateGCodeData(const std::vector<std::string>& gcode_command_list)
@@ -68,6 +77,11 @@ protected:
                 block_start = caret;
                 position++;
             }
+        }
+        //write the rest of commands that didn't fit into any block
+        if (block_start != caret)
+        {
+            ASSERT_EQ(SDCARD_OK, SDCARD_WriteSingleBlock(storage.get(), block_start, (uint32_t)position));
         }
         // write header
         WriteControlBlock(CONTROL_BLOCK_SEC_CODE, commands_count);
@@ -128,7 +142,7 @@ TEST_F(GCodeDriverTest, printer_verify_control_block_data)
 TEST_F(GCodeDriverTest, printer_start_read_command_list)
 {
     WriteControlBlock(CONTROL_BLOCK_SEC_CODE, 124);
-    ASSERT_EQ(PRINTER_OK, PrinterStart(printer_driver));
+    ASSERT_EQ(PRINTER_OK, PrinterStart(printer_driver, &dummy, &dummy));
 }
 
 TEST_F(GCodeDriverTest, printer_get_remaining_commands_initial)
@@ -139,7 +153,38 @@ TEST_F(GCodeDriverTest, printer_get_remaining_commands_initial)
 TEST_F(GCodeDriverTest, printer_cannot_start_with_invalid_control_block)
 {
     WriteControlBlock('fail', 0);
-    ASSERT_EQ(PRINTER_INVALID_CONTROL_BLOCK, PrinterStart(printer_driver));
+    ASSERT_EQ(PRINTER_INVALID_CONTROL_BLOCK, PrinterStart(printer_driver, &dummy, &dummy));
+}
+
+TEST_F(GCodeDriverTest, printer_cannot_setup_commands_with_nullptr)
+{
+    WriteControlBlock(CONTROL_BLOCK_SEC_CODE, 124);
+    ASSERT_EQ(PRINTER_INVALID_PARAMETER, PrinterStart(printer_driver, nullptr, &dummy));
+}
+
+TEST_F(GCodeDriverTest, printer_cannot_setup_exec_commands_with_nullptr)
+{
+    WriteControlBlock(CONTROL_BLOCK_SEC_CODE, 124);
+    ASSERT_EQ(PRINTER_INVALID_PARAMETER, PrinterStart(printer_driver, &dummy, nullptr));
+}
+
+TEST_F(GCodeDriverTest, printer_setup_command_lists)
+{
+    WriteControlBlock(CONTROL_BLOCK_SEC_CODE, 124);
+    ASSERT_EQ(PRINTER_OK, PrinterStart(printer_driver, &dummy, &dummy));
+}
+
+TEST_F(GCodeDriverTest, printer_run_commands)
+{
+    std::vector<std::string> gcode_command_list = {
+        "G0 F1600 X0 Y0 Z0 E0",
+        "G0 X10 Y0 Z0 E0",
+    };
+
+    CreateGCodeData(gcode_command_list);
+    PrinterStart(printer_driver, &dummy, &dummy);
+    ASSERT_NO_THROW(PrinterRunCommand(printer_driver));
+    ASSERT_NO_THROW(PrinterRunCommand(printer_driver));
 }
 
 TEST_F(GCodeDriverTest, printer_double_start)
@@ -150,10 +195,9 @@ TEST_F(GCodeDriverTest, printer_double_start)
     };
 
     CreateGCodeData(gcode_command_list);
-
-    PrinterStart(printer_driver);
+    PrinterStart(printer_driver, &dummy, &dummy);
     PrinterRunCommand(printer_driver);
-    ASSERT_EQ(PRINTER_ALREADY_STARTED, PrinterStart(printer_driver));
+    ASSERT_EQ(PRINTER_ALREADY_STARTED, PrinterStart(printer_driver, &dummy, &dummy));
     ASSERT_EQ(gcode_command_list.size() - 1, PrinterGetCommandsCount(printer_driver));
 }
 
@@ -165,11 +209,10 @@ TEST_F(GCodeDriverTest, printer_get_remaining_commands_count)
     };
 
     CreateGCodeData(gcode_command_list);
+    PrinterStart(printer_driver, &dummy, &dummy);
 
-    PrinterStart(printer_driver);
     ASSERT_EQ(gcode_command_list.size(), PrinterGetCommandsCount(printer_driver));
 }
-
 
 TEST_F(GCodeDriverTest, printer_run_command)
 {
@@ -178,8 +221,7 @@ TEST_F(GCodeDriverTest, printer_run_command)
         "G0 X10 Y0 Z0 E0",
     };
     CreateGCodeData(gcode_command_list);
-
-    PrinterStart(printer_driver);
+    PrinterStart(printer_driver, &dummy, &dummy);
     ASSERT_EQ(PRINTER_OK, PrinterRunCommand(printer_driver));
 }
 
@@ -201,8 +243,8 @@ TEST_F(GCodeDriverTest, printer_run_command_reduce_count)
         "G0 X10 Y0 Z0 E0",
     };
     CreateGCodeData(gcode_command_list);
+    PrinterStart(printer_driver, &dummy, &dummy);
 
-    PrinterStart(printer_driver);
     PrinterRunCommand(printer_driver);
     ASSERT_EQ(gcode_command_list.size() - 1, PrinterGetCommandsCount(printer_driver));
 }
@@ -213,15 +255,134 @@ TEST_F(GCodeDriverTest, printer_printing_finished)
         "G0 F1600 X0 Y0 Z0 E0",
     };
     CreateGCodeData(gcode_command_list);
-
-    PrinterStart(printer_driver);
+    PrinterStart(printer_driver, &dummy, &dummy);
     PrinterRunCommand(printer_driver);
     ASSERT_EQ(PRINTER_FINISHED, PrinterRunCommand(printer_driver));
 }
 
+class GCodeDriverCommandTest : public GCodeDriverTest
+{
+protected:
+    static std::vector<int> setup_commands;
+    static std::vector<int> run_commands;
 
+    static GCodeCommandParams last_setup_parameters;
+    static uint32_t delta;
 
+    static GCODE_COMMAND_STATE setup_move(GCodeCommandParams* parameters)
+    {
+        setup_commands.push_back(GCODE_MOVE);
 
+        delta = parameters->x - last_setup_parameters.x;
+
+        last_setup_parameters = *parameters;
+        if (delta)
+        {
+            return GCODE_INCOMPLETE;
+        }
+        return GCODE_OK;
+    }
+
+    static GCODE_COMMAND_STATE setup_set(GCodeCommandParams*)
+    {
+        setup_commands.push_back(GCODE_SET);
+        return GCODE_OK;
+    }
+
+    static GCODE_COMMAND_STATE run_move(GCodeCommandParams*)
+    {
+        if (delta > 0)
+        {
+            --delta;
+        }
+        else if (delta < 0)
+        {
+            ++delta;
+        }
+        run_commands.push_back(GCODE_MOVE);
+        return GCODE_OK;
+    }
+
+    GCodeFunctionList setup_functions;
+    GCodeFunctionList exec_functions;
+
+    virtual void SetUp()
+    {
+        setup_commands.clear();
+        GCodeDriverTest::SetUp();
+
+        setup_functions.commands[GCODE_MOVE] = setup_move;
+        setup_functions.commands[GCODE_SET] = setup_set;
+        
+        last_setup_parameters.x = 0;
+
+        std::vector<std::string> gcode_command_list = 
+        {
+            "G0 F1600 X0 Y0 Z0 E0",
+            "G92 X0 Y0",
+            "G1 F1600 X10 Y0 Z0 E0",
+            "G1 F1600 X0 Y0 Z0 E0",
+        };
+
+        CreateGCodeData(gcode_command_list);
+
+        PrinterStart(printer_driver, &setup_functions, &exec_functions);
+    }
+
+    virtual void moveToCommand(uint32_t index)
+    {
+        for (uint32_t i = 0; i < index; ++i)
+        {
+            PrinterRunCommand(printer_driver);
+        }
+    }
+};
+
+std::vector<int> GCodeDriverCommandTest::setup_commands;
+std::vector<int> GCodeDriverCommandTest::run_commands;
+GCodeCommandParams GCodeDriverCommandTest::last_setup_parameters = { 0 };
+uint32_t GCodeDriverCommandTest::delta = 0;
+
+TEST_F(GCodeDriverCommandTest, printer_commands_setup_call)
+{
+    PrinterRunCommand(printer_driver);
+    ASSERT_EQ(1U, setup_commands.size());
+}
+
+TEST_F(GCodeDriverCommandTest, printer_commands_setup_call_value)
+{
+    PrinterRunCommand(printer_driver);
+    ASSERT_EQ(1, setup_commands.size());
+    ASSERT_EQ(GCODE_MOVE, setup_commands[0]);
+}
+
+TEST_F(GCodeDriverCommandTest, printer_commands_the_next)
+{
+    PrinterRunCommand(printer_driver);
+    PrinterRunCommand(printer_driver);
+    ASSERT_EQ(2, setup_commands.size());
+    ASSERT_EQ(GCODE_SET, setup_commands[1]);
+}
+
+TEST_F(GCodeDriverCommandTest, printer_commands_incomplete_call)
+{
+    moveToCommand(2);
+    ASSERT_EQ(GCODE_INCOMPLETE, PrinterRunCommand(printer_driver));
+}
+
+TEST_F(GCodeDriverCommandTest, printer_commands_run_after_incomplete_call_does_nothing)
+{
+    moveToCommand(2);
+    PrinterRunCommand(printer_driver);
+    ASSERT_EQ(3, setup_commands.size());
+    ASSERT_EQ(GCODE_INCOMPLETE, PrinterRunCommand(printer_driver));
+    ASSERT_EQ(3, setup_commands.size());
+}
+
+TEST_F(GCodeDriverCommandTest, printer_commands_execute_nothing)
+{
+    ASSERT_EQ(GCODE_OK, PrinterExecuteCommand(printer_driver));
+}
 
 
 
