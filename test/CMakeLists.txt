@@ -8,6 +8,7 @@ set(SOURCES
     "drivers/pulse_engine.cpp"
     "drivers/spibus.cpp"
     "drivers/equalizer.cpp"
+    "drivers/motor.cpp"
     "device/device.cpp"
     "device/sdcard.cpp"
     "libraries/gcode.cpp"
