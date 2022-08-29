@@ -74,8 +74,8 @@ typedef struct GCodeParamsM_type
     int16_t i;
 } GCodeSubCommandParams;
 
-typedef GCODE_COMMAND_STATE(GCodeCommandFunction)(GCodeCommandParams* parameters);
-typedef GCODE_COMMAND_STATE(GCodeSubCommandFunction)(GCodeSubCommandParams* parameters);
+typedef GCODE_COMMAND_STATE(GCodeCommandFunction)(GCodeCommandParams* parameters, void* additional_parameter);
+typedef GCODE_COMMAND_STATE(GCodeSubCommandFunction)(GCodeSubCommandParams* parameters, void* additional_parameter);
 typedef struct GCodeFunctionList_type
 {
     GCodeCommandFunction*    commands[GCODE_COMMAND_COUNT];
@@ -104,7 +104,7 @@ GCODE_ERROR             GC_ParseCommand(HGCODE hcode, char* command_line);
 
 //compressor and validator
 uint32_t                GC_CompressCommand(HGCODE hcode, uint8_t* buffer);
-GCODE_COMMAND_STATE     GC_ExecuteFromBuffer(GCodeFunctionList* functions, uint8_t* buffer);
+GCODE_COMMAND_STATE     GC_ExecuteFromBuffer(GCodeFunctionList* functions, void* additional_parameter, uint8_t* buffer);
 
 //diagnostics
 uint16_t                GC_GetCurrentCommandCode(HGCODE hcode);

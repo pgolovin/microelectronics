@@ -1,17 +1,26 @@
 
 #include "printer/printer_gcode_driver.h"
 #include "include/gcode.h"
-#include "device_mock.h"
-#include "sdcard_mock.h"
+#include "solutions/printer_emulator.h"
 #include <gtest/gtest.h>
+
+TEST(GCodeDriverBasicTest, printer_cannot_create_without_config)
+{
+    DeviceSettings ds;
+    Device device(ds);
+    AttachDevice(device);
+
+    ASSERT_TRUE(nullptr == PrinterConfigure(nullptr));
+}
 
 TEST(GCodeDriverBasicTest, printer_cannot_create_without_storage)
 {
     DeviceSettings ds;
     Device device(ds);
     AttachDevice(device);
+    PrinterConfig cfg = { 0 };
 
-    ASSERT_TRUE(nullptr == PrinterConfigure(nullptr, 0));
+    ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
 }
 
 TEST(GCodeDriverBasicTest, printer_can_create_with_storage)
@@ -20,22 +29,18 @@ TEST(GCodeDriverBasicTest, printer_can_create_with_storage)
     Device device(ds);
     AttachDevice(device);
 
+    GPIO_TypeDef port = 0;
+    MotorConfig motor = { &port, 0, &port, 0 };
     SDcardMock storage(1024);
+    PrinterConfig cfg = { &storage, 0, motor, motor, motor, motor };
 
-    ASSERT_TRUE(nullptr != PrinterConfigure(&storage, 0));
+    ASSERT_TRUE(nullptr != PrinterConfigure(&cfg));
 }
 
-class GCodeDriverTest : public ::testing::Test
+class GCodeDriverTest : public ::testing::Test, public PrinterEmulator
 {
 protected:
-    std::unique_ptr<Device> device;
-    std::unique_ptr<SDcardMock> storage;
-    HPRINTER printer_driver;
-    std::vector<uint8_t> buffer;
-
-    GCodeFunctionList dummy;
-
-    static const size_t data_position = CONTROL_BLOCK_POSITION + 5;
+    GPIO_TypeDef port = 0;
 
     virtual void SetUp()
     {
@@ -43,63 +48,14 @@ protected:
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
 
-        dummy.commands[0] = dummy_call;
-
         storage = std::make_unique<SDcardMock>(1024);
+        
+        MotorConfig motor = { &port, 0, &port, 0 };
+        PrinterConfig cfg = { storage.get(), CONTROL_BLOCK_POSITION, motor, motor, motor, motor };
 
-        printer_driver = PrinterConfigure(storage.get(), CONTROL_BLOCK_POSITION);
+        printer_driver = PrinterConfigure(&cfg);
     }
 
-    static GCODE_COMMAND_STATE dummy_call(GCodeCommandParams*)
-    {
-        return GCODE_OK;
-    }
-
-    virtual void CreateGCodeData(const std::vector<std::string>& gcode_command_list)
-    {
-        GCodeAxisConfig axis = { 1,1,1,1 };
-        HGCODE interpreter = GC_Configure(&axis);
-        ASSERT_TRUE(nullptr != interpreter);
-        std::vector<uint8_t> file_buffer(GCODE_CHUNK_SIZE * gcode_command_list.size());
-        uint8_t* caret = file_buffer.data();
-        uint8_t* block_start = caret;
-        size_t position = data_position;
-        uint32_t commands_count = 0;
-        for (const auto& command : gcode_command_list)
-        {
-            ASSERT_EQ(GCODE_OK_COMMAND_CREATED, GC_ParseCommand(interpreter, const_cast<char*>(command.c_str())));
-            ASSERT_EQ(GCODE_CHUNK_SIZE, GC_CompressCommand(interpreter, caret));
-            caret += GCODE_CHUNK_SIZE;
-            ++commands_count;
-            if (caret - block_start >= SDcardMock::s_sector_size)
-            {
-                ASSERT_EQ(SDCARD_OK, SDCARD_WriteSingleBlock(storage.get(), block_start, (uint32_t)position));
-                block_start = caret;
-                position++;
-            }
-        }
-        //write the rest of commands that didn't fit into any block
-        if (block_start != caret)
-        {
-            ASSERT_EQ(SDCARD_OK, SDCARD_WriteSingleBlock(storage.get(), block_start, (uint32_t)position));
-        }
-        // write header
-        WriteControlBlock(CONTROL_BLOCK_SEC_CODE, commands_count);
-    }
-
-    void WriteControlBlock(uint32_t sec_code, uint32_t commands_count)
-    {
-        PrinterControlBlock block = 
-        {
-            sec_code,
-            (uint32_t)data_position,
-            "test_file_#1",
-            (uint32_t)commands_count,
-        };
-        std::vector<uint8_t> data(SDcardMock::s_sector_size, 0);
-        memcpy(data.data(), &block, sizeof(PrinterControlBlock));
-        ASSERT_EQ(SDCARD_OK, SDCARD_WriteSingleBlock(storage.get(), data.data(), CONTROL_BLOCK_POSITION));
-    }
 
     virtual void TearDown()
     {
@@ -142,7 +98,7 @@ TEST_F(GCodeDriverTest, printer_verify_control_block_data)
 TEST_F(GCodeDriverTest, printer_start_read_command_list)
 {
     WriteControlBlock(CONTROL_BLOCK_SEC_CODE, 124);
-    ASSERT_EQ(PRINTER_OK, PrinterStart(printer_driver, &dummy, &dummy));
+    ASSERT_EQ(PRINTER_OK, PrinterStart(printer_driver));
 }
 
 TEST_F(GCodeDriverTest, printer_get_remaining_commands_initial)
@@ -153,25 +109,7 @@ TEST_F(GCodeDriverTest, printer_get_remaining_commands_initial)
 TEST_F(GCodeDriverTest, printer_cannot_start_with_invalid_control_block)
 {
     WriteControlBlock('fail', 0);
-    ASSERT_EQ(PRINTER_INVALID_CONTROL_BLOCK, PrinterStart(printer_driver, &dummy, &dummy));
-}
-
-TEST_F(GCodeDriverTest, printer_cannot_setup_commands_with_nullptr)
-{
-    WriteControlBlock(CONTROL_BLOCK_SEC_CODE, 124);
-    ASSERT_EQ(PRINTER_INVALID_PARAMETER, PrinterStart(printer_driver, nullptr, &dummy));
-}
-
-TEST_F(GCodeDriverTest, printer_cannot_setup_exec_commands_with_nullptr)
-{
-    WriteControlBlock(CONTROL_BLOCK_SEC_CODE, 124);
-    ASSERT_EQ(PRINTER_INVALID_PARAMETER, PrinterStart(printer_driver, &dummy, nullptr));
-}
-
-TEST_F(GCodeDriverTest, printer_setup_command_lists)
-{
-    WriteControlBlock(CONTROL_BLOCK_SEC_CODE, 124);
-    ASSERT_EQ(PRINTER_OK, PrinterStart(printer_driver, &dummy, &dummy));
+    ASSERT_EQ(PRINTER_INVALID_CONTROL_BLOCK, PrinterStart(printer_driver));
 }
 
 TEST_F(GCodeDriverTest, printer_run_commands)
@@ -182,10 +120,11 @@ TEST_F(GCodeDriverTest, printer_run_commands)
     };
 
     CreateGCodeData(gcode_command_list);
-    PrinterStart(printer_driver, &dummy, &dummy);
-    ASSERT_NO_THROW(PrinterRunCommand(printer_driver));
-    ASSERT_NO_THROW(PrinterRunCommand(printer_driver));
+    PrinterStart(printer_driver);
+    ASSERT_NO_THROW(PrinterNextCommand(printer_driver));
+    ASSERT_NO_THROW(PrinterNextCommand(printer_driver));
 }
+
 
 TEST_F(GCodeDriverTest, printer_double_start)
 {
@@ -195,9 +134,9 @@ TEST_F(GCodeDriverTest, printer_double_start)
     };
 
     CreateGCodeData(gcode_command_list);
-    PrinterStart(printer_driver, &dummy, &dummy);
-    PrinterRunCommand(printer_driver);
-    ASSERT_EQ(PRINTER_ALREADY_STARTED, PrinterStart(printer_driver, &dummy, &dummy));
+    PrinterStart(printer_driver);
+    PrinterNextCommand(printer_driver);
+    ASSERT_EQ(PRINTER_ALREADY_STARTED, PrinterStart(printer_driver));
     ASSERT_EQ(gcode_command_list.size() - 1, PrinterGetCommandsCount(printer_driver));
 }
 
@@ -209,7 +148,7 @@ TEST_F(GCodeDriverTest, printer_get_remaining_commands_count)
     };
 
     CreateGCodeData(gcode_command_list);
-    PrinterStart(printer_driver, &dummy, &dummy);
+    PrinterStart(printer_driver);
 
     ASSERT_EQ(gcode_command_list.size(), PrinterGetCommandsCount(printer_driver));
 }
@@ -221,8 +160,8 @@ TEST_F(GCodeDriverTest, printer_run_command)
         "G0 X10 Y0 Z0 E0",
     };
     CreateGCodeData(gcode_command_list);
-    PrinterStart(printer_driver, &dummy, &dummy);
-    ASSERT_EQ(PRINTER_OK, PrinterRunCommand(printer_driver));
+    PrinterStart(printer_driver);
+    ASSERT_EQ(PRINTER_OK, PrinterNextCommand(printer_driver));
 }
 
 TEST_F(GCodeDriverTest, printer_cannot_run_without_start)
@@ -233,7 +172,7 @@ TEST_F(GCodeDriverTest, printer_cannot_run_without_start)
     };
     CreateGCodeData(gcode_command_list);
 
-    ASSERT_EQ(PRINTER_FINISHED, PrinterRunCommand(printer_driver));
+    ASSERT_EQ(PRINTER_FINISHED, PrinterNextCommand(printer_driver));
 }
 
 TEST_F(GCodeDriverTest, printer_run_command_reduce_count)
@@ -243,9 +182,9 @@ TEST_F(GCodeDriverTest, printer_run_command_reduce_count)
         "G0 X10 Y0 Z0 E0",
     };
     CreateGCodeData(gcode_command_list);
-    PrinterStart(printer_driver, &dummy, &dummy);
+    PrinterStart(printer_driver);
 
-    PrinterRunCommand(printer_driver);
+    PrinterNextCommand(printer_driver);
     ASSERT_EQ(gcode_command_list.size() - 1, PrinterGetCommandsCount(printer_driver));
 }
 
@@ -255,128 +194,101 @@ TEST_F(GCodeDriverTest, printer_printing_finished)
         "G0 F1600 X0 Y0 Z0 E0",
     };
     CreateGCodeData(gcode_command_list);
-    PrinterStart(printer_driver, &dummy, &dummy);
-    PrinterRunCommand(printer_driver);
-    ASSERT_EQ(PRINTER_FINISHED, PrinterRunCommand(printer_driver));
+    PrinterStart(printer_driver);
+    PrinterNextCommand(printer_driver);
+    ASSERT_EQ(PRINTER_FINISHED, PrinterNextCommand(printer_driver));
 }
 
-class GCodeDriverCommandTest : public GCodeDriverTest
+class GCodeDriverCommandTest : public ::testing::Test, public PrinterEmulator
 {
 protected:
-    static std::vector<int> setup_commands;
-    static std::vector<int> run_commands;
-
-    static GCodeCommandParams last_setup_parameters;
-    static uint32_t delta;
-
-    static GCODE_COMMAND_STATE setup_move(GCodeCommandParams* parameters)
-    {
-        setup_commands.push_back(GCODE_MOVE);
-
-        delta = parameters->x - last_setup_parameters.x;
-
-        last_setup_parameters = *parameters;
-        if (delta)
-        {
-            return GCODE_INCOMPLETE;
-        }
-        return GCODE_OK;
-    }
-
-    static GCODE_COMMAND_STATE setup_set(GCodeCommandParams*)
-    {
-        setup_commands.push_back(GCODE_SET);
-        return GCODE_OK;
-    }
-
-    static GCODE_COMMAND_STATE run_move(GCodeCommandParams*)
-    {
-        if (delta > 0)
-        {
-            --delta;
-        }
-        else if (delta < 0)
-        {
-            ++delta;
-        }
-        run_commands.push_back(GCODE_MOVE);
-        return GCODE_OK;
-    }
-
-    GCodeFunctionList setup_functions;
-    GCodeFunctionList exec_functions;
+    
 
     virtual void SetUp()
     {
-        setup_commands.clear();
-        GCodeDriverTest::SetUp();
-
-        setup_functions.commands[GCODE_MOVE] = setup_move;
-        setup_functions.commands[GCODE_SET] = setup_set;
-        
-        last_setup_parameters.x = 0;
+        SetupPrinter();
 
         std::vector<std::string> gcode_command_list = 
         {
-            "G0 F1600 X0 Y0 Z0 E0",
+            "G0 F10000 X0 Y0 Z0 E0",
+            "G1 F10000 X10 Y0 Z0 E0",
+            "G1 F10000 X15 Y10 Z2 E14",
             "G92 X0 Y0",
-            "G1 F1600 X10 Y0 Z0 E0",
             "G1 F1600 X0 Y0 Z0 E0",
         };
 
-        CreateGCodeData(gcode_command_list);
-
-        PrinterStart(printer_driver, &setup_functions, &exec_functions);
+        StartPrinting(gcode_command_list);
     }
 
-    virtual void moveToCommand(uint32_t index)
-    {
-        for (uint32_t i = 0; i < index; ++i)
-        {
-            PrinterRunCommand(printer_driver);
-        }
-    }
+    
 };
-
-std::vector<int> GCodeDriverCommandTest::setup_commands;
-std::vector<int> GCodeDriverCommandTest::run_commands;
-GCodeCommandParams GCodeDriverCommandTest::last_setup_parameters = { 0 };
-uint32_t GCodeDriverCommandTest::delta = 0;
 
 TEST_F(GCodeDriverCommandTest, printer_commands_setup_call)
 {
-    PrinterRunCommand(printer_driver);
-    ASSERT_EQ(1U, setup_commands.size());
-}
-
-TEST_F(GCodeDriverCommandTest, printer_commands_setup_call_value)
-{
-    PrinterRunCommand(printer_driver);
-    ASSERT_EQ(1, setup_commands.size());
-    ASSERT_EQ(GCODE_MOVE, setup_commands[0]);
-}
-
-TEST_F(GCodeDriverCommandTest, printer_commands_the_next)
-{
-    PrinterRunCommand(printer_driver);
-    PrinterRunCommand(printer_driver);
-    ASSERT_EQ(2, setup_commands.size());
-    ASSERT_EQ(GCODE_SET, setup_commands[1]);
+    PrinterNextCommand(printer_driver);
+    GCodeCommandParams params = *PrinterGetCurrentPath(printer_driver);
+    ASSERT_EQ(10000, params.fetch_speed);
+    ASSERT_EQ(0, params.x);
+    ASSERT_EQ(0, params.y);
+    ASSERT_EQ(0, params.z);
+    ASSERT_EQ(0, params.e);
 }
 
 TEST_F(GCodeDriverCommandTest, printer_commands_incomplete_call)
 {
-    moveToCommand(2);
-    ASSERT_EQ(GCODE_INCOMPLETE, PrinterRunCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
+}
+
+TEST_F(GCodeDriverCommandTest, printer_commands_complete_incomplete_call)
+{
+    PrinterNextCommand(printer_driver);
+    PRINTER_STATUS status = PrinterNextCommand(printer_driver);
+    size_t i = 0;
+    for (; i < 100; ++i)
+    {
+        status = PrinterExecuteCommand(printer_driver);
+        if (PRINTER_OK == status)
+        {
+            break;
+        }
+    }
+    // number of commands, not its number
+    ASSERT_EQ(10, ++i);
+}
+
+TEST_F(GCodeDriverCommandTest, printer_commands_the_next_parameters)
+{
+    PrinterNextCommand(printer_driver);
+    PrinterNextCommand(printer_driver);
+    GCodeCommandParams params = *PrinterGetCurrentPath(printer_driver);
+    ASSERT_EQ(10000, params.fetch_speed);
+    ASSERT_EQ(10, params.x);
+    ASSERT_EQ(0, params.y);
+    ASSERT_EQ(0, params.z);
+    ASSERT_EQ(0, params.e);
+}
+
+TEST_F(GCodeDriverCommandTest, printer_commands_segment)
+{
+    MoveToCommand(2);
+
+    PrinterNextCommand(printer_driver);
+    GCodeCommandParams params = *PrinterGetCurrentPath(printer_driver);
+    ASSERT_EQ(10000, params.fetch_speed);
+    ASSERT_EQ(5, params.x);
+    ASSERT_EQ(10, params.y);
+    ASSERT_EQ(2, params.z);
+    ASSERT_EQ(14, params.e);
 }
 
 TEST_F(GCodeDriverCommandTest, printer_commands_run_after_incomplete_call_does_nothing)
 {
-    moveToCommand(2);
-    PrinterRunCommand(printer_driver);
-    ASSERT_EQ(3, setup_commands.size());
-    ASSERT_EQ(GCODE_INCOMPLETE, PrinterRunCommand(printer_driver));
-    ASSERT_EQ(3, setup_commands.size());
+    PrinterNextCommand(printer_driver);
+    PrinterNextCommand(printer_driver);
+    uint32_t commands_count = PrinterGetCommandsCount(printer_driver);
+    ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
+    ASSERT_EQ(commands_count, PrinterGetCommandsCount(printer_driver));
 }
 
 TEST_F(GCodeDriverCommandTest, printer_commands_execute_nothing)
@@ -384,5 +296,92 @@ TEST_F(GCodeDriverCommandTest, printer_commands_execute_nothing)
     ASSERT_EQ(GCODE_OK, PrinterExecuteCommand(printer_driver));
 }
 
+TEST_F(GCodeDriverCommandTest, printer_commands_last_command_status_idle)
+{
+    ASSERT_EQ(GCODE_OK, PrinterGetStatus(printer_driver));
+}
 
+TEST_F(GCodeDriverCommandTest, printer_commands_last_command_status_busy)
+{
+    PrinterNextCommand(printer_driver);
+    PrinterNextCommand(printer_driver);
+    ASSERT_EQ(GCODE_INCOMPLETE, PrinterGetStatus(printer_driver));
+}
+
+TEST_F(GCodeDriverCommandTest, printer_commands_last_command_status_command_complete)
+{
+    PrinterNextCommand(printer_driver);
+    PRINTER_STATUS status = PrinterNextCommand(printer_driver);
+    while (status != PRINTER_OK)
+    {
+        status = PrinterExecuteCommand(printer_driver);
+    }
+    ASSERT_EQ(GCODE_OK, PrinterGetStatus(printer_driver));
+}
+
+struct PathTest
+{
+    std::string name;
+    std::string path_command;
+    uint32_t expected_steps;
+};
+
+class GCodeDriverPathTest : public ::testing::TestWithParam<PathTest>, public PrinterEmulator
+{
+protected:
+    virtual void SetUp()
+    {
+        SetupPrinter();
+    }
+};
+
+TEST_P(GCodeDriverPathTest, printer_motion)
+{
+    const PathTest path_settings = GetParam();
+
+    std::vector<std::string> commands = {
+        "G0 F10000 X0 Y0 Z0 E0",
+        path_settings.path_command,
+    };
+    StartPrinting(commands);
+    PrinterNextCommand(printer_driver);
+    PRINTER_STATUS status = PrinterNextCommand(printer_driver);
+
+    uint32_t i = 0;
+    for (; i < path_settings.expected_steps + 10; ++i)
+    {
+        status = PrinterExecuteCommand(printer_driver);
+        if (GCODE_OK == status)
+        {
+            break;
+        }
+    }
+    ++i; // calculate size of the command
+    ASSERT_EQ(path_settings.expected_steps, i);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    PrinterPathTest, GCodeDriverPathTest,
+    ::testing::Values(
+        PathTest{ "alongside_X",   "G0 X124 Y0 Z0 E0",      124 },
+        PathTest{ "alongside_Y",   "G0 X0 Y999 Z0 E0",      999 },
+        PathTest{ "alongside_Z",   "G0 X0 Y0 Z50 E0",        50 },
+        PathTest{ "alongside_E",   "G0 X0 Y0 Z0 E333",      333 },
+        PathTest{ "diagonals_XY",  "G0 X30 Y40 Z0 E0",       50 },
+        PathTest{ "diagonals_XnY", "G0 X30 Y-40 Z0 E0",      50 },
+        PathTest{ "diagonals_XZ",  "G0 X30 Y0 Z40 E0",       50 },
+        PathTest{ "diagonals_XnZ", "G0 X30 Y0 Z-40 E0",      50 },
+        PathTest{ "diagonals_XYZ", "G0 X30 Y40 Z50 E0",      71 },
+        PathTest{ "extrusion_LE",  "G0 X30 Y40 Z50 E20",     71 },
+        PathTest{ "extrusion_GT",  "G0 X30 Y40 Z50 E200",   200 }
+        // Fetch speed is oriented on 10000 calls/sec Fmm/min
+        // TODO: add settings for fetch_speed
+    ),
+    [](const ::testing::TestParamInfo<GCodeDriverPathTest::ParamType>& info)
+    {
+        std::ostringstream out;
+        out << "path_" << info.param.name ;
+        return out.str();
+    }
+);
 
