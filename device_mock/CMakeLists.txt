@@ -2,12 +2,15 @@
 set(HEADERS
     "include/main.h"
     "include/stm32f7xx_hal_spi.h"
-    "include/device_mock.h")
+    "include/device_mock.h"
+    "include/sdcard.h"
+    "include/sdcard_mock.h")
 
 set(SOURCES
     "src/main.cpp"
     "src/stm32f7xx_hal_spi.cpp"
-    "src/device_mock.cpp")
+    "src/device_mock.cpp"
+    "src/sdcard_mock.cpp")
 
 add_library(device_mock STATIC ${HEADERS} ${SOURCES})
 

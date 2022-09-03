@@ -39,6 +39,7 @@ public:
     {
         GPIO_PinState state = GPIO_PIN_SET;
         size_t gpio_signals = 0;   // number of calls to GPIO_Write
+        std::vector<GPIO_PinState> signals_log;
     };
 
 public:

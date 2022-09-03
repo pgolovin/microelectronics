@@ -128,4 +128,76 @@ TEST_F(DeviceSignalsTest, signals_count)
     ASSERT_EQ(device->GetPinState(0, 1).gpio_signals, count);
 }
 
+TEST_F(DeviceSignalsTest, signals_log)
+{
+    device->WritePin(0, 1, GPIO_PIN_RESET);
+    ASSERT_EQ(device->GetPinState(0, 1).signals_log.size(), 1);
+    ASSERT_EQ(device->GetPinState(0, 1).signals_log[0], GPIO_PIN_RESET);
+}
+
+TEST_F(DeviceSignalsTest, signals_log_redundant_signals)
+{
+    device->WritePin(0, 1, GPIO_PIN_RESET);
+    device->WritePin(0, 1, GPIO_PIN_RESET);
+    ASSERT_EQ(device->GetPinState(0, 1).signals_log.size(), 2);
+    ASSERT_EQ(device->GetPinState(0, 1).signals_log[0], GPIO_PIN_RESET);
+    ASSERT_EQ(device->GetPinState(0, 1).signals_log[1], GPIO_PIN_RESET);
+}
+
+TEST_F(DeviceSignalsTest, signals_log_multiple)
+{
+    std::vector<GPIO_PinState> signals =
+    {
+        GPIO_PIN_RESET,
+        GPIO_PIN_RESET,
+        GPIO_PIN_SET,
+        GPIO_PIN_RESET,
+        GPIO_PIN_SET,
+        GPIO_PIN_RESET,
+        GPIO_PIN_SET,
+        GPIO_PIN_RESET,
+        GPIO_PIN_SET,
+        GPIO_PIN_RESET,
+        GPIO_PIN_SET,
+    };
+    for (const auto& signal : signals)
+    {
+        device->WritePin(0, 1, signal);
+    }
+    
+    ASSERT_EQ(signals.size(), device->GetPinState(0, 1).signals_log.size());
+    for (size_t i = 0; i < signals.size(); ++i)
+    {
+        ASSERT_EQ(device->GetPinState(0, 1).signals_log[i], signals[i]);
+    }
+}
+
+TEST_F(DeviceSignalsTest, signals_log_toggle)
+{
+    device->WritePin(0, 1, GPIO_PIN_RESET);
+    device->TogglePin(0, 1);
+    ASSERT_EQ(device->GetPinState(0, 1).signals_log.size(), 2);
+    ASSERT_EQ(device->GetPinState(0, 1).signals_log[0], GPIO_PIN_RESET);
+    ASSERT_EQ(device->GetPinState(0, 1).signals_log[1], GPIO_PIN_SET);
+}
+
+TEST_F(DeviceSignalsTest, signals_log_toggle_inverse)
+{
+    device->WritePin(0, 1, GPIO_PIN_SET);
+    device->TogglePin(0, 1);
+    ASSERT_EQ(device->GetPinState(0, 1).signals_log.size(), 2);
+    ASSERT_EQ(device->GetPinState(0, 1).signals_log[0], GPIO_PIN_SET);
+    ASSERT_EQ(device->GetPinState(0, 1).signals_log[1], GPIO_PIN_RESET);
+}
+
+TEST_F(DeviceSignalsTest, signals_log_reset)
+{
+    device->WritePin(0, 1, GPIO_PIN_SET);
+    device->TogglePin(0, 1);
+    device->TogglePin(0, 1);
+    device->TogglePin(0, 1);
+    device->ResetPinGPIOCounters(0, 1);
+    ASSERT_EQ(0, device->GetPinState(0, 1).signals_log.size());
+}
+
 

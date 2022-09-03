@@ -566,6 +566,8 @@ protected:
     GCodeFunctionList functions;
     
     static std::vector<Execution_Test> results_list;
+    static uint32_t void_parameter;
+    static const uint32_t check_parameter = 42;
 
     virtual void SetUp()
     {
@@ -591,55 +593,62 @@ protected:
         device = nullptr;
     }
 
-    static GCODE_COMMAND_STATE move(GCodeCommandParams* parameters)
+    static GCODE_COMMAND_STATE move(GCodeCommandParams* parameters, void* param)
     {
+        void_parameter = *(uint32_t*)param;
         results_list.emplace_back(Execution_Test{ (uint16_t)GCODE_MOVE | GCODE_COMMAND, *parameters, GCodeSubCommandParams{ 0 } });
         return GCODE_OK;
     }
-    static GCODE_COMMAND_STATE home(GCodeCommandParams* parameters)
+    static GCODE_COMMAND_STATE home(GCodeCommandParams* parameters, void* param)
     {
+        void_parameter = *(uint32_t*)param;
         results_list.emplace_back(Execution_Test{ (uint16_t)GCODE_HOME | GCODE_COMMAND, *parameters, GCodeSubCommandParams{ 0 } });
         return GCODE_OK;
     }
-    static GCODE_COMMAND_STATE set(GCodeCommandParams* parameters)
+    static GCODE_COMMAND_STATE set(GCodeCommandParams* parameters, void* param)
     {
+        void_parameter = *(uint32_t*)param;
         results_list.emplace_back(Execution_Test{ (uint16_t)GCODE_SET | GCODE_COMMAND, *parameters, GCodeSubCommandParams{ 0 } });
         return GCODE_OK;
     }
-    static GCODE_COMMAND_STATE setNozzleTemp(GCodeSubCommandParams* parameters)
+    static GCODE_COMMAND_STATE setNozzleTemp(GCodeSubCommandParams* parameters, void* param)
     {
+        void_parameter = *(uint32_t*)param;
         results_list.emplace_back(Execution_Test{ (uint16_t)GCODE_SET_NOZZLE_TEMPERATURE | GCODE_SUBCOMMAND, GCodeCommandParams{ 0 }, *parameters });
         return GCODE_OK;
     }
-    static GCODE_COMMAND_STATE disableCooler(GCodeSubCommandParams* parameters)
+    static GCODE_COMMAND_STATE disableCooler(GCodeSubCommandParams* parameters, void* param)
     {
+        void_parameter = *(uint32_t*)param;
         results_list.emplace_back(Execution_Test{ (uint16_t)GCODE_DISABLE_COOLER | GCODE_SUBCOMMAND, GCodeCommandParams{ 0 }, *parameters });
         return GCODE_OK;
     }
 
-    static GCODE_COMMAND_STATE waitNozzle(GCodeSubCommandParams*)
+    static GCODE_COMMAND_STATE waitNozzle(GCodeSubCommandParams*, void* param)
     {
+        void_parameter = *(uint32_t*)param;
         return GCODE_INCOMPLETE;
     }
 };
 
 std::vector<GCodeExecutorTest::Execution_Test> GCodeExecutorTest::results_list = {};
+uint32_t GCodeExecutorTest::void_parameter = 0;
 
 TEST_F(GCodeExecutorTest, execute_empty_command_list)
 {
     std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
-    ASSERT_EQ((int)GCODE_FATAL_ERROR_NO_COMMAND, GC_ExecuteFromBuffer(nullptr, data.data()));
+    ASSERT_EQ((int)GCODE_FATAL_ERROR_NO_COMMAND, GC_ExecuteFromBuffer(nullptr, (void*)&check_parameter, data.data()));
 }
 
 TEST_F(GCodeExecutorTest, execute_empty_buffer)
 {
-    ASSERT_EQ((int)GCODE_FATAL_ERROR_NO_DATA, GC_ExecuteFromBuffer(&functions, 0));
+    ASSERT_EQ((int)GCODE_FATAL_ERROR_NO_DATA, GC_ExecuteFromBuffer(&functions, (void*)&check_parameter, 0));
 }
 
 TEST_F(GCodeExecutorTest, execute_invalid_buffer)
 {
     std::vector<uint8_t> data(GCODE_CHUNK_SIZE, 0);
-    ASSERT_EQ((int)GCODE_FATAL_ERROR_UNKNOWN_COMMAND, GC_ExecuteFromBuffer(&functions, data.data()));
+    ASSERT_EQ((int)GCODE_FATAL_ERROR_UNKNOWN_COMMAND, GC_ExecuteFromBuffer(&functions, (void*)&check_parameter, data.data()));
 }
 
 TEST_F(GCodeExecutorTest, execute_command)
@@ -648,7 +657,7 @@ TEST_F(GCodeExecutorTest, execute_command)
     GC_ParseCommand(code, const_cast<char*>(command.c_str()));
     std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
     GC_CompressCommand(code, data.data());
-    ASSERT_EQ((int)GCODE_OK, GC_ExecuteFromBuffer(&functions, data.data()));
+    ASSERT_EQ((int)GCODE_OK, GC_ExecuteFromBuffer(&functions, (void*)&check_parameter, data.data()));
 }
 
 TEST_F(GCodeExecutorTest, execute_move_command)
@@ -657,7 +666,7 @@ TEST_F(GCodeExecutorTest, execute_move_command)
     GC_ParseCommand(code, const_cast<char*>(command.c_str()));
     std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
     GC_CompressCommand(code, data.data());
-    GC_ExecuteFromBuffer(&functions, data.data());
+    GC_ExecuteFromBuffer(&functions, (void*)&check_parameter, data.data());
     ASSERT_EQ(1, results_list.size());
     ASSERT_EQ(GCODE_MOVE, results_list[0].command_id & 0x00ff);
 }
@@ -668,7 +677,7 @@ TEST_F(GCodeExecutorTest, execute_home_command)
     GC_ParseCommand(code, const_cast<char*>(command.c_str()));
     std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
     GC_CompressCommand(code, data.data());
-    GC_ExecuteFromBuffer(&functions, data.data());
+    GC_ExecuteFromBuffer(&functions, (void*)&check_parameter, data.data());
     ASSERT_EQ(1, results_list.size());
     ASSERT_EQ(GCODE_HOME, results_list[0].command_id & 0x00ff);
 }
@@ -679,9 +688,19 @@ TEST_F(GCodeExecutorTest, execute_set_command)
     GC_ParseCommand(code, const_cast<char*>(command.c_str()));
     std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
     GC_CompressCommand(code, data.data());
-    GC_ExecuteFromBuffer(&functions, data.data());
+    GC_ExecuteFromBuffer(&functions, (void*)&check_parameter, data.data());
     ASSERT_EQ(1, results_list.size());
     ASSERT_EQ(GCODE_SET, results_list[0].command_id & 0x00ff);
+}
+
+TEST_F(GCodeExecutorTest, execute_check_additional_parameters)
+{
+    std::string command = "G92 X0 Y0";
+    GC_ParseCommand(code, const_cast<char*>(command.c_str()));
+    std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
+    GC_CompressCommand(code, data.data());
+    GC_ExecuteFromBuffer(&functions, (void*)&check_parameter, data.data());
+    ASSERT_EQ(check_parameter, void_parameter);
 }
 
 TEST_F(GCodeExecutorTest, execution_parameters)
@@ -690,7 +709,7 @@ TEST_F(GCodeExecutorTest, execution_parameters)
     GC_ParseCommand(code, const_cast<char*>(command.c_str()));
     std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
     GC_CompressCommand(code, data.data());
-    GC_ExecuteFromBuffer(&functions, data.data());
+    GC_ExecuteFromBuffer(&functions, (void*)&check_parameter, data.data());
     ASSERT_EQ(1, results_list.size());
     ASSERT_EQ(1600, results_list[0].command_execution_parameters.fetch_speed);
     ASSERT_EQ((int16_t)(1.0 * cfg.x_steps_per_cm), results_list[0].command_execution_parameters.x);
@@ -705,7 +724,7 @@ TEST_F(GCodeExecutorTest, execute_subcommand)
     GC_ParseCommand(code, const_cast<char*>(command.c_str()));
     std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
     GC_CompressCommand(code, data.data());
-    ASSERT_EQ((int)GCODE_OK, GC_ExecuteFromBuffer(&functions, data.data()));
+    ASSERT_EQ((int)GCODE_OK, GC_ExecuteFromBuffer(&functions, (void*)&check_parameter, data.data()));
 }
 
 TEST_F(GCodeExecutorTest, execute_set_temperature_subcommand)
@@ -714,7 +733,7 @@ TEST_F(GCodeExecutorTest, execute_set_temperature_subcommand)
     GC_ParseCommand(code, const_cast<char*>(command.c_str()));
     std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
     GC_CompressCommand(code, data.data());
-    GC_ExecuteFromBuffer(&functions, data.data());
+    GC_ExecuteFromBuffer(&functions, (void*)&check_parameter, data.data());
     ASSERT_EQ(1, results_list.size());
     ASSERT_TRUE(0 != (GCODE_SUBCOMMAND & results_list[0].command_id));
     ASSERT_EQ(GCODE_SET_NOZZLE_TEMPERATURE, results_list[0].command_id & 0x00ff);
@@ -726,7 +745,7 @@ TEST_F(GCodeExecutorTest, execute_subcommand_parameters)
     GC_ParseCommand(code, const_cast<char*>(command.c_str()));
     std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
     GC_CompressCommand(code, data.data());
-    GC_ExecuteFromBuffer(&functions, data.data());
+    GC_ExecuteFromBuffer(&functions, (void*)&check_parameter, data.data());
     ASSERT_EQ(1, results_list.size());
     ASSERT_EQ(2, results_list[0].subcommand_execution_parameters.i);
     ASSERT_EQ(254, results_list[0].subcommand_execution_parameters.s);
@@ -738,8 +757,8 @@ TEST_F(GCodeExecutorTest, execute_forward_return_value)
     GC_ParseCommand(code, const_cast<char*>(command.c_str()));
     std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
     GC_CompressCommand(code, data.data());
-    GC_ExecuteFromBuffer(&functions, data.data());
-    ASSERT_EQ((int)GCODE_INCOMPLETE, GC_ExecuteFromBuffer(&functions, data.data()));
+    GC_ExecuteFromBuffer(&functions, (void*)&check_parameter, data.data());
+    ASSERT_EQ((int)GCODE_INCOMPLETE, GC_ExecuteFromBuffer(&functions, (void*)&check_parameter, data.data()));
 }
 
 class GCodeParserDialectTest : public ::testing::Test

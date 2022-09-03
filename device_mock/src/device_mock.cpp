@@ -57,6 +57,7 @@ void Device::WritePin(size_t port, uint16_t pin, GPIO_PinState state)
     auto& pin_state = m_ports[port].pins[pin];
     ++pin_state.gpio_signals;
     pin_state.state = state;
+    pin_state.signals_log.push_back(pin_state.state);
 }
 
 GPIO_PinState Device::TogglePin(size_t port, uint16_t pin)
@@ -71,6 +72,7 @@ GPIO_PinState Device::TogglePin(size_t port, uint16_t pin)
     {
         pin_state.state = GPIO_PIN_SET;
     }
+    pin_state.signals_log.push_back(pin_state.state);
     ++pin_state.gpio_signals;
     return m_ports[port].pins[pin].state;
 }
@@ -85,6 +87,7 @@ void Device::ResetPinGPIOCounters(GPIO_TypeDef port, uint16_t pin)
     ValidatePortAndPin(port, pin);
     auto& pin_state = m_ports[port].pins[pin];
     pin_state.gpio_signals = 0;
+    pin_state.signals_log.clear();
 }
 
 const Device::PinState& Device::GetPinState(GPIO_TypeDef port, uint16_t pin) const
