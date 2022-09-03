@@ -1,4 +1,5 @@
 #include "main.h"
+#include "include/pulse_engine.h"
 
 #ifndef __MOTOR__
 #define __MOTOR__
@@ -9,6 +10,7 @@ extern "C" {
 
 typedef struct MotorConfig_type
 {
+    PULSE_SINGAL  signal_type;
     GPIO_TypeDef* step_port;
     uint16_t      step_pin;
     GPIO_TypeDef* dir_port;

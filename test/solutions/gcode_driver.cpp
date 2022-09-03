@@ -30,7 +30,7 @@ TEST(GCodeDriverBasicTest, printer_cannot_create_without_frequency)
     AttachDevice(device);
 
     GPIO_TypeDef port = 0;
-    MotorConfig motor = { &port, 0, &port, 0 };
+    MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
     SDcardMock storage(1024);
     PrinterConfig cfg = { &storage, 0, 0, motor, motor, motor, motor };
 
@@ -44,7 +44,7 @@ TEST(GCodeDriverBasicTest, printer_cannot_create_without_area_settings)
     AttachDevice(device);
 
     GPIO_TypeDef port = 0;
-    MotorConfig motor = { &port, 0, &port, 0 };
+    MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
     SDcardMock storage(1024);
     PrinterConfig cfg = { &storage, 0, 10000, motor, motor, motor, motor, 0 };
 
@@ -58,7 +58,7 @@ TEST(GCodeDriverBasicTest, printer_can_create_with_storage)
     AttachDevice(device);
 
     GPIO_TypeDef port = 0;
-    MotorConfig motor = { &port, 0, &port, 0 };
+    MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
     SDcardMock storage(1024);
     GCodeAxisConfig axis_cfg = { 1,1,1,1 };
     PrinterConfig cfg = { &storage, 0, 10000, motor, motor, motor, motor, &axis_cfg};
@@ -85,7 +85,7 @@ protected:
 
         storage = std::make_unique<SDcardMock>(1024);
         
-        MotorConfig motor = { &port, 0, &port, 0 };
+        MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
         PrinterConfig cfg = { storage.get(), CONTROL_BLOCK_POSITION, PrinterEmulator::main_frequency, motor, motor, motor, motor, &axis_cfg };
 
         printer_driver = PrinterConfigure(&cfg);

@@ -28,6 +28,7 @@ TEST(MOTOR_BasicTest, can_create_motor)
 
     MotorConfig config =
     {
+        PULSE_LOWER,
         &step_port,
         step_pin,
         &dir_port,
@@ -59,6 +60,7 @@ protected:
 
         MotorConfig config =
         {
+            PULSE_LOWER,
             &step_port,
             step_pin,
             &dir_port,

@@ -11,13 +11,14 @@ typedef struct PulseInternal_type
 
 	uint32_t period;
 	uint32_t power;
+	PULSE_SINGAL signal_type;
 
 	uint32_t signal_tick;
 	uint32_t tick;
 
 } PulseInternal;
 
-HPULSE PULSE_Configure(pulse_callback* on_callback, pulse_callback* off_callback, void* parameter)
+HPULSE PULSE_Configure(PULSE_SINGAL signal_type, pulse_callback* on_callback, pulse_callback* off_callback, void* parameter)
 {
 	if (!on_callback || !off_callback)
 	{
@@ -31,6 +32,7 @@ HPULSE PULSE_Configure(pulse_callback* on_callback, pulse_callback* off_callback
 	pulse->parameter = parameter;
 	pulse->period = 1;
 	pulse->power = 0;
+	pulse->signal_type = signal_type;
 
 	return (HPULSE)pulse;
 }
@@ -71,10 +73,12 @@ void PULSE_HandleTick(HPULSE pulse)
 
 	++internal_pulse->tick;
 
-	uint32_t signal_tick = (internal_pulse->tick * internal_pulse->power) / internal_pulse->period;
+	// higher signal produces 'on' signal as a 1st signal, if power permits :)
+	uint32_t signal_tick = internal_pulse->signal_type * internal_pulse->power + 
+		((internal_pulse->tick - internal_pulse->signal_type) * internal_pulse->power) / internal_pulse->period;
 	if (signal_tick > internal_pulse->signal_tick)
 	{
-		++internal_pulse->signal_tick;
+		internal_pulse->signal_tick = signal_tick;
 		internal_pulse->on(internal_pulse->parameter);
 	}
 	else

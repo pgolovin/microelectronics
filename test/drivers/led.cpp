@@ -83,10 +83,10 @@ TEST_F(LED_Test, toggle_from_on)
 TEST_F(LED_Test, toggle_twice)
 {
     LED_Toggle(led);
-EXPECT_EQ(LED_GetState(led), GPIO_PIN_SET);
-LED_Toggle(led);
-ASSERT_EQ(LED_GetState(led), GPIO_PIN_RESET);
-ASSERT_EQ(device->GetPinState(port, pin).state, GPIO_PIN_RESET);
+    EXPECT_EQ(LED_GetState(led), GPIO_PIN_SET);
+    LED_Toggle(led);
+    ASSERT_EQ(LED_GetState(led), GPIO_PIN_RESET);
+    ASSERT_EQ(device->GetPinState(port, pin).state, GPIO_PIN_RESET);
 }
 
 
