@@ -23,6 +23,34 @@ TEST(GCodeDriverBasicTest, printer_cannot_create_without_storage)
     ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
 }
 
+TEST(GCodeDriverBasicTest, printer_cannot_create_without_frequency)
+{
+    DeviceSettings ds;
+    Device device(ds);
+    AttachDevice(device);
+
+    GPIO_TypeDef port = 0;
+    MotorConfig motor = { &port, 0, &port, 0 };
+    SDcardMock storage(1024);
+    PrinterConfig cfg = { &storage, 0, 0, motor, motor, motor, motor };
+
+    ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
+}
+
+TEST(GCodeDriverBasicTest, printer_cannot_create_without_area_settings)
+{
+    DeviceSettings ds;
+    Device device(ds);
+    AttachDevice(device);
+
+    GPIO_TypeDef port = 0;
+    MotorConfig motor = { &port, 0, &port, 0 };
+    SDcardMock storage(1024);
+    PrinterConfig cfg = { &storage, 0, 10000, motor, motor, motor, motor, 0 };
+
+    ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
+}
+
 TEST(GCodeDriverBasicTest, printer_can_create_with_storage)
 {
     DeviceSettings ds;
@@ -32,15 +60,22 @@ TEST(GCodeDriverBasicTest, printer_can_create_with_storage)
     GPIO_TypeDef port = 0;
     MotorConfig motor = { &port, 0, &port, 0 };
     SDcardMock storage(1024);
-    PrinterConfig cfg = { &storage, 0, motor, motor, motor, motor };
+    GCodeAxisConfig axis_cfg = { 1,1,1,1 };
+    PrinterConfig cfg = { &storage, 0, 10000, motor, motor, motor, motor, &axis_cfg};
 
     ASSERT_TRUE(nullptr != PrinterConfigure(&cfg));
 }
 
 class GCodeDriverTest : public ::testing::Test, public PrinterEmulator
 {
+public:
+    GCodeDriverTest()
+        : PrinterEmulator(100)
+    {
+    }
 protected:
     GPIO_TypeDef port = 0;
+    GCodeAxisConfig axis_cfg = { 1,1,1,1 };
 
     virtual void SetUp()
     {
@@ -51,7 +86,7 @@ protected:
         storage = std::make_unique<SDcardMock>(1024);
         
         MotorConfig motor = { &port, 0, &port, 0 };
-        PrinterConfig cfg = { storage.get(), CONTROL_BLOCK_POSITION, motor, motor, motor, motor };
+        PrinterConfig cfg = { storage.get(), CONTROL_BLOCK_POSITION, PrinterEmulator::main_frequency, motor, motor, motor, motor, &axis_cfg };
 
         printer_driver = PrinterConfigure(&cfg);
     }
@@ -201,33 +236,34 @@ TEST_F(GCodeDriverTest, printer_printing_finished)
 
 class GCodeDriverCommandTest : public ::testing::Test, public PrinterEmulator
 {
+public:
+    GCodeDriverCommandTest()
+        : PrinterEmulator(100)
+    {}
 protected:
-    
 
     virtual void SetUp()
     {
-        SetupPrinter();
+        SetupPrinter({ 1,1,1,1 });
 
         std::vector<std::string> gcode_command_list = 
         {
-            "G0 F10000 X0 Y0 Z0 E0",
-            "G1 F10000 X10 Y0 Z0 E0",
-            "G1 F10000 X15 Y10 Z2 E14",
+            "G0 F6000 X0 Y0 Z0 E0",
+            "G1 F6000 X10 Y0 Z0 E0",
+            "G1 F6000 X15 Y10 Z2 E14",
             "G92 X0 Y0",
             "G1 F1600 X0 Y0 Z0 E0",
         };
 
         StartPrinting(gcode_command_list);
-    }
-
-    
+    }   
 };
 
 TEST_F(GCodeDriverCommandTest, printer_commands_setup_call)
 {
     PrinterNextCommand(printer_driver);
     GCodeCommandParams params = *PrinterGetCurrentPath(printer_driver);
-    ASSERT_EQ(10000, params.fetch_speed);
+    ASSERT_EQ(6000, params.fetch_speed);
     ASSERT_EQ(0, params.x);
     ASSERT_EQ(0, params.y);
     ASSERT_EQ(0, params.z);
@@ -262,7 +298,7 @@ TEST_F(GCodeDriverCommandTest, printer_commands_the_next_parameters)
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     GCodeCommandParams params = *PrinterGetCurrentPath(printer_driver);
-    ASSERT_EQ(10000, params.fetch_speed);
+    ASSERT_EQ(6000, params.fetch_speed);
     ASSERT_EQ(10, params.x);
     ASSERT_EQ(0, params.y);
     ASSERT_EQ(0, params.z);
@@ -275,7 +311,7 @@ TEST_F(GCodeDriverCommandTest, printer_commands_segment)
 
     PrinterNextCommand(printer_driver);
     GCodeCommandParams params = *PrinterGetCurrentPath(printer_driver);
-    ASSERT_EQ(10000, params.fetch_speed);
+    ASSERT_EQ(6000, params.fetch_speed);
     ASSERT_EQ(5, params.x);
     ASSERT_EQ(10, params.y);
     ASSERT_EQ(2, params.z);
@@ -328,11 +364,18 @@ struct PathTest
 
 class GCodeDriverPathTest : public ::testing::TestWithParam<PathTest>, public PrinterEmulator
 {
+public: 
+    GCodeDriverPathTest()
+    : PrinterEmulator(100)
+    {
+    }
 protected:
     virtual void SetUp()
     {
-        SetupPrinter();
+        SetupPrinter({ 1,1,1,1 });
     }
+
+    std::string initial_command = "G0 F6000 X0 Y0 Z0 E0"; // for current settings this means that step will be called each execute call.
 };
 
 TEST_P(GCodeDriverPathTest, printer_motion)
@@ -340,7 +383,7 @@ TEST_P(GCodeDriverPathTest, printer_motion)
     const PathTest path_settings = GetParam();
 
     std::vector<std::string> commands = {
-        "G0 F10000 X0 Y0 Z0 E0",
+        initial_command,
         path_settings.path_command,
     };
     StartPrinting(commands);
@@ -359,23 +402,29 @@ TEST_P(GCodeDriverPathTest, printer_motion)
     ++i; // calculate size of the command
     ASSERT_EQ(path_settings.expected_steps, i);
 }
+//ASSUMPTION:
+// movement alognside XY is separated from movement alongside Z
+// so Fetch speed calculated for both these parameters separately
+// thus max fetch speed in case of movement [0,0,0]->[20,20,20] will be 1.4 times
+// bigger than fetch speed.
+//TODO: check on real device, since Z axis is rarelly used, this might be not an issue
 
 INSTANTIATE_TEST_SUITE_P(
     PrinterPathTest, GCodeDriverPathTest,
     ::testing::Values(
-        PathTest{ "alongside_X",   "G0 X124 Y0 Z0 E0",      124 },
-        PathTest{ "alongside_Y",   "G0 X0 Y999 Z0 E0",      999 },
-        PathTest{ "alongside_Z",   "G0 X0 Y0 Z50 E0",        50 },
-        PathTest{ "alongside_E",   "G0 X0 Y0 Z0 E333",      333 },
-        PathTest{ "diagonals_XY",  "G0 X30 Y40 Z0 E0",       50 },
-        PathTest{ "diagonals_XnY", "G0 X30 Y-40 Z0 E0",      50 },
-        PathTest{ "diagonals_XZ",  "G0 X30 Y0 Z40 E0",       50 },
-        PathTest{ "diagonals_XnZ", "G0 X30 Y0 Z-40 E0",      50 },
-        PathTest{ "diagonals_XYZ", "G0 X30 Y40 Z50 E0",      71 },
-        PathTest{ "extrusion_LE",  "G0 X30 Y40 Z50 E20",     71 },
-        PathTest{ "extrusion_GT",  "G0 X30 Y40 Z50 E200",   200 }
-        // Fetch speed is oriented on 10000 calls/sec Fmm/min
-        // TODO: add settings for fetch_speed
+        PathTest{ "alongside_X",    "G0 X124 Y0 Z0 E0",      124 },
+        PathTest{ "alongside_Y",    "G0 X0 Y999 Z0 E0",      999 },
+        PathTest{ "alongside_Z",    "G0 X0 Y0 Z50 E0",        50 },
+        PathTest{ "alongside_E",    "G0 X0 Y0 Z0 E333",      333 },
+        PathTest{ "diagonals_XY",   "G0 X30 Y40 Z0 E0",       50 },
+        PathTest{ "diagonals_XnY",  "G0 X30 Y-40 Z0 E0",      50 },
+        PathTest{ "diagonals_XlsZ", "G0 X30 Y0 Z20 E0",       30 },
+        PathTest{ "diagonals_XgtZ", "G0 X30 Y0 Z40 E0",       40 },
+        PathTest{ "diagonals_XnZ",  "G0 X30 Y0 Z-40 E0",      40 },
+        PathTest{ "diagonals_XYZ",  "G0 X30 Y40 Z30 E0",      50 },
+        PathTest{ "diagonals_XYgtZ","G0 X30 Y40 Z90 E0",      90 },
+        PathTest{ "extrusion_LE",   "G0 X30 Y40 Z50 E20",     50 },
+        PathTest{ "extrusion_GT",   "G0 X30 Y40 Z50 E200",   200 }
     ),
     [](const ::testing::TestParamInfo<GCodeDriverPathTest::ParamType>& info)
     {
@@ -385,3 +434,144 @@ INSTANTIATE_TEST_SUITE_P(
     }
 );
 
+struct SpeedTest
+{
+    std::string name;
+    std::string command;
+    PRINTER_STATUS expected_status;
+    uint32_t expected_steps;
+};
+
+class GCodeDriverSpeedTest : public ::testing::TestWithParam<SpeedTest>, public PrinterEmulator
+{
+public:
+    // use real frequency this time
+    GCodeDriverSpeedTest()
+        : PrinterEmulator(10000)
+    {}
+protected:
+
+    virtual void SetUp()
+    {
+        SetupPrinter({ 1,1,1,1 });
+    }
+
+    std::string initial_command = "G0 F1800 X0 Y0 Z0 E0";
+};
+
+TEST_P(GCodeDriverSpeedTest, printer_motion)
+{
+    const SpeedTest speed_settings = GetParam();
+
+    std::vector<std::string> commands = {
+        initial_command,
+        speed_settings.command,
+    };
+    StartPrinting(commands);
+    PrinterNextCommand(printer_driver);
+    PRINTER_STATUS status = PrinterNextCommand(printer_driver);
+    ASSERT_EQ(speed_settings.expected_status, status);
+    if (GCODE_INCOMPLETE != status)
+    {
+        return;
+    }
+
+    uint32_t i = 0;
+    for (; i < speed_settings.expected_steps + 10; ++i)
+    {
+        status = PrinterExecuteCommand(printer_driver);
+        if (GCODE_OK == status)
+        {
+            break;
+        }
+    }
+    ++i; // calculate size of the command
+    ASSERT_EQ(speed_settings.expected_steps, i);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    PrinterSpeedTest, GCodeDriverSpeedTest,
+    ::testing::Values(
+        SpeedTest{ "zero",      "G0 F0 X124 Y0 Z0 E0",        (PRINTER_STATUS)GCODE_ERROR_INVALID_PARAM,     0 },
+        SpeedTest{ "negative",  "G0 F-1000 X124 Y0 Z0 E0",    (PRINTER_STATUS)GCODE_ERROR_INVALID_PARAM,     0 },
+        SpeedTest{ "only_X",    "G0 F1800 X124 Y0 Z0 E0",     (PRINTER_STATUS)GCODE_INCOMPLETE,          41333 }, // 30mm/sec ~ 30steps/sec
+        SpeedTest{ "only_Y",    "G0 F2400 X0 Y120 Z0 E0",     (PRINTER_STATUS)GCODE_INCOMPLETE,          30000 }, // steps * 10000 * 60 / fetch
+        SpeedTest{ "only_Z",    "G0 F5800 X0 Y0 Z600 E0",     (PRINTER_STATUS)GCODE_INCOMPLETE,          62068 },
+        SpeedTest{ "only_E",    "G0 F5800 X0 Y0 Z0 E6",       (PRINTER_STATUS)GCODE_INCOMPLETE,            620 },
+        SpeedTest{ "XY",        "G0 F1800 X120 Y240 Z0 E0",   (PRINTER_STATUS)GCODE_INCOMPLETE,          89333 },
+        SpeedTest{ "nXY",       "G0 F1800 X-120 Y240 Z0 E0",  (PRINTER_STATUS)GCODE_INCOMPLETE,          89333 },
+        SpeedTest{ "printing",  "G0 F3600 X220 Y-340 Z0 E200",(PRINTER_STATUS)GCODE_INCOMPLETE,          67500 } 
+    ),
+    [](const ::testing::TestParamInfo<GCodeDriverSpeedTest::ParamType>& info)
+    {
+        std::ostringstream out;
+        out << "speed_" << info.param.name;
+        return out.str();
+    }
+);
+
+
+class GCodeDriverNormalizedSpeedTest : public ::testing::TestWithParam<SpeedTest>, public PrinterEmulator
+{
+public:
+    // use real frequency this time
+    GCodeDriverNormalizedSpeedTest()
+        : PrinterEmulator(10000)
+    {}
+protected:
+
+    virtual void SetUp()
+    {
+        SetupPrinter(axis_configuration);
+    }
+
+    std::string initial_command = "G0 F1800 X0 Y0 Z0 E0";
+};
+
+TEST_P(GCodeDriverNormalizedSpeedTest, printer_motion)
+{
+    const SpeedTest speed_settings = GetParam();
+
+    std::vector<std::string> commands = {
+        initial_command,
+        speed_settings.command,
+    };
+    StartPrinting(commands);
+    PrinterNextCommand(printer_driver);
+    PRINTER_STATUS status = PrinterNextCommand(printer_driver);
+
+    uint32_t i = 0;
+    for (; i < 0xFFFFFF; ++i)
+    {
+        status = PrinterExecuteCommand(printer_driver);
+        if (GCODE_OK == status)
+        {
+            break;
+        }
+    }
+    ++i; // calculate size of the command
+    ASSERT_EQ(speed_settings.expected_steps, i) << "incorrect number of steps";
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    PrinterNormalizedSpeedTest, GCodeDriverNormalizedSpeedTest,
+    ::testing::Values(
+        SpeedTest{ "only_X",    "G0 F1800 X124 Y0 Z0 E0",      PRINTER_OK,  413 }, // 30mm/sec ~ 30 * x_steps_per_mm steps/sec
+        SpeedTest{ "only_Y",    "G0 F2400 X0 Y120 Z0 E0",      PRINTER_OK,  300 }, // steps * 10000 * 60 / fetch
+        SpeedTest{ "only_Z",    "G0 F600 X0 Y0 Z600 E0",       PRINTER_OK, 1500 }, 
+        SpeedTest{ "only_E",    "G0 F600 X0 Y0 Z0 E600",       PRINTER_OK, 5769 },
+        SpeedTest{ "limit_Z",   "G0 F5800 X0 Y0 Z600 E0",      PRINTER_OK,  600 }, // number of stepps cannot be less than required distance
+        SpeedTest{ "limit_E",   "G0 F7200 X0 Y0 Z0 E600",      PRINTER_OK,  600 }, // number of stepps cannot be less than required distance
+        SpeedTest{ "XYgtE",     "G1 F1800 X300 Y400 Z0 E600",  PRINTER_OK, 1923 },
+        SpeedTest{ "XYlsE",     "G1 F1800 X300 Y400 Z0 E300",  PRINTER_OK, 1666 },
+        SpeedTest{ "level_Down","G0 F600 Z4",                  PRINTER_OK,   10 },
+        SpeedTest{ "level_Up",  "G0 F600 Z-4",                 PRINTER_OK,   10 },
+        SpeedTest{ "retract",   "G0 F2400 E-4",                PRINTER_OK,    9 }
+    ),
+    [](const ::testing::TestParamInfo<GCodeDriverSpeedTest::ParamType>& info)
+    {
+        std::ostringstream out;
+        out << "normalized_speed_" << info.param.name;
+        return out.str();
+    }
+);

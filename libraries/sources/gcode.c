@@ -80,8 +80,6 @@ static GCODE_ERROR parseCommandParams(GCodeCommandParams* params, GCodeAxisConfi
     uint16_t multiplier = 1;
     int16_t* param = 0;
     
-    // parse arguments for all commands in a single function
-    // it's a messy but i decided to go this way to reduce amount of executable code
     while (*command_line)
     {
         multiplier = 1;
@@ -91,19 +89,19 @@ static GCODE_ERROR parseCommandParams(GCodeCommandParams* params, GCodeAxisConfi
             param = &params->fetch_speed;
             break;
         case 'X':
-            multiplier = cfg->x_steps_per_cm;
+            multiplier = cfg->x_steps_per_mm;
             param = &params->x;
             break;
         case 'Y':
-            multiplier = cfg->y_steps_per_cm;
+            multiplier = cfg->y_steps_per_mm;
             param = &params->y;
             break;
         case 'Z':
-            multiplier = cfg->z_steps_per_cm;
+            multiplier = cfg->z_steps_per_mm;
             param = &params->z;
             break;
         case 'E':
-            multiplier = cfg->e_steps_per_cm;
+            multiplier = cfg->e_steps_per_mm;
             param = &params->e;
             break; 
         case ';': // no parameters will be available after the comment

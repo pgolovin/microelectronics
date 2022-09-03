@@ -184,19 +184,19 @@ protected:
     virtual void ValidateArguments(GCodeCommandParams* g)
     {
         ASSERT_EQ(6200, g->fetch_speed);
-        ASSERT_EQ(2.45f * cfg.x_steps_per_cm, g->x);
-        ASSERT_EQ(1.00f * cfg.y_steps_per_cm, g->y);
-        ASSERT_EQ(0.10f * cfg.z_steps_per_cm, g->z);
-        ASSERT_EQ(1.76f * cfg.e_steps_per_cm, g->e);
+        ASSERT_EQ(2.45f * cfg.x_steps_per_mm, g->x);
+        ASSERT_EQ(1.00f * cfg.y_steps_per_mm, g->y);
+        ASSERT_EQ(0.10f * cfg.z_steps_per_mm, g->z);
+        ASSERT_EQ(1.76f * cfg.e_steps_per_mm, g->e);
     }
 
     virtual void ValidateSecondaryArguments(GCodeCommandParams* g)
     {
         ASSERT_EQ(6200, g->fetch_speed);                          //unmodified
-        ASSERT_EQ((int16_t)(-1.45f * cfg.x_steps_per_cm), g->x);
-        ASSERT_EQ((int16_t)(1.00f * cfg.y_steps_per_cm), g->y);  //unmodified
-        ASSERT_EQ((int16_t)(0.30f * cfg.z_steps_per_cm), g->z);
-        ASSERT_EQ((int16_t)(-1.11f * cfg.e_steps_per_cm), g->e);
+        ASSERT_EQ((int16_t)(-1.45f * cfg.x_steps_per_mm), g->x);
+        ASSERT_EQ((int16_t)(1.00f * cfg.y_steps_per_mm), g->y);  //unmodified
+        ASSERT_EQ((int16_t)(0.30f * cfg.z_steps_per_mm), g->z);
+        ASSERT_EQ((int16_t)(-1.11f * cfg.e_steps_per_mm), g->e);
     }
 
     virtual void TearDown()
@@ -240,25 +240,25 @@ TEST_F(GCodeParserCommandTest, comman_G_fetch_speed)
 TEST_F(GCodeParserCommandTest, comman_G_x)
 {
     GCodeCommandParams* g = GC_GetCurrentCommand(code);
-    ASSERT_EQ(2.45f * cfg.x_steps_per_cm, g->x);
+    ASSERT_EQ(2.45f * cfg.x_steps_per_mm, g->x);
 }
 
 TEST_F(GCodeParserCommandTest, comman_G_y)
 {
     GCodeCommandParams* g = GC_GetCurrentCommand(code);
-    ASSERT_EQ(1.00f * cfg.y_steps_per_cm, g->y);
+    ASSERT_EQ(1.00f * cfg.y_steps_per_mm, g->y);
 }
 
 TEST_F(GCodeParserCommandTest, comman_G_z)
 {
     GCodeCommandParams* g = GC_GetCurrentCommand(code);
-    ASSERT_EQ(0.10f * cfg.z_steps_per_cm, g->z);
+    ASSERT_EQ(0.10f * cfg.z_steps_per_mm, g->z);
 }
 
 TEST_F(GCodeParserCommandTest, comman_G_e)
 {
     GCodeCommandParams* g = GC_GetCurrentCommand(code);
-    ASSERT_EQ(1.76f * cfg.e_steps_per_cm, g->e);
+    ASSERT_EQ(1.76f * cfg.e_steps_per_mm, g->e);
 }
 
 TEST_F(GCodeParserCommandTest, comment_doesnt_change_params)
@@ -712,10 +712,10 @@ TEST_F(GCodeExecutorTest, execution_parameters)
     GC_ExecuteFromBuffer(&functions, (void*)&check_parameter, data.data());
     ASSERT_EQ(1, results_list.size());
     ASSERT_EQ(1600, results_list[0].command_execution_parameters.fetch_speed);
-    ASSERT_EQ((int16_t)(1.0 * cfg.x_steps_per_cm), results_list[0].command_execution_parameters.x);
-    ASSERT_EQ((int16_t)(2.45 * cfg.y_steps_per_cm), results_list[0].command_execution_parameters.y);
-    ASSERT_EQ((int16_t)(0.1 * cfg.z_steps_per_cm), results_list[0].command_execution_parameters.z);
-    ASSERT_EQ((int16_t)(0.12 * cfg.e_steps_per_cm), results_list[0].command_execution_parameters.e);
+    ASSERT_EQ((int16_t)(1.0 * cfg.x_steps_per_mm), results_list[0].command_execution_parameters.x);
+    ASSERT_EQ((int16_t)(2.45 * cfg.y_steps_per_mm), results_list[0].command_execution_parameters.y);
+    ASSERT_EQ((int16_t)(0.1 * cfg.z_steps_per_mm), results_list[0].command_execution_parameters.z);
+    ASSERT_EQ((int16_t)(0.12 * cfg.e_steps_per_mm), results_list[0].command_execution_parameters.e);
 }
 
 TEST_F(GCodeExecutorTest, execute_subcommand)

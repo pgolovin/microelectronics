@@ -12,6 +12,14 @@ extern "C" {
 #define CONTROL_BLOCK_POSITION 10
 #define CONTROL_BLOCK_SEC_CODE 'prnt'
 
+const GCodeAxisConfig axis_configuration =
+{
+    100,
+    100,
+    400,
+    104
+};
+
 typedef struct PrinterControlBlock_Type
 {
     //id, to identify that card is correct;
