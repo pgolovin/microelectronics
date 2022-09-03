@@ -1,7 +1,7 @@
 #include "solutions/printer_emulator.h"
 
 
-void PrinterEmulator::SetupPrinter()
+void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config)
 {
     DeviceSettings ds;
     device = std::make_unique<Device>(ds);
@@ -14,7 +14,8 @@ void PrinterEmulator::SetupPrinter()
     MotorConfig motor_z = { &port_z_step, 0, &port_z_dir, 0 };
     MotorConfig motor_e = { &port_e_step, 0, &port_e_dir, 0 };
 
-    PrinterConfig cfg = { storage.get(), CONTROL_BLOCK_POSITION, motor_x, motor_y, motor_z, motor_e };
+    external_config = axis_config;
+    PrinterConfig cfg = { storage.get(), CONTROL_BLOCK_POSITION, PrinterEmulator::main_frequency, motor_x, motor_y, motor_z, motor_e, &external_config };
 
     printer_driver = PrinterConfigure(&cfg);
 }
@@ -41,6 +42,7 @@ void PrinterEmulator::MoveToCommand(uint32_t index)
 
 void PrinterEmulator::CreateGCodeData(const std::vector<std::string>& gcode_command_list)
 {
+    //gcode will write data in steps. not mm's
     GCodeAxisConfig axis = { 1,1,1,1 };
     HGCODE interpreter = GC_Configure(&axis);
     if (nullptr == interpreter)

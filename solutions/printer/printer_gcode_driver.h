@@ -14,13 +14,24 @@ extern "C" {
 
 typedef struct PrinterConfig_type
 {
+    // Handle to SD card that contains internal printer settings and data, 
+    // internal Flash drive
     HSDCARD bytecode_storage;
+    // Position of control block in the flash drive. in 512B sectors.
     uint32_t control_block_sector;
 
+    // Main frequency of external timer, this timer controls movement timers 
+    uint16_t main_frequency;
+
+    // Configuration settings of printer motors.
     MotorConfig x;
     MotorConfig y;
     MotorConfig z;
     MotorConfig e;
+
+    // Working area settings
+    // contains information about amount of steps per cantimeter
+    GCodeAxisConfig* axis_configuration;
 } PrinterConfig;
 
 typedef struct PrinterDriver_type
@@ -37,11 +48,11 @@ typedef enum PRINTER_STATUS_Type
     PRINTER_ALREADY_STARTED,
 } PRINTER_STATUS;
 
-HPRINTER PrinterConfigure(PrinterConfig* printer_cfg);
+HPRINTER       PrinterConfigure(PrinterConfig* printer_cfg);
 PRINTER_STATUS PrinterReadControlBlock(HPRINTER hprinter, PrinterControlBlock* control_block);
 
 PRINTER_STATUS PrinterStart(HPRINTER hprinter);
-uint32_t PrinterGetCommandsCount(HPRINTER hprinter);
+uint32_t       PrinterGetCommandsCount(HPRINTER hprinter);
 PRINTER_STATUS PrinterNextCommand(HPRINTER hprinter);
 PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter);
 PRINTER_STATUS PrinterGetStatus(HPRINTER hprinter);

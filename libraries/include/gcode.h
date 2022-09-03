@@ -47,6 +47,7 @@ typedef enum GCODE_ERROR_Type
 {
     GCODE_OK_COMMAND_CREATED = 0,
     GCODE_OK_NO_COMMAND, // comment or empty line
+    GCODE_ERROR_INVALID_PARAM,
     GCODE_ERROR_UNKNOWN_PARAM,
     GCODE_ERROR_UNKNOWN_COMMAND,
     GCODE_ERROR_UNKNOWN,
@@ -89,10 +90,10 @@ typedef struct GCodeFunctionList_type
 
 typedef struct GCodeAxisConfig_type
 {
-    int16_t x_steps_per_cm;
-    int16_t y_steps_per_cm;
-    int16_t z_steps_per_cm;
-    int16_t e_steps_per_cm;
+    int16_t x_steps_per_mm;
+    int16_t y_steps_per_mm;
+    int16_t z_steps_per_mm;
+    int16_t e_steps_per_mm;
 } GCodeAxisConfig;
 
 typedef GCode_Type* HGCODE;
