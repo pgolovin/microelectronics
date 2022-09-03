@@ -1,5 +1,4 @@
 #include "include/motor.h"
-#include "include/pulse_engine.h"
 
 // private members part
 typedef struct Motor_type
@@ -32,7 +31,7 @@ HMOTOR MOTOR_Configure(MotorConfig* config)
     HAL_GPIO_WritePin(motor->port_config.step_port, motor->port_config.step_pin, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(motor->port_config.dir_port, motor->port_config.dir_pin, GPIO_PIN_RESET);
 
-    motor->pulse_engine = PULSE_Configure(pulse_call, pulse_off, motor);
+    motor->pulse_engine = PULSE_Configure(config->signal_type, pulse_call, pulse_off, motor);
     motor->programmable_ticks = 0;
 
     return (HMOTOR)motor;

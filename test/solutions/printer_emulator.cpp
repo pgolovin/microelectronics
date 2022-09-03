@@ -9,10 +9,11 @@ void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config)
 
     storage = std::make_unique<SDcardMock>(1024);
 
-    MotorConfig motor_x = { &port_x_step, 0, &port_x_dir, 0 };
-    MotorConfig motor_y = { &port_y_step, 0, &port_y_dir, 0 };
-    MotorConfig motor_z = { &port_z_step, 0, &port_z_dir, 0 };
-    MotorConfig motor_e = { &port_e_step, 0, &port_e_dir, 0 };
+    MotorConfig motor_x = {PULSE_LOWER, &port_x_step, 0, &port_x_dir, 0 };
+    MotorConfig motor_y = {PULSE_LOWER, &port_y_step, 0, &port_y_dir, 0 };
+    MotorConfig motor_z = {PULSE_LOWER, &port_z_step, 0, &port_z_dir, 0 };
+    //extruder engine starts extrusion and the start of the segment, to avoid gaps in the printing
+    MotorConfig motor_e = {PULSE_HIGHER, &port_e_step, 0, &port_e_dir, 0 };
 
     external_config = axis_config;
     PrinterConfig cfg = { storage.get(), CONTROL_BLOCK_POSITION, PrinterEmulator::main_frequency, motor_x, motor_y, motor_z, motor_e, &external_config };

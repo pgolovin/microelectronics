@@ -35,7 +35,7 @@ LED* LED_Configure(GPIO_TypeDef* pin_array, uint16_t pin)
 	led->pin_array = pin_array;
 	led->pin = pin;
 	
-	led->pulse_engine = PULSE_Configure(LED_On_Callback, LED_Off_Callback, led);
+	led->pulse_engine = PULSE_Configure(PULSE_LOWER, LED_On_Callback, LED_Off_Callback, led);
 	PULSE_SetPeriod(led->pulse_engine, 100);
 	
 	led->led_state = GPIO_PIN_RESET;
