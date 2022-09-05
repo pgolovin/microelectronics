@@ -41,6 +41,14 @@ void PrinterEmulator::MoveToCommand(uint32_t index)
     }
 }
 
+void PrinterEmulator::CompleteCommand(PRINTER_STATUS command_status)
+{
+    while (command_status != PRINTER_OK)
+    {
+        command_status = PrinterExecuteCommand(printer_driver);
+    }
+}
+
 void PrinterEmulator::CreateGCodeData(const std::vector<std::string>& gcode_command_list)
 {
     //gcode will write data in steps. not mm's

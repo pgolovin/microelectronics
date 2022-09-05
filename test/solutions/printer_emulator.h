@@ -36,6 +36,7 @@ protected:
     void StartPrinting(const std::vector<std::string>& commands);
 
     void MoveToCommand(uint32_t index);
+    void CompleteCommand(PRINTER_STATUS command_status);
 
     void CreateGCodeData(const std::vector<std::string>& gcode_command_list);
 

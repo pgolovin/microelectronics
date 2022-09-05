@@ -548,6 +548,85 @@ INSTANTIATE_TEST_SUITE_P(
     }
 );
 
+class GCodeDecompilerTest : public ::testing::Test
+{
+protected:
+
+    std::unique_ptr<Device> device;
+    HGCODE code = nullptr;
+    GCodeAxisConfig cfg = { 100, 100, 100, 100 };
+    std::vector<uint8_t> compiled_data;
+    GCodeFunctionList functions;
+
+    static uint32_t void_parameter;
+    static const uint32_t check_parameter = 42;
+
+    virtual void SetUp()
+    {
+        DeviceSettings ds;
+        device = std::make_unique<Device>(ds);
+        AttachDevice(*device);
+        code = GC_Configure(&cfg);
+    }
+};
+
+TEST_F(GCodeDecompilerTest, decompile_cannot_without_data)
+{
+    GCODE_COMMAND_LIST command_id;
+    ASSERT_TRUE(nullptr == GC_DecompileFromBuffer(nullptr, &command_id));
+}
+
+TEST_F(GCodeDecompilerTest, decompile_cannot_without_command_id)
+{
+    std::string command = "G0 F1600 X1.0 Y2.0 Z0.1 E0.12";
+    GC_ParseCommand(code, const_cast<char*>(command.c_str()));
+    std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
+    GC_CompressCommand(code, data.data());
+
+    ASSERT_TRUE(nullptr == GC_DecompileFromBuffer(data.data(), nullptr));
+}
+
+TEST_F(GCodeDecompilerTest, decompile_can_do_command)
+{
+    std::string command = "G0 F1600 X1.0 Y2.0 Z0.1 E0.12";
+    GC_ParseCommand(code, const_cast<char*>(command.c_str()));
+    std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
+    GC_CompressCommand(code, data.data());
+
+    GCODE_COMMAND_LIST command_id;
+
+    ASSERT_TRUE(nullptr != GC_DecompileFromBuffer(data.data(), &command_id));
+}
+
+TEST_F(GCodeDecompilerTest, decompile_command)
+{
+    std::string command = "G0 F1600 X1.0 Y2.45 Z0.1 E0.12";
+    GC_ParseCommand(code, const_cast<char*>(command.c_str()));
+    std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
+    GC_CompressCommand(code, data.data());
+
+    GCODE_COMMAND_LIST command_id;
+    GCodeCommandParams* params = GC_DecompileFromBuffer(data.data(), &command_id);
+
+    ASSERT_EQ(GCODE_MOVE, command_id);
+    ASSERT_EQ(1600, params->fetch_speed);
+    ASSERT_EQ((int16_t)(1.0 * cfg.x_steps_per_mm), params->x);
+    ASSERT_EQ((int16_t)(2.45 * cfg.y_steps_per_mm), params->y);
+    ASSERT_EQ((int16_t)(0.1 * cfg.z_steps_per_mm), params->z);
+    ASSERT_EQ((int16_t)(0.12 * cfg.e_steps_per_mm), params->e);
+}
+
+TEST_F(GCodeDecompilerTest, decompile_subcommand)
+{
+    std::string command = "M107 S255";
+    GC_ParseCommand(code, const_cast<char*>(command.c_str()));
+    std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
+    GC_CompressCommand(code, data.data());
+
+    GCODE_COMMAND_LIST command_id;
+    ASSERT_TRUE(nullptr == GC_DecompileFromBuffer(data.data(), &command_id));
+}
+
 class GCodeExecutorTest : public ::testing::Test
 {
 protected:

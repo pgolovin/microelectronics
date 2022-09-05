@@ -105,6 +105,7 @@ GCODE_ERROR             GC_ParseCommand(HGCODE hcode, char* command_line);
 
 //compressor and validator
 uint32_t                GC_CompressCommand(HGCODE hcode, uint8_t* buffer);
+GCodeCommandParams*     GC_DecompileFromBuffer(uint8_t* buffer, GCODE_COMMAND_LIST* out_command_id); // Unsafe
 GCODE_COMMAND_STATE     GC_ExecuteFromBuffer(GCodeFunctionList* functions, void* additional_parameter, uint8_t* buffer);
 
 //diagnostics

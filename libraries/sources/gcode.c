@@ -299,6 +299,21 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
     return GCODE_CHUNK_SIZE;
 }
 
+GCodeCommandParams* GC_DecompileFromBuffer(uint8_t* buffer, GCODE_COMMAND_LIST* out_command_id)
+{
+    if (!buffer || !out_command_id)
+    {
+        return 0;
+    }
+
+    if (*(uint16_t*)buffer & GCODE_COMMAND)
+    {
+        *out_command_id = (GCODE_COMMAND_LIST)buffer[0];
+        return (GCodeCommandParams*)(buffer + 2);
+    }
+    return 0;
+}
+
 GCODE_COMMAND_STATE GC_ExecuteFromBuffer(GCodeFunctionList* functions, void* additional_parameter, uint8_t* buffer)
 {
     if (!functions)

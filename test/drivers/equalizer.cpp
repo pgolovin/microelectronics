@@ -293,8 +293,8 @@ INSTANTIATE_TEST_SUITE_P(
         EqualizerParams{      2100,     2811,   5,   1,   0,       5,          5,        10000, "increment_fast_hold_value" },
         EqualizerParams{      2100,     2811,   3,   2,   0,       3,          5,        10000, "reach_and_hold_without_deviation" },
         EqualizerParams{      2100,     2811,   1,   1,   5,       5,          5,         1000, "reach_and_hold_with_big_deviation" },
-        EqualizerParams{      2100,     2867,   5,   2,   5,       5,          5,         1000, "reach_and_hold_indivisible_steps" },
-        EqualizerParams{      2100,     2861,   5,   5,   5,      15, 0xffffffff,        10000, "hold_value_stress_test" }
+        EqualizerParams{      2100,     2867,   5,   2,   5,       5,          5,         1000, "reach_and_hold_indivisible_steps" }
+        // EqualizerParams{      2100,     2861,   5,   5,   5,      15, 0xffffffff,        10000, "hold_value_stress_test" }
     ),
     [](const ::testing::TestParamInfo<EqualizerTest::ParamType>& info)
     {
