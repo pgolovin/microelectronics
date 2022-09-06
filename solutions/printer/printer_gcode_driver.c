@@ -27,6 +27,8 @@ typedef struct PrinterDriverInternal_type
     HMOTOR motor_z;
     HMOTOR motor_e;
 
+    PRINTER_ACCELERATION acceleration_enbled;
+
     GCodeAxisConfig* axis_cfg;
 
     uint32_t acceleration_region_length;
@@ -158,7 +160,7 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hprinter)
     {
         printer->last_command_status = GCODE_INCOMPLETE;
 
-        if (!printer->acceleration_region_length)
+        if (!printer->acceleration_region_length && printer->acceleration_enbled)
         {
             calculateAccelRegion(printer, time);
         }
@@ -187,6 +189,8 @@ HPRINTER PrinterConfigure(PrinterConfig* printer_cfg)
     driver->motor_y = MOTOR_Configure(&printer_cfg->y);
     driver->motor_z = MOTOR_Configure(&printer_cfg->z);
     driver->motor_e = MOTOR_Configure(&printer_cfg->e);
+
+    driver->acceleration_enbled = printer_cfg->acceleration_enabled;
 
     driver->axis_cfg = printer_cfg->axis_configuration;
     driver->acceleration_region_length = 0;

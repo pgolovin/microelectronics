@@ -47,7 +47,7 @@ TEST(GCodeDriverBasicTest, printer_cannot_create_without_area_settings)
     GPIO_TypeDef port = 0;
     MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
     SDcardMock storage(1024);
-    PrinterConfig cfg = { &storage, 0, 10000, motor, motor, motor, motor, 0 };
+    PrinterConfig cfg = { &storage, 0, 10000, motor, motor, motor, motor, PRINTER_ACCELERATION_DISABLE, 0 };
 
     ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
 }
@@ -62,7 +62,7 @@ TEST(GCodeDriverBasicTest, printer_can_create_with_storage)
     MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
     SDcardMock storage(1024);
     GCodeAxisConfig axis_cfg = { 1,1,1,1 };
-    PrinterConfig cfg = { &storage, 0, 10000, motor, motor, motor, motor, &axis_cfg};
+    PrinterConfig cfg = { &storage, 0, 10000, motor, motor, motor, motor, PRINTER_ACCELERATION_DISABLE , &axis_cfg};
 
     ASSERT_TRUE(nullptr != PrinterConfigure(&cfg));
 }
@@ -87,7 +87,7 @@ protected:
         storage = std::make_unique<SDcardMock>(1024);
         
         MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
-        PrinterConfig cfg = { storage.get(), CONTROL_BLOCK_POSITION, PrinterEmulator::main_frequency, motor, motor, motor, motor, &axis_cfg };
+        PrinterConfig cfg = { storage.get(), CONTROL_BLOCK_POSITION, PrinterEmulator::main_frequency, motor, motor, motor, motor, PRINTER_ACCELERATION_DISABLE, &axis_cfg };
 
         printer_driver = PrinterConfigure(&cfg);
     }
@@ -245,7 +245,7 @@ protected:
 
     virtual void SetUp()
     {
-        SetupPrinter({ 1,1,1,1 });
+        SetupPrinter({ 1,1,1,1 }, PRINTER_ACCELERATION_DISABLE);
 
         std::vector<std::string> gcode_command_list = 
         {
@@ -373,7 +373,7 @@ public:
 protected:
     virtual void SetUp()
     {
-        SetupPrinter({ 1,1,1,1 });
+        SetupPrinter({ 1,1,1,1 }, PRINTER_ACCELERATION_DISABLE);
     }
 
     std::string initial_command = "G0 F6000 X0 Y0 Z0 E0"; // for current settings this means that step will be called each execute call.
@@ -454,7 +454,7 @@ protected:
 
     virtual void SetUp()
     {
-        SetupPrinter({ 1,1,1,1 });
+        SetupPrinter({ 1,1,1,1 }, PRINTER_ACCELERATION_DISABLE);
     }
 
     std::string initial_command = "G0 F1800 X0 Y0 Z0 E0";
@@ -522,7 +522,7 @@ protected:
 
     virtual void SetUp()
     {
-        SetupPrinter(axis_configuration);
+        SetupPrinter(axis_configuration, PRINTER_ACCELERATION_DISABLE);
     }
 
     std::string initial_command = "G0 F1800 X0 Y0 Z0 E0";
@@ -578,207 +578,6 @@ INSTANTIATE_TEST_SUITE_P(
     }
 );
 
-class GCodeDriverAccelerationTest : public ::testing::Test, public PrinterEmulator
-{
-public:
-    // use real frequency this time
-    GCodeDriverAccelerationTest()
-        : PrinterEmulator(10000)
-    {}
-protected:
-
-    virtual void SetUp()
-    {
-        SetupPrinter(axis_configuration);
-    }
-
-    std::string initial_command = "G0 F1800 X0 Y0 Z0 E0";
-};
-
-TEST_F(GCodeDriverAccelerationTest, printer_region_single)
-{
-    std::vector<std::string> commands = {
-        initial_command,
-        "G0 F1800 X100 Y0 Z0 E0",
-    };
-    StartPrinting(commands);
-    PrinterNextCommand(printer_driver);
-    PrinterNextCommand(printer_driver);
-    uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(333U, region_length);
-}
-
-TEST_F(GCodeDriverAccelerationTest, printer_region_series)
-{
-    std::vector<std::string> commands = {
-        initial_command,
-        "G0 F1800 X100 Y0 Z0 E0",
-        "G0 X200 Y0 Z0 E0",
-        "G0 X300 Y0 Z0 E0",
-    };
-    StartPrinting(commands);
-    PrinterNextCommand(printer_driver);
-    PrinterNextCommand(printer_driver);
-    uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(999U, region_length);
-}
-
-TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_speed_change)
-{
-    std::vector<std::string> commands = {
-        initial_command,
-        "G0 F1800 X100 Y0 Z0 E0",
-        "G0 X300 Y0 Z0 E0",
-        "G0 F2700 X400 Y0 Z0 E0",
-    };
-    StartPrinting(commands);
-    PrinterNextCommand(printer_driver);
-    PrinterNextCommand(printer_driver);
-    uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(999U, region_length);
-}
-
-TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_command_change)
-{
-    std::vector<std::string> commands = {
-        initial_command,
-        "G0 F1800 X100 Y0 Z0 E0",
-        "G92 X0 Y0",
-        "G0 X400 Y0 Z0 E0",
-    };
-    StartPrinting(commands);
-    PrinterNextCommand(printer_driver);
-    PrinterNextCommand(printer_driver);
-    uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(333U, region_length);
-}
-
-TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_subcommand)
-{
-    std::vector<std::string> commands = {
-        initial_command,
-        "G0 F1800 X100 Y0 Z0 E0",
-        "G92 X0 Y0",
-        "G0 X400 Y0 Z0 E0",
-    };
-    StartPrinting(commands);
-    PrinterNextCommand(printer_driver);
-    PrinterNextCommand(printer_driver);
-    uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(333U, region_length);
-}
-
-TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_big_XY_angle)
-{
-    std::vector<std::string> commands = {
-        initial_command,
-        "G0 F1800 X100 Y0 Z0 E0",
-        "G0 X100 Y100 Z0 E0",
-    };
-    StartPrinting(commands);
-    PrinterNextCommand(printer_driver);
-    PrinterNextCommand(printer_driver);
-    uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(333U, region_length);
-}
-
-TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_big_Z_angle)
-{
-    std::vector<std::string> commands = {
-        initial_command,
-        "G0 F1800 X100 Y0 Z0 E0",
-        "G0 X100 Y0 Z1 E0",
-    };
-    StartPrinting(commands);
-    PrinterNextCommand(printer_driver);
-    PrinterNextCommand(printer_driver);
-    uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(333U, region_length);
-}
-
-TEST_F(GCodeDriverAccelerationTest, printer_region_z_direction_works)
-{
-    std::vector<std::string> commands = {
-        initial_command,
-        "G0 F1800 X100 Y0 Z0 E0",
-        "G0 X200 Y0 Z1 E0",
-    };
-    StartPrinting(commands);
-    PrinterNextCommand(printer_driver);
-    PrinterNextCommand(printer_driver);
-    uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(666U, region_length);
-}
-
-TEST_F(GCodeDriverAccelerationTest, printer_region_subregions)
-{
-    std::vector<std::string> commands = {
-        initial_command,
-        "G0 F1800 X100 Y0 Z0 E0",
-        "G0 F1800 X200 Y0 Z0 E0",
-    };
-    StartPrinting(commands);
-    PrinterNextCommand(printer_driver);
-    PRINTER_STATUS status = PrinterNextCommand(printer_driver);
-    uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(666U, region_length);
-    CompleteCommand(status);
-    status = PrinterNextCommand(printer_driver);
-    region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(333U, region_length);
-}
-
-TEST_F(GCodeDriverAccelerationTest, printer_region_subsequent_regions)
-{
-    std::vector<std::string> commands = {
-        initial_command,
-        "G0 F1800 X100 Y0 Z0 E0",
-        "G0 F1800 X200 Y0 Z0 E0",
-        "G0 F600 Z200",
-        "G0 F600 Z400",
-    };
-    StartPrinting(commands);
-    PrinterNextCommand(printer_driver);
-    CompleteCommand(PrinterNextCommand(printer_driver));
-    CompleteCommand(PrinterNextCommand(printer_driver));
-    PrinterNextCommand(printer_driver);
-    uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(1000U, region_length);
-}
-
-TEST_F(GCodeDriverAccelerationTest, printer_region_zero_regions)
-{
-    std::vector<std::string> commands = {
-        initial_command,
-        "G0 X0 Y0",
-        "G0 X100 Y0",
-    };
-    StartPrinting(commands);
-    PrinterNextCommand(printer_driver);
-    PrinterNextCommand(printer_driver);
-    uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(0U, region_length);
-}
-
-TEST_F(GCodeDriverAccelerationTest, printer_region_exceeds_single_command_block)
-{
-    const size_t command_block_size = SDcardMock::s_sector_size / GCODE_CHUNK_SIZE;
-    std::vector<std::string> commands = { initial_command };
-    
-    for (size_t i = 0; i < command_block_size * 3; ++i)
-    {
-        std::ostringstream command;
-        command << "G0 F1800 X" << (i+1)*10 << " Y0";
-        commands.push_back(command.str());
-    }
-
-    StartPrinting(commands);
-    PrinterNextCommand(printer_driver);
-    ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
-    uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(33U * command_block_size * 3, region_length);
-}
-
 class GCodeDriverMemoryTest : public ::testing::Test, public PrinterEmulator
 {
 public:
@@ -789,10 +588,11 @@ public:
     {}
 protected:
     const size_t command_block_size = SDcardMock::s_sector_size / GCODE_CHUNK_SIZE;
-    size_t commands_count;
+    size_t commands_count = 0;
+
     virtual void SetUp()
     {
-        SetupPrinter(axis_configuration);
+        SetupPrinter(axis_configuration, PRINTER_ACCELERATION_DISABLE);
 
         
         std::vector<std::string> commands = { "G0 F1800 X0 Y0 Z0 E0" };

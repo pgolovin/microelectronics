@@ -1,7 +1,7 @@
 #include "solutions/printer_emulator.h"
 
 
-void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config)
+void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERATION enable_acceleration)
 {
     DeviceSettings ds;
     device = std::make_unique<Device>(ds);
@@ -16,7 +16,7 @@ void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config)
     MotorConfig motor_e = {PULSE_HIGHER, &port_e_step, 0, &port_e_dir, 0 };
 
     external_config = axis_config;
-    PrinterConfig cfg = { storage.get(), CONTROL_BLOCK_POSITION, PrinterEmulator::main_frequency, motor_x, motor_y, motor_z, motor_e, &external_config };
+    PrinterConfig cfg = { storage.get(), CONTROL_BLOCK_POSITION, PrinterEmulator::main_frequency, motor_x, motor_y, motor_z, motor_e, enable_acceleration, &external_config };
 
     printer_driver = PrinterConfigure(&cfg);
 }
