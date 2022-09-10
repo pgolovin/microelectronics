@@ -36,7 +36,8 @@ public:
     void StartPrinting(const std::vector<std::string>& commands);
 
     void MoveToCommand(uint32_t index);
-    void CompleteCommand(PRINTER_STATUS command_status);
+    size_t CompleteCommand(PRINTER_STATUS command_status);
+    size_t CalculateStepsCount(uint32_t fetch_speed, uint32_t distance, uint32_t resolution);
 
     void CreateGCodeData(const std::vector<std::string>& gcode_command_list);
 

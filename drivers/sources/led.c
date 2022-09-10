@@ -15,17 +15,6 @@ typedef struct PED_Internal_type
 	GPIO_PinState led_state;
 } LED_Internal;
 
-// Pulse engine callbacks
-static void LED_On_Callback(void* _led)
-{
-	LED_On(_led);
-}
-
-static void LED_Off_Callback(void* _led)
-{
-	LED_Off(_led);
-}
-
 // LED_ body
 LED* LED_Configure(GPIO_TypeDef* pin_array, uint16_t pin)
 {
@@ -35,7 +24,7 @@ LED* LED_Configure(GPIO_TypeDef* pin_array, uint16_t pin)
 	led->pin_array = pin_array;
 	led->pin = pin;
 	
-	led->pulse_engine = PULSE_Configure(PULSE_LOWER, LED_On_Callback, LED_Off_Callback, led);
+	led->pulse_engine = PULSE_Configure(PULSE_LOWER);
 	PULSE_SetPeriod(led->pulse_engine, 100);
 	
 	led->led_state = GPIO_PIN_RESET;
@@ -99,6 +88,12 @@ void LED_SetPower(LED* _led, int power)
 void LED_HandleTick(LED* _led)
 {
 	LED_Internal* led = (LED_Internal*)_led;
-	PULSE_HandleTick(led->pulse_engine);
-	
+	if (PULSE_HandleTick(led->pulse_engine))
+	{
+		LED_On(_led);
+	}
+	else
+	{
+		LED_Off(_led);
+	}	
 }

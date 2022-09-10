@@ -26,34 +26,9 @@ protected:
     }
 };
 
-TEST_F(PULSEBasicTest, cannot_create_pulse_signal_wo_callbacks)
-{
-    HPULSE pulse = PULSE_Configure(PULSE_LOWER, nullptr, nullptr, nullptr);
-    ASSERT_TRUE(pulse == nullptr);
-}
-
-TEST_F(PULSEBasicTest, cannot_create_pulse_signal_wo_off_callback)
-{
-    HPULSE pulse = PULSE_Configure(PULSE_LOWER, PULSEBasicTest::callback, nullptr, nullptr);
-    ASSERT_TRUE(pulse == nullptr);
-}
-
-TEST_F(PULSEBasicTest, cannot_create_pulse_signal_wo_on_callback)
-{
-    HPULSE pulse = PULSE_Configure(PULSE_LOWER, nullptr, PULSEBasicTest::callback, nullptr);
-    ASSERT_TRUE(pulse == nullptr);
-}
-
-TEST_F(PULSEBasicTest, can_create_pulse_signal_wo_parameter)
-{
-    HPULSE pulse = PULSE_Configure(PULSE_LOWER, PULSEBasicTest::callback, PULSEBasicTest::callback, nullptr);
-    ASSERT_FALSE(pulse == nullptr);
-    PULSE_Release(pulse);
-}
-
 TEST_F(PULSEBasicTest, can_create_pulse_signal)
 {
-    HPULSE pulse = PULSE_Configure(PULSE_LOWER, PULSEBasicTest::callback, PULSEBasicTest::callback, this);
+    HPULSE pulse = PULSE_Configure(PULSE_LOWER);
     ASSERT_FALSE(pulse == nullptr);
     PULSE_Release(pulse);
 }
@@ -61,19 +36,6 @@ TEST_F(PULSEBasicTest, can_create_pulse_signal)
 // timer based functionality
 class PULSETest : public ::testing::Test
 {
-public:
-    static void signal_on(void* parameter)
-    {
-        auto pulse_test = static_cast<PULSETest*>(parameter);
-        ++pulse_test->on;
-    };
-
-    static void signal_off(void* parameter)
-    {
-        auto pulse_test = static_cast<PULSETest*>(parameter);
-        ++pulse_test->off;
-    };
-
 protected:
     HPULSE pulse = nullptr;
     std::unique_ptr<Device> device;
@@ -87,12 +49,24 @@ protected:
         off = 0;
     }
 
+    void HandlePulseTick()
+    {
+        if (PULSE_HandleTick(pulse))
+        {
+            ++on;
+        }
+        else
+        {
+            ++off;
+        }
+    }
+
     virtual void SetUp()
     {
         DeviceSettings ds;
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
-        pulse = PULSE_Configure(PULSE_LOWER, signal_on, signal_off, this);
+        pulse = PULSE_Configure(PULSE_LOWER);
         PULSE_SetPeriod(pulse, period);
     }
 
@@ -109,7 +83,7 @@ TEST_F(PULSETest, ticks_count)
     const size_t ticks = period * 10;
     for (size_t i = 0; i < ticks; ++i)
     {
-        PULSE_HandleTick(pulse);
+        HandlePulseTick();
     }
     ASSERT_EQ(on + off, ticks);
 }
@@ -120,7 +94,7 @@ TEST_F(PULSETest, full_power)
     PULSE_SetPower(pulse, period); // 100% power = period
     for (size_t i = 0; i < ticks; ++i)
     {
-        PULSE_HandleTick(pulse);
+        HandlePulseTick();
     }
     ASSERT_EQ(off, 0);
     ASSERT_EQ(on, ticks);
@@ -132,7 +106,7 @@ TEST_F(PULSETest, powerless)
     PULSE_SetPower(pulse, 0);
     for (size_t i = 0; i < ticks; ++i)
     {
-        PULSE_HandleTick(pulse);
+        HandlePulseTick();
     }
     ASSERT_EQ(on, 0);
     ASSERT_EQ(off, ticks);
@@ -142,7 +116,7 @@ TEST_F(PULSETest, first_pulse)
 {
     const size_t ticks = period * 10;
     PULSE_SetPower(pulse, 1);
-    PULSE_HandleTick(pulse);
+    HandlePulseTick();
 
     ASSERT_EQ(off, 1);
 }
@@ -153,7 +127,7 @@ TEST_F(PULSETest, power_50_percent)
     PULSE_SetPower(pulse, period/2);
     for (size_t i = 0; i < ticks; ++i)
     {
-        PULSE_HandleTick(pulse);
+        HandlePulseTick();
         if (0 == i % 2)
         {
             // starts with power off mode
@@ -175,7 +149,7 @@ TEST_F(PULSETest, power_25_percent)
     PULSE_SetPower(pulse, period / 4);
     for (size_t i = 0; i < ticks; ++i)
     {
-        PULSE_HandleTick(pulse);
+        HandlePulseTick();
         if (0 == (i+1) % 4)
         {
             ASSERT_EQ(on, i / 4 + 1);
@@ -197,7 +171,7 @@ TEST_F(PULSETest, power_80_percent)
     PULSE_SetPower(pulse, period * 4 / 5);
     for (size_t i = 0; i < ticks; ++i)
     {
-        PULSE_HandleTick(pulse);
+        HandlePulseTick();
         if (0 == i % 5)
         {
             ASSERT_EQ(off, i / 5 + 1);
@@ -218,7 +192,7 @@ TEST_F(PULSETest, power_200_percent_truncated_to_100)
     PULSE_SetPower(pulse, period * 2);
     for (size_t i = 0; i < ticks; ++i)
     {
-        PULSE_HandleTick(pulse);
+        HandlePulseTick();
     }
     ASSERT_EQ(off, 0);
     ASSERT_EQ(on, ticks);
@@ -230,21 +204,21 @@ TEST_F(PULSETest, change_power)
     PULSE_SetPower(pulse, period / 2);
     for (size_t i = 0; i < ticks; ++i)
     {
-        PULSE_HandleTick(pulse);
+        HandlePulseTick();
     }
     ASSERT_EQ(on, ticks/2);
     ResetCounters();
     PULSE_SetPower(pulse, period / 4);
     for (size_t i = 0; i < ticks; ++i)
     {
-        PULSE_HandleTick(pulse);
+        HandlePulseTick();
     }
     ASSERT_EQ(on, ticks / 4);
     ResetCounters();
     PULSE_SetPower(pulse, 0);
     for (size_t i = 0; i < ticks; ++i)
     {
-        PULSE_HandleTick(pulse);
+        HandlePulseTick();
     }
     ASSERT_EQ(on, 0);
     ASSERT_EQ(off, ticks);
@@ -256,14 +230,14 @@ TEST_F(PULSETest, change_period)
     PULSE_SetPower(pulse, period / 2);
     for (size_t i = 0; i < ticks; ++i)
     {
-        PULSE_HandleTick(pulse);
+        HandlePulseTick();
     }
     ASSERT_EQ(on, ticks / 2);
     ResetCounters();
     PULSE_SetPeriod(pulse, period / 2);
     for (size_t i = 0; i < ticks; ++i)
     {
-        PULSE_HandleTick(pulse);
+        HandlePulseTick();
     }
     ASSERT_EQ(on, ticks);
     ResetCounters();
@@ -271,7 +245,7 @@ TEST_F(PULSETest, change_period)
     PULSE_SetPeriod(pulse, (uint32_t)ticks);
     for (size_t i = 0; i < ticks; ++i)
     {
-        PULSE_HandleTick(pulse);
+        HandlePulseTick();
     }
     ASSERT_EQ(on, ticks/2);
     ASSERT_EQ(off, ticks/2);
@@ -284,7 +258,7 @@ TEST_F(PULSETest, zero_period)
     PULSE_SetPeriod(pulse, 0);
     for (size_t i = 0; i < ticks; ++i)
     {
-        PULSE_HandleTick(pulse);
+        HandlePulseTick();
     }
     ASSERT_EQ(on, ticks);
     ASSERT_EQ(off, 0);
@@ -297,7 +271,7 @@ TEST_F(PULSETest, zero_power)
     PULSE_SetPeriod(pulse, 0);
     for (size_t i = 0; i < ticks; ++i)
     {
-        PULSE_HandleTick(pulse);
+        HandlePulseTick();
     }
     ASSERT_EQ(on, 0);
     ASSERT_EQ(off, ticks);
@@ -310,12 +284,12 @@ TEST_F(PULSETest, change_power_in_a_middle)
     PULSE_SetPeriod(pulse, period);
     for (size_t i = 0; i < period / 2; ++i)
     {
-        PULSE_HandleTick(pulse);
+        HandlePulseTick();
     }
     PULSE_SetPower(pulse, period/10);
     for (size_t i = 0; i < period / 2; ++i)
     {
-        PULSE_HandleTick(pulse);
+        HandlePulseTick();
     }
     ASSERT_EQ(on, period/4+period/20);
 }
@@ -328,7 +302,7 @@ protected:
         DeviceSettings ds;
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
-        pulse = PULSE_Configure(PULSE_HIGHER, signal_on, signal_off, this);
+        pulse = PULSE_Configure(PULSE_HIGHER);
         PULSE_SetPeriod(pulse, period);
     }
 };
@@ -339,7 +313,7 @@ TEST_F(PULSEHigherTest, powerless)
     PULSE_SetPower(pulse, 0);
     for (size_t i = 0; i < ticks; ++i)
     {
-        PULSE_HandleTick(pulse);
+        HandlePulseTick();
     }
     ASSERT_EQ(on, 0);
     ASSERT_EQ(off, ticks);
@@ -349,7 +323,7 @@ TEST_F(PULSEHigherTest, first_pulse)
 {
     const size_t ticks = period * 10;
     PULSE_SetPower(pulse, 1);
-    PULSE_HandleTick(pulse);
+    HandlePulseTick();
 
     ASSERT_EQ(on, 1);
 }
@@ -361,7 +335,7 @@ TEST_F(PULSEHigherTest, power_80_percent)
     PULSE_SetPower(pulse, period * 4 / 5);
     for (size_t i = 0; i < ticks; ++i)
     {
-        PULSE_HandleTick(pulse);
+        HandlePulseTick();
         if (0 == i % 5)
         {
             ASSERT_EQ(off, i / 5);
@@ -378,19 +352,6 @@ TEST_F(PULSEHigherTest, power_80_percent)
 
 class PULSEPowerTest : public ::testing::TestWithParam<uint32_t>
 {
-public:
-    static void signal_on(void* parameter)
-    {
-        auto pulse_test = static_cast<PULSEPowerTest*>(parameter);
-        ++pulse_test->on;
-    };
-
-    static void signal_off(void* parameter)
-    {
-        auto pulse_test = static_cast<PULSEPowerTest*>(parameter);
-        ++pulse_test->off;
-    };
-
 protected:
     HPULSE pulse = nullptr;
     std::unique_ptr<Device> device;
@@ -398,12 +359,25 @@ protected:
     size_t on = 0;
     const uint32_t period = 100;
 
+
+    void HandlePulseTick()
+    {
+        if (PULSE_HandleTick(pulse))
+        {
+            ++on;
+        }
+        else
+        {
+            ++off;
+        }
+    }
+
     virtual void SetUp()
     {
         DeviceSettings ds;
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
-        pulse = PULSE_Configure(PULSE_LOWER, signal_on, signal_off, this);
+        pulse = PULSE_Configure(PULSE_LOWER);
         PULSE_SetPeriod(pulse, period);
     }
 
@@ -427,7 +401,7 @@ TEST_P(PULSEPowerTest, pulse_power)
         on = 0;
         for (size_t i = 0; i < period; ++i)
         {
-            PULSE_HandleTick(pulse);
+            HandlePulseTick();
         }
         ASSERT_EQ(on, power);
         local_on += on;
@@ -451,7 +425,7 @@ class PULSEHigherPowerTest : public PULSEPowerTest
         DeviceSettings ds;
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
-        pulse = PULSE_Configure(PULSE_HIGHER, signal_on, signal_off, this);
+        pulse = PULSE_Configure(PULSE_HIGHER);
         PULSE_SetPeriod(pulse, period);
     }
 };
@@ -468,7 +442,7 @@ TEST_P(PULSEHigherPowerTest, pulse_power)
         on = 0;
         for (size_t i = 0; i < period; ++i)
         {
-            PULSE_HandleTick(pulse);
+            HandlePulseTick();
         }
         ASSERT_EQ(on, power);
         local_on += on;
@@ -496,31 +470,31 @@ struct PulsePower
 
 class PULSECustomSetingsPowerTest : public ::testing::TestWithParam<PulsePower>
 {
-public:
-    static void signal_on(void* parameter)
-    {
-        auto pulse_test = static_cast<PULSECustomSetingsPowerTest*>(parameter);
-        ++pulse_test->on;
-    };
-
-    static void signal_off(void* parameter)
-    {
-        auto pulse_test = static_cast<PULSECustomSetingsPowerTest*>(parameter);
-        ++pulse_test->off;
-    };
-
 protected:
     HPULSE pulse = nullptr;
     std::unique_ptr<Device> device;
     size_t off = 0;
     size_t on = 0;
 
+
+    void HandlePulseTick()
+    {
+        if (PULSE_HandleTick(pulse))
+        {
+            ++on;
+        }
+        else
+        {
+            ++off;
+        }
+    }
+
     virtual void SetUp()
     {
         DeviceSettings ds;
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
-        pulse = PULSE_Configure(PULSE_LOWER, signal_on, signal_off, this);
+        pulse = PULSE_Configure(PULSE_LOWER);
     }
 
     virtual void TearDown()
@@ -542,7 +516,7 @@ TEST_P(PULSECustomSetingsPowerTest, pulse_power_ex)
         on = 0;
         for (size_t i = 0; i < power.period; ++i)
         {
-            PULSE_HandleTick(pulse);
+            HandlePulseTick();
             if (i + 1 == power.check_point)
             {
                 ASSERT_EQ(on, power.ref_value);

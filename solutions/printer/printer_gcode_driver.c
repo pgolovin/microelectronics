@@ -28,6 +28,7 @@ typedef struct PrinterDriverInternal_type
     HMOTOR motor_e;
 
     PRINTER_ACCELERATION acceleration_enbled;
+    HPULSE accelerator;
 
     GCodeAxisConfig* axis_cfg;
 

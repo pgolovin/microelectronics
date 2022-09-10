@@ -255,19 +255,19 @@ public:
         : PrinterEmulator(10000)
     {}
 protected:
-    const size_t command_block_size = SDcardMock::s_sector_size / GCODE_CHUNK_SIZE;
-    size_t commands_count;
+    const size_t acceleration_value = 30; // mm/sec^2
+    const size_t steps_per_block = 100; // 1 mm per region
+    size_t commands_count = 0;
     virtual void SetUp()
     {
         SetupPrinter(axis_configuration, PRINTER_ACCELERATION_ENABLE);
 
+        std::vector<std::string> commands;
 
-        std::vector<std::string> commands = { "G0 F1800 X0 Y0 Z0 E0" };
-
-        for (size_t i = 0; i < command_block_size * 3; ++i)
+        for (size_t i = 0; i < 60 * 3; ++i)
         {
             std::ostringstream command;
-            command << "G0 F1800 X" << (i + 1) * 10 << " Y0";
+            command << "G0 F1800 X" << i * steps_per_block << " Y0";
             commands.push_back(command.str());
         }
         commands_count = commands.size();
@@ -275,3 +275,11 @@ protected:
         StartPrinting(commands);
     }
 };
+
+TEST_F(GCodeDriverAccelerationMechanicTest, printer_accel_long_region_start)
+{
+    PrinterNextCommand(printer_driver);
+    size_t steps = CompleteCommand(PrinterNextCommand(printer_driver));
+
+    ASSERT_GT(CalculateStepsCount(1800, steps_per_block, 100), steps);
+}
