@@ -8,6 +8,8 @@ extern "C"
 {
 #endif
 
+#define SDCARD_BLOCK_SIZE 512
+
 typedef void* HSDCARD;
 HSDCARD SDCARD_Configure(void* hspi, GPIO_TypeDef* cs_port_array, uint16_t sc_port);
 

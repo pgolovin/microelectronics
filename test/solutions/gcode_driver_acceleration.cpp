@@ -246,16 +246,154 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_exceeds_single_command_block)
     ASSERT_EQ(33U * command_block_size * 3, region_length);
 }
 
-class GCodeDriverAccelerationMechanicTest : public ::testing::Test, public PrinterEmulator
+class GCodeDriverAccelLongRegionTest : public ::testing::Test, public PrinterEmulator
 {
 public:
 
     // use real frequency this time
-    GCodeDriverAccelerationMechanicTest()
+    GCodeDriverAccelLongRegionTest()
         : PrinterEmulator(10000)
     {}
 protected:
-    const size_t acceleration_value = 30; // mm/sec^2
+    const size_t acceleration_value = 60; // mm/sec^2
+    const size_t steps_per_block = 100; // 1 mm per region
+    const size_t fetch_speed = 1800; // 1 mm per region
+    size_t commands_count = 0;
+    virtual void SetUp()
+    {
+        SetupPrinter(axis_configuration, PRINTER_ACCELERATION_ENABLE);
+
+        std::vector<std::string> commands;
+
+        for (size_t i = 0; i < 60 * 3 * fetch_speed / 1800; ++i)
+        {
+            std::ostringstream command;
+            command << "G0 F"<< fetch_speed <<" X" << i * steps_per_block << " Y0";
+            commands.push_back(command.str());
+        }
+        commands_count = commands.size();
+
+        StartPrinting(commands);
+    }
+};
+
+TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_start)
+{
+    PrinterNextCommand(printer_driver);
+    size_t steps = CompleteCommand(PrinterNextCommand(printer_driver));
+
+    ASSERT_GT(steps, CalculateStepsCount(fetch_speed, steps_per_block, 100));
+}
+
+TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_acceleration)
+{
+    //accel = 60 => max velocity will be available after 5000 steps (0.5 sec);
+    PrinterNextCommand(printer_driver);
+    size_t steps = 0;
+    uint32_t cmd_index = 0;
+    uint32_t prev_steps = 0xFFFFFFF;
+    while (steps < 5000 * fetch_speed / 1800)
+    {
+        size_t local_steps = CompleteCommand(PrinterNextCommand(printer_driver));
+        ASSERT_LT(local_steps, prev_steps);
+        prev_steps = local_steps;
+        steps += local_steps;
+        ++cmd_index;
+        ASSERT_NE(commands_count - 1, cmd_index) << "Commands count exceeded";
+    }
+}
+
+TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_max_speed)
+{
+    //accel = 60 => max velocity will be available after 5000 steps (0.5 sec);
+    PrinterNextCommand(printer_driver);
+    size_t steps = 0;
+    uint32_t cmd_index = 0;
+    while (steps < 5000 * fetch_speed / 1800)
+    {
+        size_t local_steps = CompleteCommand(PrinterNextCommand(printer_driver));
+        ASSERT_GT(local_steps, CalculateStepsCount(fetch_speed, steps_per_block, 100));
+        steps += local_steps;
+        ++cmd_index;
+        ASSERT_NE(commands_count - 1, cmd_index) << "Commands count exceeded";
+    }
+    ++cmd_index;
+    steps = CompleteCommand(PrinterNextCommand(printer_driver));
+    ASSERT_EQ(steps, CalculateStepsCount(fetch_speed, steps_per_block, 100)) << "Command number: " << cmd_index;
+}
+
+TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_end)
+{
+    //accel = 60 => max velocity will be available after 5000 steps (0.5 sec);
+    PrinterNextCommand(printer_driver);
+    uint32_t cmd_index = 0;
+
+    PRINTER_STATUS status = PrinterNextCommand(printer_driver);
+    uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
+    size_t steps = CompleteCommand(status);
+
+    while (steps < 5000 * fetch_speed / 1800)
+    {
+        steps += CompleteCommand(PrinterNextCommand(printer_driver));
+        ASSERT_NE(commands_count - 1, cmd_index) << "Commands count exceeded";
+    }
+    size_t braking_distance = region_length - PrinterGetAccelerationRegion(printer_driver);
+    
+    while (region_length > (braking_distance - CalculateStepsCount(fetch_speed, steps_per_block, 100)))
+    {
+        steps += CompleteCommand(PrinterNextCommand(printer_driver));
+        region_length = PrinterGetAccelerationRegion(printer_driver);
+        ++cmd_index;
+        ASSERT_NE(commands_count - 1, cmd_index) << "Commands count exceeded";
+    }
+    ++cmd_index;
+    // getting to the braking zone
+    steps = CompleteCommand(PrinterNextCommand(printer_driver));
+    ASSERT_GT(steps, CalculateStepsCount(fetch_speed, steps_per_block, 100)) << "Command number: " << cmd_index << " of " << commands_count;
+}
+
+TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_braking)
+{
+    PrinterNextCommand(printer_driver);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+   
+    while (PrinterGetCommandsCount(printer_driver) > 3)
+    {
+        CompleteCommand(PrinterNextCommand(printer_driver));
+    }
+    // getting to the braking zone
+    size_t steps = CalculateStepsCount(fetch_speed, steps_per_block, 100);
+    size_t local_steps = CalculateStepsCount(fetch_speed, steps_per_block, 100);
+    while (PrinterGetCommandsCount(printer_driver))
+    {
+        local_steps = CompleteCommand(PrinterNextCommand(printer_driver));
+        ASSERT_GT(local_steps, steps) << "command: " << PrinterGetCommandsCount(printer_driver);
+        steps = local_steps;
+    }
+}
+
+TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_can_be_printed)
+{
+    uint32_t printer_commands_count = PrinterGetCommandsCount(printer_driver);
+    for (size_t i = 0; i < printer_commands_count; ++i)
+    {
+        PRINTER_STATUS status = PrinterNextCommand(printer_driver);
+        ASSERT_NE(PRINTER_FINISHED, status);
+        CompleteCommand(status);
+    }
+
+    ASSERT_EQ(PRINTER_FINISHED, PrinterNextCommand(printer_driver));
+}
+
+
+class GCodeDriverAccelShortRegionTest : public ::testing::Test, public PrinterEmulator
+{
+public:
+    GCodeDriverAccelShortRegionTest()
+        : PrinterEmulator(10000)
+    {}
+protected:
+    const size_t acceleration_value = 60; // mm/sec^2
     const size_t steps_per_block = 100; // 1 mm per region
     size_t commands_count = 0;
     virtual void SetUp()
@@ -264,7 +402,7 @@ protected:
 
         std::vector<std::string> commands;
 
-        for (size_t i = 0; i < 60 * 3; ++i)
+        for (size_t i = 0; i < 4; ++i)
         {
             std::ostringstream command;
             command << "G0 F1800 X" << i * steps_per_block << " Y0";
@@ -276,10 +414,96 @@ protected:
     }
 };
 
-TEST_F(GCodeDriverAccelerationMechanicTest, printer_accel_long_region_start)
+TEST_F(GCodeDriverAccelShortRegionTest, printer_accel_start)
 {
+    //accel = 60 => max velocity will be available after 5000 steps (0.5 sec);
     PrinterNextCommand(printer_driver);
+    uint32_t cmd_index = 0;
     size_t steps = CompleteCommand(PrinterNextCommand(printer_driver));
+    ASSERT_GT(steps, CalculateStepsCount(1800, steps_per_block, 100));
+}
 
-    ASSERT_GT(CalculateStepsCount(1800, steps_per_block, 100), steps);
+TEST_F(GCodeDriverAccelShortRegionTest, printer_accel_middle)
+{
+    //accel = 60 => max velocity will be available after 5000 steps (0.5 sec);
+    PrinterNextCommand(printer_driver);
+    uint32_t cmd_index = 0;
+    size_t steps_s = CompleteCommand(PrinterNextCommand(printer_driver));
+    size_t steps_m = CompleteCommand(PrinterNextCommand(printer_driver));
+    ASSERT_GT(steps_m, CalculateStepsCount(1800, steps_per_block, 100));
+    ASSERT_GT(steps_s, steps_m);
+}
+
+TEST_F(GCodeDriverAccelShortRegionTest, printer_accel_end)
+{
+    //accel = 60 => max velocity will be available after 5000 steps (0.5 sec);
+    PrinterNextCommand(printer_driver);
+    uint32_t cmd_index = 0;
+    int32_t steps_s = CompleteCommand(PrinterNextCommand(printer_driver));
+    int32_t steps_m = CompleteCommand(PrinterNextCommand(printer_driver));
+    int32_t steps_e = CompleteCommand(PrinterNextCommand(printer_driver));
+    ASSERT_GT(steps_e, CalculateStepsCount(1800, steps_per_block, 100));
+    ASSERT_GT(steps_e, steps_m);
+    ASSERT_LT(abs(steps_s - steps_e), 100);
+}
+
+class GCodeDriverAccelZTest : public ::testing::Test, public PrinterEmulator
+{
+public:
+    GCodeDriverAccelZTest()
+        : PrinterEmulator(10000)
+    {}
+protected:
+    const size_t acceleration_value = 60; // mm/sec^2
+    const size_t steps_per_block = 25; // 1 mm per region
+    size_t commands_count = 0;
+    virtual void SetUp()
+    {
+        SetupPrinter(axis_configuration, PRINTER_ACCELERATION_ENABLE);
+
+        std::vector<std::string> commands;
+
+        for (size_t i = 0; i < 4; ++i)
+        {
+            std::ostringstream command;
+            command << "G0 F600 X0 Y0 Z" << i * steps_per_block << " E0";
+            commands.push_back(command.str());
+        }
+        commands_count = commands.size();
+
+        StartPrinting(commands);
+    }
+};
+
+TEST_F(GCodeDriverAccelZTest, printer_accel_start)
+{
+    //accel = 60 => max velocity will be available after 5000 steps (0.5 sec);
+    PrinterNextCommand(printer_driver);
+    uint32_t cmd_index = 0;
+    size_t steps = CompleteCommand(PrinterNextCommand(printer_driver));
+    ASSERT_GT(steps, CalculateStepsCount(600, steps_per_block, 400));
+}
+
+TEST_F(GCodeDriverAccelZTest, printer_accel_middle)
+{
+    //accel = 60 => max velocity will be available after 5000 steps (0.5 sec);
+    PrinterNextCommand(printer_driver);
+    uint32_t cmd_index = 0;
+    size_t steps_s = CompleteCommand(PrinterNextCommand(printer_driver));
+    size_t steps_m = CompleteCommand(PrinterNextCommand(printer_driver));
+    ASSERT_GT(steps_m, CalculateStepsCount(600, steps_per_block, 400));
+    ASSERT_GT(steps_s, steps_m);
+}
+
+TEST_F(GCodeDriverAccelZTest, printer_accel_end)
+{
+    //accel = 60 => max velocity will be available after 5000 steps (0.5 sec);
+    PrinterNextCommand(printer_driver);
+    uint32_t cmd_index = 0;
+    int32_t steps_s = CompleteCommand(PrinterNextCommand(printer_driver));
+    int32_t steps_m = CompleteCommand(PrinterNextCommand(printer_driver));
+    int32_t steps_e = CompleteCommand(PrinterNextCommand(printer_driver));
+    ASSERT_GT(steps_e, CalculateStepsCount(600, steps_per_block, 400));
+    ASSERT_GT(steps_e, steps_m);
+    ASSERT_LT(abs(steps_s - steps_e), 100);
 }

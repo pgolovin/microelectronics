@@ -54,7 +54,7 @@ size_t PrinterEmulator::CompleteCommand(PRINTER_STATUS command_status)
 
 size_t PrinterEmulator::CalculateStepsCount(uint32_t fetch_speed, uint32_t distance, uint32_t resolution)
 {
-    return distance * 10000 * 60 / fetch_speed / resolution;
+    return (10000 * 60 / fetch_speed / resolution < 1) ? distance : (distance * 10000 * 60 / fetch_speed / resolution);
 }
 
 void PrinterEmulator::CreateGCodeData(const std::vector<std::string>& gcode_command_list)

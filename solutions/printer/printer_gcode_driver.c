@@ -3,6 +3,8 @@
 #include <math.h>
 
 #define SECONDS_IN_MINUTE 60
+#define STANDARD_ACCELERATION 60
+#define STANDARD_ACCELERATION_SEGMENT 100U
 #define COS_15_GRAD 0.966
 
 typedef struct PrinterDriverInternal_type
@@ -12,13 +14,13 @@ typedef struct PrinterDriverInternal_type
     uint32_t current_sector;
 
     uint8_t caret_position;  // 256 is enought. number of commands in the block is 32
-    uint8_t data_block[512];
+    uint8_t data_block[SDCARD_BLOCK_SIZE];
 
     GCodeFunctionList setup_calls;
     GCodeCommandParams current_segment;
     GCodeCommandParams last_position;
 
-    int32_t main_frequency_per_minute;
+    uint16_t main_frequency;
     
     PRINTER_STATUS last_command_status;
 
@@ -27,12 +29,18 @@ typedef struct PrinterDriverInternal_type
     HMOTOR motor_z;
     HMOTOR motor_e;
 
-    PRINTER_ACCELERATION acceleration_enbled;
-    HPULSE accelerator;
+    PRINTER_ACCELERATION acceleration_enabled;
+    HPULSE   accelerator;
+    uint8_t  acceleration_tick;
+    uint8_t  acceleration_region;
+    uint8_t  acceleration_segments; // not sure that it is possible to have more than 256 acceleration segments
+    int8_t   acceleration_region_increment;
+    uint16_t acceleration_distance;
+    uint8_t  acceleration_distance_increment;
+    uint32_t acceleration_subsequent_region_length;
 
     GCodeAxisConfig* axis_cfg;
-
-    uint32_t acceleration_region_length;
+        
     uint32_t commands_count;
 
 } PrinterDriver;
@@ -47,9 +55,9 @@ static uint32_t compareTimeWithSpeedLimit(int32_t signed_segment, uint32_t time,
     }
 
     // check if we reached speed limit: amount of steps required to reach destination lower than amount of requested steps 
-    if (printer->main_frequency_per_minute / (resolution * printer->current_segment.fetch_speed) > 1)
+    if (printer->main_frequency * SECONDS_IN_MINUTE / (resolution * printer->current_segment.fetch_speed) > 1)
     {
-        segment = segment * printer->main_frequency_per_minute / (resolution * printer->current_segment.fetch_speed);
+        segment = segment * printer->main_frequency * SECONDS_IN_MINUTE / (resolution * printer->current_segment.fetch_speed);
     }
     // return the longest distance
     return segment > time ? segment : time;
@@ -72,17 +80,17 @@ static uint32_t calculateTime(PrinterDriver* printer, GCodeCommandParams* segmen
 
 static void calculateAccelRegion(PrinterDriver* printer, uint32_t initial_region)
 {
-    printer->acceleration_region_length = initial_region;
+    printer->acceleration_subsequent_region_length = initial_region;
 
     uint32_t current_caret = printer->caret_position + 1;
     GCODE_COMMAND_LIST command_id = GCODE_MOVE;
     uint8_t* data_block = printer->data_block;
-    uint8_t next_block[512];
+    uint8_t next_block[SDCARD_BLOCK_SIZE];
 
     GCodeCommandParams last_segment = printer->current_segment;
     GCodeCommandParams last_position = printer->last_position;
 
-    const uint32_t commands_per_block = 512 / GCODE_CHUNK_SIZE;
+    const uint32_t commands_per_block = SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE;
     uint32_t sector = printer->current_sector;
 
     for (uint32_t i = 0; i < printer->commands_count; ++i)
@@ -125,7 +133,7 @@ static void calculateAccelRegion(PrinterDriver* printer, uint32_t initial_region
         last_segment.y = segment.y;
         last_segment.z = segment.z;
 
-        printer->acceleration_region_length += calculateTime(printer, &segment);
+        printer->acceleration_subsequent_region_length += calculateTime(printer, &segment);
 
         last_position = *parameters;
     }
@@ -161,9 +169,24 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hprinter)
     {
         printer->last_command_status = GCODE_INCOMPLETE;
 
-        if (!printer->acceleration_region_length && printer->acceleration_enbled)
+        if (printer->acceleration_enabled && !printer->acceleration_subsequent_region_length)
         {
             calculateAccelRegion(printer, time);
+
+            int16_t fetch_speed = printer->current_segment.fetch_speed / SECONDS_IN_MINUTE;
+            uint32_t acceleration_time = printer->main_frequency * fetch_speed / STANDARD_ACCELERATION;
+            
+            // number of segments required to get full speed;
+            printer->acceleration_segments = acceleration_time / STANDARD_ACCELERATION_SEGMENT;
+            printer->acceleration_tick = 0;
+
+            printer->acceleration_distance = 0;
+            printer->acceleration_distance_increment = 1;
+
+            printer->acceleration_region = 1;
+            printer->acceleration_region_increment = 1;
+
+            PULSE_SetPower(printer->accelerator, printer->acceleration_region);
         }
     }
 
@@ -184,17 +207,18 @@ HPRINTER PrinterConfigure(PrinterConfig* printer_cfg)
 
     driver->setup_calls.commands[GCODE_MOVE] = setupMove;
 
-    driver->main_frequency_per_minute = printer_cfg->main_frequency * SECONDS_IN_MINUTE;
+    driver->main_frequency = printer_cfg->main_frequency;
 
     driver->motor_x = MOTOR_Configure(&printer_cfg->x);
     driver->motor_y = MOTOR_Configure(&printer_cfg->y);
     driver->motor_z = MOTOR_Configure(&printer_cfg->z);
     driver->motor_e = MOTOR_Configure(&printer_cfg->e);
 
-    driver->acceleration_enbled = printer_cfg->acceleration_enabled;
+    driver->acceleration_enabled = printer_cfg->acceleration_enabled;
+    driver->accelerator = PULSE_Configure(PULSE_HIGHER);
 
     driver->axis_cfg = printer_cfg->axis_configuration;
-    driver->acceleration_region_length = 0;
+    driver->acceleration_subsequent_region_length = 0;
 
     return (HPRINTER)driver;
 }
@@ -243,6 +267,9 @@ PRINTER_STATUS PrinterStart(HPRINTER hprinter)
     printer->commands_count = control_block.commands_count;
     printer->current_sector = control_block.file_sector;
     SDCARD_ReadSingleBlock(printer->storage, printer->data_block, printer->current_sector);
+
+    PULSE_SetPeriod(printer->accelerator, STANDARD_ACCELERATION_SEGMENT);
+    PULSE_SetPower(printer->accelerator, STANDARD_ACCELERATION_SEGMENT);
     
     return status;
 }
@@ -263,7 +290,7 @@ PRINTER_STATUS PrinterGetStatus(HPRINTER hprinter)
 uint32_t PrinterGetAccelerationRegion(HPRINTER hprinter)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
-    return printer->acceleration_region_length;
+    return printer->acceleration_subsequent_region_length;
 }
 
 GCodeCommandParams* PrinterGetCurrentPath(HPRINTER hprinter)
@@ -286,7 +313,7 @@ PRINTER_STATUS PrinterNextCommand(HPRINTER hprinter)
         --printer->commands_count;
         printer->last_command_status = GC_ExecuteFromBuffer(&printer->setup_calls, printer, printer->data_block + (size_t)(GCODE_CHUNK_SIZE*printer->caret_position));
         ++printer->caret_position;
-        if (printer->caret_position == 512 / GCODE_CHUNK_SIZE)
+        if (printer->caret_position == SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE)
         {
             SDCARD_ReadSingleBlock(printer->storage, printer->data_block, ++printer->current_sector);
             printer->caret_position = 0;
@@ -300,10 +327,48 @@ PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
     
+    // Acceleration region is on a both sides of subsequent regions
+    // Length of braking region is calculated and equal to acceleration region
+    if ((printer->acceleration_enabled) &&
+        ((printer->acceleration_region < printer->acceleration_segments) ||
+        (printer->acceleration_subsequent_region_length <= printer->acceleration_distance)))
+    {
+        // Reaching apogee point in a middle of acceleration lead to revert of steps count an acceleration, 
+        // This gave symetric picture of acceleration/braking pair. but dufference can be in 1 segment, due to 
+        // Directions of the signals in pulse_engine.
+        if (printer->acceleration_distance - printer->acceleration_subsequent_region_length < 2 && printer->acceleration_distance_increment)
+        {
+            printer->acceleration_region_increment = -1;
+            printer->acceleration_tick = STANDARD_ACCELERATION_SEGMENT - printer->acceleration_tick;
+            printer->acceleration_distance_increment = 0;
+        }
+
+        ++printer->acceleration_tick;
+        if (STANDARD_ACCELERATION_SEGMENT <= printer->acceleration_tick)
+        {
+            printer->acceleration_tick = 0;
+            printer->acceleration_region += printer->acceleration_region_increment;
+            // Mistake in 1 step, that can happen due to non-symmetrics signals, might lead to
+            // zeroeing power, and 0.1 seconds of motors idling
+            if (printer->acceleration_region)
+            {
+                PULSE_SetPower(printer->accelerator, printer->acceleration_region);
+            }
+        }
+
+        if (!PULSE_HandleTick(printer->accelerator))
+        {
+            return printer->last_command_status;
+        }
+
+        printer->acceleration_distance += printer->acceleration_distance_increment;
+    }
+
     MOTOR_HandleTick(printer->motor_x);
     MOTOR_HandleTick(printer->motor_y);
     MOTOR_HandleTick(printer->motor_z);
     MOTOR_HandleTick(printer->motor_e);
+
     MOTOR_STATE state = MOTOR_GetState(printer->motor_x);
     state += MOTOR_GetState(printer->motor_y);
     state += MOTOR_GetState(printer->motor_z);
@@ -317,10 +382,12 @@ PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter)
     {
         printer->last_command_status = GCODE_INCOMPLETE;
     }
-    if (printer->acceleration_region_length)
+
+    if (printer->acceleration_subsequent_region_length)
     {
-        --printer->acceleration_region_length;
+        --printer->acceleration_subsequent_region_length;
     }
+
     return printer->last_command_status;
 }
 
