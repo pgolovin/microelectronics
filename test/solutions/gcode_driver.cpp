@@ -3,6 +3,7 @@
 #include "include/gcode.h"
 #include "solutions/printer_emulator.h"
 #include <gtest/gtest.h>
+#include <sstream>
 
 TEST(GCodeDriverBasicTest, printer_cannot_create_without_config)
 {
@@ -46,7 +47,7 @@ TEST(GCodeDriverBasicTest, printer_cannot_create_without_area_settings)
     GPIO_TypeDef port = 0;
     MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
     SDcardMock storage(1024);
-    PrinterConfig cfg = { &storage, 0, 10000, motor, motor, motor, motor, 0 };
+    PrinterConfig cfg = { &storage, 0, 10000, motor, motor, motor, motor, PRINTER_ACCELERATION_DISABLE, 0 };
 
     ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
 }
@@ -61,7 +62,7 @@ TEST(GCodeDriverBasicTest, printer_can_create_with_storage)
     MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
     SDcardMock storage(1024);
     GCodeAxisConfig axis_cfg = { 1,1,1,1 };
-    PrinterConfig cfg = { &storage, 0, 10000, motor, motor, motor, motor, &axis_cfg};
+    PrinterConfig cfg = { &storage, 0, 10000, motor, motor, motor, motor, PRINTER_ACCELERATION_DISABLE , &axis_cfg};
 
     ASSERT_TRUE(nullptr != PrinterConfigure(&cfg));
 }
@@ -86,7 +87,7 @@ protected:
         storage = std::make_unique<SDcardMock>(1024);
         
         MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
-        PrinterConfig cfg = { storage.get(), CONTROL_BLOCK_POSITION, PrinterEmulator::main_frequency, motor, motor, motor, motor, &axis_cfg };
+        PrinterConfig cfg = { storage.get(), CONTROL_BLOCK_POSITION, PrinterEmulator::main_frequency, motor, motor, motor, motor, PRINTER_ACCELERATION_DISABLE, &axis_cfg };
 
         printer_driver = PrinterConfigure(&cfg);
     }
@@ -244,7 +245,7 @@ protected:
 
     virtual void SetUp()
     {
-        SetupPrinter({ 1,1,1,1 });
+        SetupPrinter({ 1,1,1,1 }, PRINTER_ACCELERATION_DISABLE);
 
         std::vector<std::string> gcode_command_list = 
         {
@@ -372,7 +373,7 @@ public:
 protected:
     virtual void SetUp()
     {
-        SetupPrinter({ 1,1,1,1 });
+        SetupPrinter({ 1,1,1,1 }, PRINTER_ACCELERATION_DISABLE);
     }
 
     std::string initial_command = "G0 F6000 X0 Y0 Z0 E0"; // for current settings this means that step will be called each execute call.
@@ -453,7 +454,7 @@ protected:
 
     virtual void SetUp()
     {
-        SetupPrinter({ 1,1,1,1 });
+        SetupPrinter({ 1,1,1,1 }, PRINTER_ACCELERATION_DISABLE);
     }
 
     std::string initial_command = "G0 F1800 X0 Y0 Z0 E0";
@@ -510,7 +511,6 @@ INSTANTIATE_TEST_SUITE_P(
     }
 );
 
-
 class GCodeDriverNormalizedSpeedTest : public ::testing::TestWithParam<SpeedTest>, public PrinterEmulator
 {
 public:
@@ -522,7 +522,7 @@ protected:
 
     virtual void SetUp()
     {
-        SetupPrinter(axis_configuration);
+        SetupPrinter(axis_configuration, PRINTER_ACCELERATION_DISABLE);
     }
 
     std::string initial_command = "G0 F1800 X0 Y0 Z0 E0";
@@ -560,6 +560,8 @@ INSTANTIATE_TEST_SUITE_P(
         SpeedTest{ "only_Y",    "G0 F2400 X0 Y120 Z0 E0",      PRINTER_OK,  300 }, // steps * 10000 * 60 / fetch
         SpeedTest{ "only_Z",    "G0 F600 X0 Y0 Z600 E0",       PRINTER_OK, 1500 }, 
         SpeedTest{ "only_E",    "G0 F600 X0 Y0 Z0 E600",       PRINTER_OK, 5769 },
+        SpeedTest{ "limit_X",   "G0 F7200 X600 Y0 Z0 E0",      PRINTER_OK,  600 }, // number of stepps cannot be less than required distance
+        SpeedTest{ "limit_Y",   "G0 F7200 X0 Y600 Z0 E0",      PRINTER_OK,  600 }, // number of stepps cannot be less than required distance
         SpeedTest{ "limit_Z",   "G0 F5800 X0 Y0 Z600 E0",      PRINTER_OK,  600 }, // number of stepps cannot be less than required distance
         SpeedTest{ "limit_E",   "G0 F7200 X0 Y0 Z0 E600",      PRINTER_OK,  600 }, // number of stepps cannot be less than required distance
         SpeedTest{ "XYgtE",     "G1 F1800 X300 Y400 Z0 E600",  PRINTER_OK, 1923 },
@@ -575,3 +577,75 @@ INSTANTIATE_TEST_SUITE_P(
         return out.str();
     }
 );
+
+class GCodeDriverMemoryTest : public ::testing::Test, public PrinterEmulator
+{
+public:
+    
+    // use real frequency this time
+    GCodeDriverMemoryTest()
+        : PrinterEmulator(10000)
+    {}
+protected:
+    const size_t command_block_size = SDcardMock::s_sector_size / GCODE_CHUNK_SIZE;
+    size_t commands_count = 0;
+
+    virtual void SetUp()
+    {
+        SetupPrinter(axis_configuration, PRINTER_ACCELERATION_DISABLE);
+
+        
+        std::vector<std::string> commands = { "G0 F1800 X0 Y0 Z0 E0" };
+
+        for (size_t i = 0; i < command_block_size * 3; ++i)
+        {
+            std::ostringstream command;
+            command << "G0 F1800 X" << (i + 1) * 10 << " Y0";
+            commands.push_back(command.str());
+        }
+        commands_count = commands.size();
+
+        StartPrinting(commands);
+    }
+};
+
+TEST_F(GCodeDriverMemoryTest, printer_command_list_no_errors)
+{
+    size_t i = 0;
+    for (; i < commands_count; ++i)
+    {
+        PRINTER_STATUS status = PrinterNextCommand(printer_driver);
+        ASSERT_TRUE(GCODE_OK == status || GCODE_INCOMPLETE == status) << "current status: " << status << " on iteration: " << i;
+        CompleteCommand(status);
+    }
+}
+
+TEST_F(GCodeDriverMemoryTest, printer_command_list_finished)
+{
+    size_t i = 0;
+    for (; i < commands_count + 1; ++i)
+    {
+        PRINTER_STATUS status = PrinterNextCommand(printer_driver);
+        if (PRINTER_FINISHED == status)
+        {
+            return;
+        }
+        CompleteCommand(status);
+    }
+    FAIL() << "finished state was not raized";
+}
+
+TEST_F(GCodeDriverMemoryTest, printer_command_list_commands_count)
+{
+    size_t i = 0;
+    for (; i < commands_count + 1; ++i)
+    {
+        PRINTER_STATUS status = PrinterNextCommand(printer_driver);
+        if (PRINTER_FINISHED == status)
+        {
+            return;
+        }
+        CompleteCommand(status);
+    }
+    ASSERT_EQ(commands_count, i - 1);
+}

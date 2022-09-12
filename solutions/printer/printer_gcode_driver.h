@@ -12,6 +12,13 @@
 extern "C" {
 #endif
 
+
+typedef enum PRINTER_ACCELERATION_Type
+{
+    PRINTER_ACCELERATION_DISABLE = 0,
+    PRINTER_ACCELERATION_ENABLE = 1
+} PRINTER_ACCELERATION;
+
 typedef struct PrinterConfig_type
 {
     // Handle to SD card that contains internal printer settings and data, 
@@ -28,6 +35,8 @@ typedef struct PrinterConfig_type
     MotorConfig y;
     MotorConfig z;
     MotorConfig e;
+    // Flag to enable acceleration control or not.
+    PRINTER_ACCELERATION acceleration_enabled;
 
     // Working area settings
     // contains information about amount of steps per cantimeter
@@ -48,15 +57,18 @@ typedef enum PRINTER_STATUS_Type
     PRINTER_ALREADY_STARTED,
 } PRINTER_STATUS;
 
+
 HPRINTER       PrinterConfigure(PrinterConfig* printer_cfg);
 PRINTER_STATUS PrinterReadControlBlock(HPRINTER hprinter, PrinterControlBlock* control_block);
 
 PRINTER_STATUS PrinterStart(HPRINTER hprinter);
-uint32_t       PrinterGetCommandsCount(HPRINTER hprinter);
 PRINTER_STATUS PrinterNextCommand(HPRINTER hprinter);
 PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter);
 PRINTER_STATUS PrinterGetStatus(HPRINTER hprinter);
 
+//TODO: rename to remaining command count
+uint32_t       PrinterGetCommandsCount(HPRINTER hprinter);
+uint32_t       PrinterGetAccelerationRegion(HPRINTER hprinter);
 // returns speed and length of current path segment.
 // equals to relative command parameters
 GCodeCommandParams* PrinterGetCurrentPath(HPRINTER hprinter);

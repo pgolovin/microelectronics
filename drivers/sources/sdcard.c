@@ -503,7 +503,7 @@ SDCARD_Status SDCARD_ReadBlocksNumber(HSDCARD hsdcard)
         // sd card is configured incorrectly
         // try to set block size to 512B
         SPIBUS_SelectDevice(sdcard->hspi, sdcard->spi_id);
-        return_value = SendCommand(sdcard, SET_BLOCKLEN, 512, 0);
+        return_value = SendCommand(sdcard, SET_BLOCKLEN, SDCARD_BLOCK_SIZE, 0);
         SPIBUS_UnselectDevice(sdcard->hspi, sdcard->spi_id);
         if (return_value.r1 != 0x0)
         {
@@ -511,7 +511,7 @@ SDCARD_Status SDCARD_ReadBlocksNumber(HSDCARD hsdcard)
             return AbortProcedure(sdcard, SDCARD_WRITE_REJECTED);
         }
     }
-    sdcard->block_size = 512;
+    sdcard->block_size = SDCARD_BLOCK_SIZE;
 
     //  ref: https://docs-emea.rs-online.com/webdocs/1111/0900766b811118fa.pdf
     //    memory capacity = (C_SIZE+1) * 512K
@@ -757,7 +757,7 @@ SDCARD_Status SDCARD_FAT_Write(uint8_t drive_index, const uint8_t *buffer, uint3
     }
     else 
     {
-        status = (SDCARD_Write(s_fat_drives[drive_index], buffer, sector, count) == count*512) ? SDCARD_OK : SDCARD_WRITE_REJECTED;;
+        status = (SDCARD_Write(s_fat_drives[drive_index], buffer, sector, count) == count* SDCARD_BLOCK_SIZE) ? SDCARD_OK : SDCARD_WRITE_REJECTED;;
     }
     
     return status;

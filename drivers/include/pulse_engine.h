@@ -22,11 +22,11 @@ typedef enum PULSE_SIGNAL_type
 typedef void(pulse_callback)(void* parameter);
 
 //wave type is used to check how pulse engine works, is signal region starts from lower value (off) or from higher (on)
-HPULSE PULSE_Configure(PULSE_SINGAL signal_type, pulse_callback* on_callback, pulse_callback* off_callback, void* parameter);
+HPULSE PULSE_Configure(PULSE_SINGAL signal_type);
 void PULSE_Release(HPULSE pulse);
 void PULSE_SetPower(HPULSE pulse, uint32_t power);
 void PULSE_SetPeriod(HPULSE pulse, uint32_t period);
-void PULSE_HandleTick(HPULSE pulse);
+bool PULSE_HandleTick(HPULSE pulse);
 
 #ifdef __cplusplus
 }

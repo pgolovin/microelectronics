@@ -1,6 +1,6 @@
 #enable conan package manager
 
-find_package(gtest)
+find_package(GTest)
 # set the project name
 set(SOURCES
     "tests.cpp"
@@ -13,6 +13,7 @@ set(SOURCES
     "device/sdcard.cpp"
     "libraries/gcode.cpp"
     "solutions/gcode_driver.cpp"
+    "solutions/gcode_driver_acceleration.cpp"
     "solutions/printer_emulator.h"
     "solutions/printer_emulator.cpp")
 # add sub-project

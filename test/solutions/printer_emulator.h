@@ -9,7 +9,7 @@
 
 class PrinterEmulator
 {
-protected:
+public:
     static const size_t data_position = CONTROL_BLOCK_POSITION + 5;
     uint16_t main_frequency; //Hz
 
@@ -31,11 +31,13 @@ protected:
     PrinterEmulator(uint16_t frequency) : main_frequency(frequency) {};
     virtual ~PrinterEmulator() {};
 
-    void SetupPrinter(GCodeAxisConfig axis_config);
+    void SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERATION enable_acceleration);
 
     void StartPrinting(const std::vector<std::string>& commands);
 
     void MoveToCommand(uint32_t index);
+    size_t CompleteCommand(PRINTER_STATUS command_status);
+    size_t CalculateStepsCount(uint32_t fetch_speed, uint32_t distance, uint32_t resolution);
 
     void CreateGCodeData(const std::vector<std::string>& gcode_command_list);
 

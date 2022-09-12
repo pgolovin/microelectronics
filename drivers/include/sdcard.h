@@ -16,6 +16,7 @@ extern "C" {
   CRCPolynomial = 10;
 */
 
+#define SDCARD_BLOCK_SIZE 512
 struct SDCARD_type
 {
 	uint32_t id;

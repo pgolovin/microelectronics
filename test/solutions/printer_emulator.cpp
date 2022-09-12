@@ -1,7 +1,7 @@
 #include "solutions/printer_emulator.h"
 
 
-void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config)
+void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERATION enable_acceleration)
 {
     DeviceSettings ds;
     device = std::make_unique<Device>(ds);
@@ -16,7 +16,7 @@ void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config)
     MotorConfig motor_e = {PULSE_HIGHER, &port_e_step, 0, &port_e_dir, 0 };
 
     external_config = axis_config;
-    PrinterConfig cfg = { storage.get(), CONTROL_BLOCK_POSITION, PrinterEmulator::main_frequency, motor_x, motor_y, motor_z, motor_e, &external_config };
+    PrinterConfig cfg = { storage.get(), CONTROL_BLOCK_POSITION, PrinterEmulator::main_frequency, motor_x, motor_y, motor_z, motor_e, enable_acceleration, &external_config };
 
     printer_driver = PrinterConfigure(&cfg);
 }
@@ -39,6 +39,22 @@ void PrinterEmulator::MoveToCommand(uint32_t index)
             command_status = PrinterExecuteCommand(printer_driver);
         }
     }
+}
+
+size_t PrinterEmulator::CompleteCommand(PRINTER_STATUS command_status)
+{
+    size_t i = 0; 
+    while (command_status != PRINTER_OK)
+    {
+        ++i;
+        command_status = PrinterExecuteCommand(printer_driver);
+    }
+    return i;
+}
+
+size_t PrinterEmulator::CalculateStepsCount(uint32_t fetch_speed, uint32_t distance, uint32_t resolution)
+{
+    return (10000 * 60 / fetch_speed / resolution < 1) ? distance : (distance * 10000 * 60 / fetch_speed / resolution);
 }
 
 void PrinterEmulator::CreateGCodeData(const std::vector<std::string>& gcode_command_list)

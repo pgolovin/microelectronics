@@ -5,10 +5,6 @@
 
 typedef struct PulseInternal_type
 {
-	pulse_callback* on;
-	pulse_callback* off;
-	void* parameter;
-
 	uint32_t period;
 	uint32_t power;
 	PULSE_SINGAL signal_type;
@@ -18,18 +14,10 @@ typedef struct PulseInternal_type
 
 } PulseInternal;
 
-HPULSE PULSE_Configure(PULSE_SINGAL signal_type, pulse_callback* on_callback, pulse_callback* off_callback, void* parameter)
+HPULSE PULSE_Configure(PULSE_SINGAL signal_type)
 {
-	if (!on_callback || !off_callback)
-	{
-		return 0;
-	}
-
 	PulseInternal* pulse = DeviceAlloc(sizeof(PulseInternal));
 
-	pulse->on = on_callback;
-	pulse->off = off_callback;
-	pulse->parameter = parameter;
 	pulse->period = 1;
 	pulse->power = 0;
 	pulse->signal_type = signal_type;
@@ -60,7 +48,7 @@ void PULSE_SetPower(HPULSE pulse, uint32_t power)
 	internal_pulse->tick = 0;
 }
 
-void PULSE_HandleTick(HPULSE pulse)
+bool PULSE_HandleTick(HPULSE pulse)
 {
 	PulseInternal* internal_pulse = (PulseInternal*)pulse;
 
@@ -72,20 +60,17 @@ void PULSE_HandleTick(HPULSE pulse)
 	// this gave us constant density across whole signal
 
 	++internal_pulse->tick;
-
+	
 	// higher signal produces 'on' signal as a 1st signal, if power permits :)
 	uint32_t signal_tick = internal_pulse->signal_type * internal_pulse->power + 
 		((internal_pulse->tick - internal_pulse->signal_type) * internal_pulse->power) / internal_pulse->period;
-	if (signal_tick > internal_pulse->signal_tick)
+	
+	bool result = signal_tick > internal_pulse->signal_tick;
+	if (result)
 	{
 		internal_pulse->signal_tick = signal_tick;
-		internal_pulse->on(internal_pulse->parameter);
 	}
-	else
-	{
-		internal_pulse->off(internal_pulse->parameter);
-	}
-
+	
 	// Zeroing valuese is not necessary here
 	// doing it to avoid any potential overflows.
 	if (internal_pulse->tick == internal_pulse->period)
@@ -93,5 +78,6 @@ void PULSE_HandleTick(HPULSE pulse)
 		internal_pulse->tick = 0;
 		internal_pulse->signal_tick = 0;
 	}
+	return result;
 }
 
