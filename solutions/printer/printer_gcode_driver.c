@@ -193,6 +193,13 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hprinter)
     return printer->last_command_status;
 };
 
+static GCODE_COMMAND_STATE setupSet(GCodeCommandParams* params, void* hprinter)
+{
+    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    printer->last_position = *params;
+    return GCODE_OK;
+}
+
 HPRINTER PrinterConfigure(PrinterConfig* printer_cfg)
 {
     if (!printer_cfg || !printer_cfg->bytecode_storage || !printer_cfg->main_frequency || !printer_cfg->axis_configuration)
@@ -206,6 +213,8 @@ HPRINTER PrinterConfigure(PrinterConfig* printer_cfg)
     driver->commands_count = 0;
 
     driver->setup_calls.commands[GCODE_MOVE] = setupMove;
+    driver->setup_calls.commands[GCODE_HOME] = setupMove; // the same command here
+    driver->setup_calls.commands[GCODE_SET] = setupSet;
 
     driver->main_frequency = printer_cfg->main_frequency;
 

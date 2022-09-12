@@ -649,3 +649,122 @@ TEST_F(GCodeDriverMemoryTest, printer_command_list_commands_count)
     }
     ASSERT_EQ(commands_count, i - 1);
 }
+
+class GCodeDriverCommandsTest : public ::testing::Test, public PrinterEmulator
+{
+public:
+
+    // use real frequency this time
+    GCodeDriverCommandsTest()
+        : PrinterEmulator(10000)
+    {}
+protected:
+    virtual void SetUp()
+    {
+        SetupPrinter(axis_configuration, PRINTER_ACCELERATION_DISABLE);
+    }
+};
+
+TEST_F(GCodeDriverCommandsTest, printer_commands_set_command)
+{
+    std::vector<std::string> commands = { 
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G0 F1800 X200 Y100 Z0 E0",
+        "G92 X0 Y0"
+    };
+    StartPrinting(commands);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
+}
+
+TEST_F(GCodeDriverCommandsTest, printer_commands_set_sets_value)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G0 F1800 X200 Y100 Z0 E0",
+        "G92 X0 Y0",
+        "G0 F1800 X200 Y100 Z0 E0",
+    };
+    StartPrinting(commands);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver)); // set
+    ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver)); // value reassigend, as a result the same coordinates should lead to movement
+}
+
+TEST_F(GCodeDriverCommandsTest, printer_commands_set_params)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G0 F1800 X200 Y100 Z0 E0",
+        "G92 X0 Y0",
+        "G0 F1800 X120 Y33 Z0 E0",
+    };
+    StartPrinting(commands);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver)); // set
+    PrinterNextCommand(printer_driver);
+    GCodeCommandParams* segment = PrinterGetCurrentPath(printer_driver);
+    ASSERT_EQ(120, segment->x);
+    ASSERT_EQ(33, segment->y);
+}
+
+TEST_F(GCodeDriverCommandsTest, printer_commands_home_command)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G0 F1800 X200 Y100 Z0 E0",
+        "G28 X0 Y0"
+    };
+    StartPrinting(commands);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
+}
+
+TEST_F(GCodeDriverCommandsTest, printer_commands_home_command_params)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G0 F1800 X200 Y100 Z0 E0",
+        "G28 X0 Y0"
+    };
+    StartPrinting(commands);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    GCodeCommandParams* segment = PrinterGetCurrentPath(printer_driver);
+    ASSERT_EQ(-200, segment->x);
+    ASSERT_EQ(-100, segment->y);
+}
+
+TEST_F(GCodeDriverCommandsTest, printer_commands_home_zero)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G28 X0 Y0"
+    };
+    StartPrinting(commands);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
+}
+
+TEST_F(GCodeDriverCommandsTest, printer_commands_print)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G1 F1800 X100 Y200 Z2 E15"
+    };
+    StartPrinting(commands);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
+}
