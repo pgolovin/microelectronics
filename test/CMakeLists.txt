@@ -9,6 +9,7 @@ set(SOURCES
     "drivers/spibus.cpp"
     "drivers/equalizer.cpp"
     "drivers/motor.cpp"
+    "drivers/termal_regulator.cpp"
     "device/device.cpp"
     "device/sdcard.cpp"
     "libraries/gcode.cpp"

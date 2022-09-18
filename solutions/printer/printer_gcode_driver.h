@@ -3,6 +3,7 @@
 #include "sdcard.h"
 #include "include/gcode.h"
 #include "include/motor.h"
+#include "include/termal_regulator.h"
 #include "printer/printer_entities.h"
 
 #ifndef __PRINTER_GCODE_DRIVER__
@@ -31,12 +32,16 @@ typedef struct PrinterConfig_type
     uint16_t main_frequency;
 
     // Configuration settings of printer motors.
-    MotorConfig x;
-    MotorConfig y;
-    MotorConfig z;
-    MotorConfig e;
+    MotorConfig *x;
+    MotorConfig *y;
+    MotorConfig *z;
+    MotorConfig *e;
     // Flag to enable acceleration control or not.
     PRINTER_ACCELERATION acceleration_enabled;
+
+    // Termal sensors configuration
+    TermalRegulatorConfig *nozzle_config;
+    TermalRegulatorConfig *table_config;
 
     // Working area settings
     // contains information about amount of steps per cantimeter
@@ -72,6 +77,8 @@ uint32_t       PrinterGetAccelerationRegion(HPRINTER hprinter);
 // returns speed and length of current path segment.
 // equals to relative command parameters
 GCodeCommandParams* PrinterGetCurrentPath(HPRINTER hprinter);
+
+uint16_t PrinterGetNozzleTargetT(HPRINTER hprinter);
 
 #ifdef __cplusplus
 }

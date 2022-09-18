@@ -31,9 +31,10 @@ TEST(GCodeDriverBasicTest, printer_cannot_create_without_frequency)
     AttachDevice(device);
 
     GPIO_TypeDef port = 0;
+    TermalRegulatorConfig ts = { &port, 0, GPIO_PIN_SET, GPIO_PIN_RESET };
     MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
     SDcardMock storage(1024);
-    PrinterConfig cfg = { &storage, 0, 0, motor, motor, motor, motor };
+    PrinterConfig cfg = { &storage, 0, 0, &motor, &motor, &motor, &motor, PRINTER_ACCELERATION_DISABLE, &ts, &ts };
 
     ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
 }
@@ -45,9 +46,41 @@ TEST(GCodeDriverBasicTest, printer_cannot_create_without_area_settings)
     AttachDevice(device);
 
     GPIO_TypeDef port = 0;
+    TermalRegulatorConfig ts = { &port, 0, GPIO_PIN_SET, GPIO_PIN_RESET };
     MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
     SDcardMock storage(1024);
-    PrinterConfig cfg = { &storage, 0, 10000, motor, motor, motor, motor, PRINTER_ACCELERATION_DISABLE, 0 };
+    PrinterConfig cfg = { &storage, 0, 10000, &motor, &motor, &motor, &motor, PRINTER_ACCELERATION_DISABLE, &ts, &ts, 0 };
+
+    ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
+}
+
+TEST(GCodeDriverBasicTest, printer_cannot_create_without_motor)
+{
+    DeviceSettings ds;
+    Device device(ds);
+    AttachDevice(device);
+
+    GPIO_TypeDef port = 0;
+    TermalRegulatorConfig ts = { &port, 0, GPIO_PIN_SET, GPIO_PIN_RESET };
+    MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
+    SDcardMock storage(1024);
+    GCodeAxisConfig axis_cfg = { 1,1,1,1 };
+    PrinterConfig cfg = { &storage, 0, 10000, 0, 0, 0, 0, PRINTER_ACCELERATION_DISABLE, &ts, &ts, &axis_cfg };
+
+    ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
+}
+
+TEST(GCodeDriverBasicTest, printer_cannot_create_without_sensor)
+{
+    DeviceSettings ds;
+    Device device(ds);
+    AttachDevice(device);
+
+    GPIO_TypeDef port = 0;
+    MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
+    SDcardMock storage(1024);
+    GCodeAxisConfig axis_cfg = { 1,1,1,1 };
+    PrinterConfig cfg = { &storage, 0, 10000, &motor, &motor, &motor, &motor, PRINTER_ACCELERATION_DISABLE, 0, 0, &axis_cfg };
 
     ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
 }
@@ -59,10 +92,11 @@ TEST(GCodeDriverBasicTest, printer_can_create_with_storage)
     AttachDevice(device);
 
     GPIO_TypeDef port = 0;
-    MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
+    TermalRegulatorConfig ts = { &port, 0, GPIO_PIN_SET, GPIO_PIN_RESET, 1.f, 0.f };
+    MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0,};
     SDcardMock storage(1024);
     GCodeAxisConfig axis_cfg = { 1,1,1,1 };
-    PrinterConfig cfg = { &storage, 0, 10000, motor, motor, motor, motor, PRINTER_ACCELERATION_DISABLE , &axis_cfg};
+    PrinterConfig cfg = { &storage, 0, 10000, &motor, &motor, &motor, &motor, PRINTER_ACCELERATION_DISABLE, &ts, &ts, &axis_cfg};
 
     ASSERT_TRUE(nullptr != PrinterConfigure(&cfg));
 }
@@ -86,8 +120,9 @@ protected:
 
         storage = std::make_unique<SDcardMock>(1024);
         
+        TermalRegulatorConfig ts = { &port, 0, GPIO_PIN_SET, GPIO_PIN_RESET, 1.f, 0.f };
         MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
-        PrinterConfig cfg = { storage.get(), CONTROL_BLOCK_POSITION, PrinterEmulator::main_frequency, motor, motor, motor, motor, PRINTER_ACCELERATION_DISABLE, &axis_cfg };
+        PrinterConfig cfg = { storage.get(), CONTROL_BLOCK_POSITION, PrinterEmulator::main_frequency, &motor, &motor, &motor, &motor, PRINTER_ACCELERATION_DISABLE, &ts, &ts, &axis_cfg };
 
         printer_driver = PrinterConfigure(&cfg);
     }
@@ -767,4 +802,45 @@ TEST_F(GCodeDriverCommandsTest, printer_commands_print)
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
+}
+
+class GCodeDriverSubcommandsTest : public ::testing::Test, public PrinterEmulator
+{
+public:
+
+    // use real frequency this time
+    GCodeDriverSubcommandsTest()
+        : PrinterEmulator(10000)
+    {}
+protected:
+    virtual void SetUp()
+    {
+        SetupPrinter(axis_configuration, PRINTER_ACCELERATION_DISABLE);
+    }
+};
+
+TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_hotend_temp)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "M104 S210"
+    };
+    StartPrinting(commands);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_hotend_temp_value)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "M104 S210"
+    };
+    StartPrinting(commands);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    uint32_t nozzle_temperature = PrinterGetNozzleTargetT(printer_driver);
+    ASSERT_EQ(210, nozzle_temperature);
 }

@@ -7,8 +7,18 @@
 #define STANDARD_ACCELERATION_SEGMENT 100U
 #define COS_15_GRAD 0.966
 
+typedef enum PrinterCommadMode_type
+{
+    MODE_IDLE = 0,
+    MODE_MOVE = 0x01,
+    MODE_WAIT_NOZZLE = 0x02,
+    MODE_WAIT_TABLE  = 0x04,
+} PrinterCommadMode;
+
 typedef struct PrinterDriverInternal_type
 {
+    PrinterCommadMode mode;
+
     HSDCARD storage;
     uint32_t control_block_sector;
     uint32_t current_sector;
@@ -39,11 +49,25 @@ typedef struct PrinterDriverInternal_type
     uint8_t  acceleration_distance_increment;
     uint32_t acceleration_subsequent_region_length;
 
+    // todo use termal sensor instead
+    HTERMALREGULATOR nozzle_temperature;
+    HTERMALREGULATOR table_temperature;
+
     GCodeAxisConfig* axis_cfg;
         
     uint32_t commands_count;
 
 } PrinterDriver;
+
+static void inc(void* parameter)
+{
+    parameter = parameter;
+}
+
+static void dec(void* parameter)
+{
+    parameter = parameter;
+}
 
 static uint32_t compareTimeWithSpeedLimit(int32_t signed_segment, uint32_t time, uint16_t resolution, PrinterDriver* printer)
 {
@@ -189,7 +213,7 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hprinter)
             PULSE_SetPower(printer->accelerator, printer->acceleration_region);
         }
     }
-
+    printer->mode = MODE_MOVE;
     return printer->last_command_status;
 };
 
@@ -197,39 +221,57 @@ static GCODE_COMMAND_STATE setupSet(GCodeCommandParams* params, void* hprinter)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
     printer->last_position = *params;
+
+    return GCODE_OK;
+}
+
+static GCODE_COMMAND_STATE setupSetHotendTemp(GCodeSubCommandParams* params, void* hprinter)
+{
+    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    TR_SetTargetTemperature(printer->nozzle_temperature, params->s);
+
     return GCODE_OK;
 }
 
 HPRINTER PrinterConfigure(PrinterConfig* printer_cfg)
 {
-    if (!printer_cfg || !printer_cfg->bytecode_storage || !printer_cfg->main_frequency || !printer_cfg->axis_configuration)
+    if (!printer_cfg || !printer_cfg->bytecode_storage || !printer_cfg->main_frequency || !printer_cfg->axis_configuration ||
+        !printer_cfg->x || !printer_cfg->y || !printer_cfg->z || !printer_cfg->e ||
+        !printer_cfg->nozzle_config || !printer_cfg->table_config)
     {
         return 0;
     }
 
-    PrinterDriver* driver = DeviceAlloc(sizeof(PrinterDriver));
-    driver->storage = printer_cfg->bytecode_storage;
-    driver->control_block_sector = printer_cfg->control_block_sector;
-    driver->commands_count = 0;
+    PrinterDriver* printer = DeviceAlloc(sizeof(PrinterDriver));
+    printer->storage = printer_cfg->bytecode_storage;
+    printer->control_block_sector = printer_cfg->control_block_sector;
+    printer->commands_count = 0;
 
-    driver->setup_calls.commands[GCODE_MOVE] = setupMove;
-    driver->setup_calls.commands[GCODE_HOME] = setupMove; // the same command here
-    driver->setup_calls.commands[GCODE_SET] = setupSet;
+    printer->setup_calls.commands[GCODE_MOVE] = setupMove;
+    printer->setup_calls.commands[GCODE_HOME] = setupMove; // the same command here
+    printer->setup_calls.commands[GCODE_SET] = setupSet;
 
-    driver->main_frequency = printer_cfg->main_frequency;
+    printer->setup_calls.subcommands[GCODE_SET_NOZZLE_TEMPERATURE] = setupSetHotendTemp;
 
-    driver->motor_x = MOTOR_Configure(&printer_cfg->x);
-    driver->motor_y = MOTOR_Configure(&printer_cfg->y);
-    driver->motor_z = MOTOR_Configure(&printer_cfg->z);
-    driver->motor_e = MOTOR_Configure(&printer_cfg->e);
+    printer->main_frequency = printer_cfg->main_frequency;
 
-    driver->acceleration_enabled = printer_cfg->acceleration_enabled;
-    driver->accelerator = PULSE_Configure(PULSE_HIGHER);
+    printer->motor_x = MOTOR_Configure(printer_cfg->x);
+    printer->motor_y = MOTOR_Configure(printer_cfg->y);
+    printer->motor_z = MOTOR_Configure(printer_cfg->z);
+    printer->motor_e = MOTOR_Configure(printer_cfg->e);
 
-    driver->axis_cfg = printer_cfg->axis_configuration;
-    driver->acceleration_subsequent_region_length = 0;
+    printer->acceleration_enabled = printer_cfg->acceleration_enabled;
+    printer->accelerator = PULSE_Configure(PULSE_HIGHER);
 
-    return (HPRINTER)driver;
+    printer->axis_cfg = printer_cfg->axis_configuration;
+    printer->acceleration_subsequent_region_length = 0;
+
+    printer->nozzle_temperature = TR_Configure(printer_cfg->nozzle_config);
+    printer->table_temperature  = TR_Configure(printer_cfg->table_config);
+
+    printer->mode = MODE_IDLE;
+
+    return (HPRINTER)printer;
 }
 
 PRINTER_STATUS PrinterReadControlBlock(HPRINTER hprinter, PrinterControlBlock* control_block)
@@ -332,6 +374,12 @@ PRINTER_STATUS PrinterNextCommand(HPRINTER hprinter)
     return printer->last_command_status;
 }
 
+uint16_t PrinterGetNozzleTargetT(HPRINTER hprinter)
+{
+    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    return TR_GetTargetTemperature(printer->nozzle_temperature);
+}
+
 PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
@@ -386,6 +434,7 @@ PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter)
     if (MOTOR_IDLE == state)
     {
         printer->last_command_status = GCODE_OK;
+        printer->mode = MODE_IDLE;
     }
     else
     {

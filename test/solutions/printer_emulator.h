@@ -27,6 +27,8 @@ public:
     GPIO_TypeDef port_z_dir = 5;
     GPIO_TypeDef port_e_step = 6;
     GPIO_TypeDef port_e_dir = 7;
+    GPIO_TypeDef port_nozzle = 8;
+    GPIO_TypeDef port_table = 8;
 
     PrinterEmulator(uint16_t frequency) : main_frequency(frequency) {};
     virtual ~PrinterEmulator() {};
