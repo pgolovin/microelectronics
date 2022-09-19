@@ -62,6 +62,13 @@ typedef enum PRINTER_STATUS_Type
     PRINTER_ALREADY_STARTED,
 } PRINTER_STATUS;
 
+typedef enum TERMO_REGULTAOR_Type
+{
+    TERMO_NOZZLE = 0,
+    TERMO_TABLE = 1,
+    TERMO_REGULATORS_COUNT
+} TERMO_REGULTAOR;
+
 
 HPRINTER       PrinterConfigure(PrinterConfig* printer_cfg);
 PRINTER_STATUS PrinterReadControlBlock(HPRINTER hprinter, PrinterControlBlock* control_block);
@@ -78,7 +85,9 @@ uint32_t       PrinterGetAccelerationRegion(HPRINTER hprinter);
 // equals to relative command parameters
 GCodeCommandParams* PrinterGetCurrentPath(HPRINTER hprinter);
 
-uint16_t PrinterGetNozzleTargetT(HPRINTER hprinter);
+void PrinterUpdateVoltageT(HPRINTER hprinter, TERMO_REGULTAOR regulator, uint16_t voltage);
+uint16_t PrinterGetTargetT(HPRINTER hprinter, TERMO_REGULTAOR regulator);
+uint16_t PrinterGetCurrentT(HPRINTER hprinter, TERMO_REGULTAOR regulator);
 
 #ifdef __cplusplus
 }

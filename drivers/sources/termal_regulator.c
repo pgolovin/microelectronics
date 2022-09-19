@@ -163,5 +163,5 @@ bool TR_IsTemperatureReached(HTERMALREGULATOR htr)
 bool TR_IsHeaterStabilized(HTERMALREGULATOR htr)
 {
     TermalRegulator* tr = (TermalRegulator*)htr;
-    return (tr->warm_power - tr->warm_power_min > 0);
+    return (tr->warm_power - tr->warm_power_min > 0) && (tr->cool_power_max - tr->cool_power > 0);
 }

@@ -817,6 +817,36 @@ protected:
     {
         SetupPrinter(axis_configuration, PRINTER_ACCELERATION_DISABLE);
     }
+
+    void HandleNozzleEnvironmentTick()
+    {
+        GPIO_PinState state = device->GetPinState(port_nozzle, 0).state;
+        if (GPIO_PIN_SET == state)
+        {
+            ++nozzle_value;
+        }
+        else
+        {
+            --nozzle_value;
+        }
+        PrinterUpdateVoltageT(printer_driver, TERMO_NOZZLE, nozzle_value);
+    }
+    void HandleTableEnvironmentTick()
+    {
+        //rever5ced pin state for heat and cool
+        GPIO_PinState state = device->GetPinState(port_table, 0).state;
+        if (GPIO_PIN_SET == state)
+        {
+            --table_value;
+        }
+        else
+        {
+            ++table_value;
+        }
+        PrinterUpdateVoltageT(printer_driver, TERMO_TABLE, table_value);
+    }
+    uint16_t nozzle_value = 20;
+    uint16_t table_value = 20;
 };
 
 TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_hotend_temp)
@@ -841,6 +871,132 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_hotend_temp_value)
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     PrinterNextCommand(printer_driver);
-    uint32_t nozzle_temperature = PrinterGetNozzleTargetT(printer_driver);
+    uint32_t nozzle_temperature = PrinterGetTargetT(printer_driver, TERMO_NOZZLE);
     ASSERT_EQ(210, nozzle_temperature);
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_hotend_temp)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "M109 S210"
+    };
+    StartPrinting(commands);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_hotend_temp_target_value)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "M109 S210"
+    };
+    StartPrinting(commands);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    ASSERT_EQ(210, PrinterGetTargetT(printer_driver, TERMO_NOZZLE));
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_hotend_temp_current_value)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "M109 S210"
+    };
+    StartPrinting(commands);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PRINTER_STATUS status = PrinterNextCommand(printer_driver);
+    size_t tick_index = 0;
+    while(status != PRINTER_OK)
+    {
+        if (0 == tick_index % 1000)
+        {
+            HandleNozzleEnvironmentTick();
+        }
+        ++tick_index;
+        status = PrinterExecuteCommand(printer_driver);
+    }
+
+    ASSERT_TRUE(abs(210.0 - PrinterGetCurrentT(printer_driver, TERMO_NOZZLE)) < 5);
+}
+
+// Table
+
+TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_table_temp)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "M140 S110"
+    };
+    StartPrinting(commands);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_table_temp_value)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "M140 S110"
+    };
+    StartPrinting(commands);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    uint32_t temperature = PrinterGetTargetT(printer_driver, TERMO_TABLE);
+    ASSERT_EQ(110, temperature);
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_table_temp)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "M190 S110"
+    };
+    StartPrinting(commands);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_table_temp_target_value)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "M190 S110"
+    };
+    StartPrinting(commands);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    ASSERT_EQ(110, PrinterGetTargetT(printer_driver, TERMO_TABLE));
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_table_temp_current_value)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "M190 S110"
+    };
+    StartPrinting(commands);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PRINTER_STATUS status = PrinterNextCommand(printer_driver);
+    size_t tick_index = 0;
+    while (status != PRINTER_OK)
+    {
+        if (0 == tick_index % 1000)
+        {
+            HandleTableEnvironmentTick();
+        }
+        ++tick_index;
+        status = PrinterExecuteCommand(printer_driver);
+    }
+
+    ASSERT_TRUE(abs(110.0 - PrinterGetCurrentT(printer_driver, TERMO_TABLE)) < 5);
 }

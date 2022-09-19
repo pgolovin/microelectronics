@@ -10,7 +10,6 @@
 #include "ff.h"
 #include "diskio.h"
 
-#include "include/equalizer.h"
 #include "include/termal_regulator.h"
 
 #include <stdlib.h>
@@ -596,12 +595,12 @@ HEXPERIMENTAL EXPERIMENTAL_Configure(SPI_HandleTypeDef* hspi, SPI_HandleTypeDef*
     };
     exp->nozzle = TR_Configure(&tr_config);
     
-    TermalRegulatorConfig table_eq_config = {
+    TermalRegulatorConfig table_tr_config = {
         TABLE_HEATER_CONTROL_GPIO_Port, TABLE_HEATER_CONTROL_Pin,
         GPIO_PIN_RESET, GPIO_PIN_SET, 
         1.f, 0.f
     };
-    exp->table = TR_Configure(&table_eq_config);
+    exp->table = TR_Configure(&table_tr_config);
     
     GCodeAxisConfig cfg = {100, 100, 100, 100};
     exp->gcode = GC_Configure(&cfg);

@@ -18,6 +18,8 @@ typedef enum PrinterCommadMode_type
 typedef struct PrinterDriverInternal_type
 {
     PrinterCommadMode mode;
+    uint32_t tick_index;
+    uint8_t printer_state_flags;
 
     HSDCARD storage;
     uint32_t control_block_sector;
@@ -50,8 +52,7 @@ typedef struct PrinterDriverInternal_type
     uint32_t acceleration_subsequent_region_length;
 
     // todo use termal sensor instead
-    HTERMALREGULATOR nozzle_temperature;
-    HTERMALREGULATOR table_temperature;
+    HTERMALREGULATOR regulators[TERMO_REGULATORS_COUNT];
 
     GCodeAxisConfig* axis_cfg;
         
@@ -228,9 +229,37 @@ static GCODE_COMMAND_STATE setupSet(GCodeCommandParams* params, void* hprinter)
 static GCODE_COMMAND_STATE setupSetHotendTemp(GCodeSubCommandParams* params, void* hprinter)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
-    TR_SetTargetTemperature(printer->nozzle_temperature, params->s);
+    TR_SetTargetTemperature(printer->regulators[TERMO_NOZZLE], params->s);
 
     return GCODE_OK;
+}
+
+static GCODE_COMMAND_STATE setupSetHotendTempBlocking(GCodeSubCommandParams* params, void* hprinter)
+{
+    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    TR_SetTargetTemperature(printer->regulators[TERMO_NOZZLE], params->s);
+
+    printer->mode = MODE_WAIT_NOZZLE;
+
+    return GCODE_INCOMPLETE;
+}
+
+static GCODE_COMMAND_STATE setupSetTableTemp(GCodeSubCommandParams* params, void* hprinter)
+{
+    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    TR_SetTargetTemperature(printer->regulators[TERMO_TABLE], params->s);
+
+    return GCODE_OK;
+}
+
+static GCODE_COMMAND_STATE setupSetTableTempBlocking(GCodeSubCommandParams* params, void* hprinter)
+{
+    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    TR_SetTargetTemperature(printer->regulators[TERMO_TABLE], params->s);
+
+    printer->mode = MODE_WAIT_TABLE;
+
+    return GCODE_INCOMPLETE;
 }
 
 HPRINTER PrinterConfigure(PrinterConfig* printer_cfg)
@@ -252,6 +281,9 @@ HPRINTER PrinterConfigure(PrinterConfig* printer_cfg)
     printer->setup_calls.commands[GCODE_SET] = setupSet;
 
     printer->setup_calls.subcommands[GCODE_SET_NOZZLE_TEMPERATURE] = setupSetHotendTemp;
+    printer->setup_calls.subcommands[GCODE_WAIT_NOZZLE] = setupSetHotendTempBlocking;
+    printer->setup_calls.subcommands[GCODE_SET_TABLE_TEMPERATURE] = setupSetTableTemp;
+    printer->setup_calls.subcommands[GCODE_WAIT_TABLE] = setupSetTableTempBlocking;
 
     printer->main_frequency = printer_cfg->main_frequency;
 
@@ -266,10 +298,12 @@ HPRINTER PrinterConfigure(PrinterConfig* printer_cfg)
     printer->axis_cfg = printer_cfg->axis_configuration;
     printer->acceleration_subsequent_region_length = 0;
 
-    printer->nozzle_temperature = TR_Configure(printer_cfg->nozzle_config);
-    printer->table_temperature  = TR_Configure(printer_cfg->table_config);
+    printer->regulators[TERMO_NOZZLE] = TR_Configure(printer_cfg->nozzle_config);
+    printer->regulators[TERMO_TABLE]  = TR_Configure(printer_cfg->table_config);
 
     printer->mode = MODE_IDLE;
+    printer->tick_index = 0;
+    printer->printer_state_flags = 0;
 
     return (HPRINTER)printer;
 }
@@ -300,6 +334,10 @@ PRINTER_STATUS PrinterStart(HPRINTER hprinter)
         return PRINTER_ALREADY_STARTED;
     }
 
+    printer->mode = MODE_IDLE;
+    printer->tick_index = 0;
+    printer->printer_state_flags = 0;
+
     printer->caret_position = 0;
     printer->last_command_status = GCODE_OK;
 
@@ -318,6 +356,8 @@ PRINTER_STATUS PrinterStart(HPRINTER hprinter)
     printer->commands_count = control_block.commands_count;
     printer->current_sector = control_block.file_sector;
     SDCARD_ReadSingleBlock(printer->storage, printer->data_block, printer->current_sector);
+
+    printer->tick_index = 0;
 
     PULSE_SetPeriod(printer->accelerator, STANDARD_ACCELERATION_SEGMENT);
     PULSE_SetPower(printer->accelerator, STANDARD_ACCELERATION_SEGMENT);
@@ -374,16 +414,43 @@ PRINTER_STATUS PrinterNextCommand(HPRINTER hprinter)
     return printer->last_command_status;
 }
 
-uint16_t PrinterGetNozzleTargetT(HPRINTER hprinter)
+void PrinterUpdateVoltageT(HPRINTER hprinter, TERMO_REGULTAOR regulator, uint16_t voltage)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
-    return TR_GetTargetTemperature(printer->nozzle_temperature);
+    TR_SetADCValue(printer->regulators[regulator], voltage);
+}
+
+uint16_t PrinterGetTargetT(HPRINTER hprinter, TERMO_REGULTAOR regulator)
+{
+    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    return TR_GetTargetTemperature(printer->regulators[regulator]);
+}
+
+uint16_t PrinterGetCurrentT(HPRINTER hprinter, TERMO_REGULTAOR regulator)
+{
+    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    return TR_GetCurrentTemperature(printer->regulators[regulator]);
 }
 
 PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
     
+    if (0 == printer->tick_index % 1000)
+    {
+        TR_HandleTick(printer->regulators[TERMO_NOZZLE]);
+        printer->printer_state_flags = (printer->mode & MODE_WAIT_NOZZLE) && !TR_IsHeaterStabilized(printer->regulators[TERMO_NOZZLE]) ? MODE_WAIT_NOZZLE : 0;
+
+        TR_HandleTick(printer->regulators[TERMO_TABLE]);
+        printer->printer_state_flags |= (printer->mode & MODE_WAIT_TABLE) && !TR_IsHeaterStabilized(printer->regulators[TERMO_TABLE]) ? MODE_WAIT_TABLE : 0;
+    }
+
+    ++printer->tick_index;
+    if (printer->main_frequency == printer->tick_index)
+    {
+        printer->tick_index = 0;
+    }
+
     // Acceleration region is on a both sides of subsequent regions
     // Length of braking region is calculated and equal to acceleration region
     if ((printer->acceleration_enabled) &&
@@ -426,12 +493,14 @@ PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter)
     MOTOR_HandleTick(printer->motor_z);
     MOTOR_HandleTick(printer->motor_e);
 
-    MOTOR_STATE state = MOTOR_GetState(printer->motor_x);
-    state += MOTOR_GetState(printer->motor_y);
-    state += MOTOR_GetState(printer->motor_z);
-    state += MOTOR_GetState(printer->motor_e);
+    uint8_t state = printer->printer_state_flags;
 
-    if (MOTOR_IDLE == state)
+    state |= MOTOR_GetState(printer->motor_x);
+    state |= MOTOR_GetState(printer->motor_y);
+    state |= MOTOR_GetState(printer->motor_z);
+    state |= MOTOR_GetState(printer->motor_e);
+
+    if (0 == state)
     {
         printer->last_command_status = GCODE_OK;
         printer->mode = MODE_IDLE;
