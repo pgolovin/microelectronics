@@ -3,6 +3,7 @@
 #include <math.h>
 
 #define SECONDS_IN_MINUTE 60
+#define TERMO_REQUEST_PER_SECOND 10
 #define STANDARD_ACCELERATION 60
 #define STANDARD_ACCELERATION_SEGMENT 100U
 #define COS_15_GRAD 0.966
@@ -19,7 +20,7 @@ typedef struct PrinterDriverInternal_type
 {
     PrinterCommadMode mode;
     uint32_t tick_index;
-    uint8_t printer_state_flags;
+    uint8_t termo_regulators_state;
 
     HSDCARD storage;
     uint32_t control_block_sector;
@@ -300,7 +301,7 @@ HPRINTER PrinterConfigure(PrinterConfig* printer_cfg)
 
     printer->mode = MODE_IDLE;
     printer->tick_index = 0;
-    printer->printer_state_flags = 0;
+    printer->termo_regulators_state = 0;
 
     return (HPRINTER)printer;
 }
@@ -333,7 +334,7 @@ PRINTER_STATUS PrinterStart(HPRINTER hprinter)
 
     printer->mode = MODE_IDLE;
     printer->tick_index = 0;
-    printer->printer_state_flags = 0;
+    printer->termo_regulators_state = 0;
 
     printer->caret_position = 0;
     printer->last_command_status = GCODE_OK;
@@ -433,13 +434,13 @@ PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
     
-    if (0 == printer->tick_index % 1000)
+    if (0 == printer->tick_index % (printer->main_frequency / TERMO_REQUEST_PER_SECOND))
     {
         TR_HandleTick(printer->regulators[TERMO_NOZZLE]);
-        printer->printer_state_flags = (printer->mode & MODE_WAIT_NOZZLE) && !TR_IsHeaterStabilized(printer->regulators[TERMO_NOZZLE]) ? MODE_WAIT_NOZZLE : 0;
+        printer->termo_regulators_state = (printer->mode & MODE_WAIT_NOZZLE) && !TR_IsHeaterStabilized(printer->regulators[TERMO_NOZZLE]) ? MODE_WAIT_NOZZLE : 0;
 
         TR_HandleTick(printer->regulators[TERMO_TABLE]);
-        printer->printer_state_flags |= (printer->mode & MODE_WAIT_TABLE) && !TR_IsHeaterStabilized(printer->regulators[TERMO_TABLE]) ? MODE_WAIT_TABLE : 0;
+        printer->termo_regulators_state |= (printer->mode & MODE_WAIT_TABLE) && !TR_IsHeaterStabilized(printer->regulators[TERMO_TABLE]) ? MODE_WAIT_TABLE : 0;
     }
 
     ++printer->tick_index;
@@ -485,7 +486,7 @@ PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter)
         printer->acceleration_distance += printer->acceleration_distance_increment;
     }
 
-    uint8_t state = printer->printer_state_flags;
+    uint8_t state = printer->termo_regulators_state;
     for (uint8_t i = 0; i < MOTOR_COUNT; ++i)
     {
         MOTOR_HandleTick(printer->motors[i]);
