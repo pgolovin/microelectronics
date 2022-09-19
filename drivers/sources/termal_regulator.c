@@ -17,15 +17,15 @@ typedef struct TermalRegulatorInternal_type
     float angle;
     float offset;
 
-    HPULSE warmup_regulator;
+    HPULSE heatup_regulator;
 
-    uint8_t warm_power;
-    uint8_t warm_power_min;
+    uint8_t heat_power;
+    uint8_t heat_power_min;
 
     uint8_t cool_power;
     uint8_t cool_power_max;
 
-    bool    warming;
+    bool    heating;
     int8_t  heat_probe_index;
 
     bool temperature_reached;
@@ -46,13 +46,13 @@ HTERMALREGULATOR TR_Configure(TermalRegulatorConfig* config)
     tr->angle = config->line_angle;
     tr->offset = config->line_offset;
 
-    tr->warmup_regulator = PULSE_Configure(PULSE_HIGHER);
-    tr->warm_power = TERMAL_REGULATOR_HEAT_PERIOD;
-    tr->warm_power_min = TERMAL_REGULATOR_HEAT_PERIOD;
+    tr->heatup_regulator = PULSE_Configure(PULSE_HIGHER);
+    tr->heat_power = TERMAL_REGULATOR_HEAT_PERIOD;
+    tr->heat_power_min = TERMAL_REGULATOR_HEAT_PERIOD;
 
     tr->cool_power = 0;
     tr->cool_power_max = 0;
-    PULSE_SetPeriod(tr->warmup_regulator, TERMAL_REGULATOR_HEAT_PERIOD);
+    PULSE_SetPeriod(tr->heatup_regulator, TERMAL_REGULATOR_HEAT_PERIOD);
 
     return (HTERMALREGULATOR)tr;
 }
@@ -66,8 +66,8 @@ void TR_SetTargetTemperature(HTERMALREGULATOR htr, uint16_t value)
     tr->intermediate_voltage = 0;
     tr->temperature_reached = false;
     
-    tr->warm_power = TERMAL_REGULATOR_HEAT_PERIOD;
-    tr->warm_power_min = TERMAL_REGULATOR_HEAT_PERIOD;
+    tr->heat_power = TERMAL_REGULATOR_HEAT_PERIOD;
+    tr->heat_power_min = TERMAL_REGULATOR_HEAT_PERIOD;
 
     tr->cool_power = 0;
     tr->cool_power_max = 0;
@@ -113,44 +113,43 @@ void TR_SetADCValue(HTERMALREGULATOR htr, uint16_t value)
     uint16_t power = 0;
     if (tr->current_voltage < tr->target_voltage)
     {
-        power = tr->warm_power;
-        if (tr->warming && delta <= 0 && tr->heat_probe_index++)
+        power = tr->heat_power;
+        if (tr->heating && delta <= 0 && tr->heat_probe_index++)
         {
             tr->heat_probe_index = 0;
-            tr->warm_power = tr->warm_power_min + POWER_REVERT_INDEX;
+            tr->heat_power = tr->heat_power_min + POWER_REVERT_INDEX;
         }
-        if (tr->temperature_reached && tr->cool_power < tr->warm_power && tr->cool_power_max == tr->cool_power && !tr->warming)
+        if (tr->temperature_reached && tr->cool_power < tr->heat_power && tr->cool_power_max == tr->cool_power && !tr->heating)
         {
             ++tr->cool_power_max;
             ++tr->cool_power;
             tr->heat_probe_index = 0;
         }
-        tr->warming = true;
+        tr->heating = true;
     } 
     else
     {
         power = tr->cool_power;
-        if (!tr->warming && delta >= 0 && tr->cool_power > POWER_REVERT_INDEX && tr->heat_probe_index++)
+        if (!tr->heating && delta >= 0 && tr->cool_power > POWER_REVERT_INDEX && tr->heat_probe_index++)
         {
             tr->heat_probe_index = 0;
             tr->cool_power = tr->cool_power_max - POWER_REVERT_INDEX;
         }
-        if (tr->temperature_reached && tr->cool_power < tr->warm_power && tr->warm_power_min == tr->warm_power && tr->warming)
+        if (tr->temperature_reached && tr->cool_power < tr->heat_power && tr->heat_power_min == tr->heat_power && tr->heating)
         {
-            --tr->warm_power;
-            --tr->warm_power_min;
+            --tr->heat_power;
+            --tr->heat_power_min;
             tr->heat_probe_index = 0;
         }
-        tr->warming = false;
+        tr->heating = false;
     }
-    PULSE_SetPower(tr->warmup_regulator, power);
-    
+    PULSE_SetPower(tr->heatup_regulator, power);
 }
 
 void TR_HandleTick(HTERMALREGULATOR htr)
 {
     TermalRegulator* tr = (TermalRegulator*)htr;
-    GPIO_PinState state = (PULSE_HandleTick(tr->warmup_regulator)) ? tr->config.heat_value : tr->config.cool_value;
+    GPIO_PinState state = (PULSE_HandleTick(tr->heatup_regulator)) ? tr->config.heat_value : tr->config.cool_value;
     HAL_GPIO_WritePin(tr->config.port, tr->config.pin, state);
 }
 
@@ -163,5 +162,5 @@ bool TR_IsTemperatureReached(HTERMALREGULATOR htr)
 bool TR_IsHeaterStabilized(HTERMALREGULATOR htr)
 {
     TermalRegulator* tr = (TermalRegulator*)htr;
-    return (tr->warm_power - tr->warm_power_min > 0) && (tr->cool_power_max - tr->cool_power > 0);
+    return (tr->heat_power - tr->heat_power_min > 0) && (tr->cool_power_max - tr->cool_power > 0);
 }

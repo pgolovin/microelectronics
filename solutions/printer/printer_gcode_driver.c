@@ -36,10 +36,7 @@ typedef struct PrinterDriverInternal_type
     
     PRINTER_STATUS last_command_status;
 
-    HMOTOR motor_x;
-    HMOTOR motor_y;
-    HMOTOR motor_z;
-    HMOTOR motor_e;
+    HMOTOR motors[MOTOR_COUNT];
 
     PRINTER_ACCELERATION acceleration_enabled;
     HPULSE   accelerator;
@@ -185,10 +182,10 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hprinter)
     // basic fetch speed is calculated as velocity of the head, without velocity of the table, it is calculated independently.
     uint32_t time = calculateTime(printer, &printer->current_segment);
    
-    MOTOR_SetProgram(printer->motor_x, time, printer->current_segment.x);
-    MOTOR_SetProgram(printer->motor_y, time, printer->current_segment.y);
-    MOTOR_SetProgram(printer->motor_z, time, printer->current_segment.z);
-    MOTOR_SetProgram(printer->motor_e, time, printer->current_segment.e);
+    MOTOR_SetProgram(printer->motors[MOTOR_X], time, printer->current_segment.x);
+    MOTOR_SetProgram(printer->motors[MOTOR_Y], time, printer->current_segment.y);
+    MOTOR_SetProgram(printer->motors[MOTOR_Z], time, printer->current_segment.z);
+    MOTOR_SetProgram(printer->motors[MOTOR_E], time, printer->current_segment.e);
     
     if (time)
     {
@@ -265,7 +262,7 @@ static GCODE_COMMAND_STATE setupSetTableTempBlocking(GCodeSubCommandParams* para
 HPRINTER PrinterConfigure(PrinterConfig* printer_cfg)
 {
     if (!printer_cfg || !printer_cfg->bytecode_storage || !printer_cfg->main_frequency || !printer_cfg->axis_configuration ||
-        !printer_cfg->x || !printer_cfg->y || !printer_cfg->z || !printer_cfg->e ||
+        !printer_cfg->motors[MOTOR_X] || !printer_cfg->motors[MOTOR_Y] || !printer_cfg->motors[MOTOR_Z] || !printer_cfg->motors[MOTOR_E] ||
         !printer_cfg->nozzle_config || !printer_cfg->table_config)
     {
         return 0;
@@ -287,10 +284,10 @@ HPRINTER PrinterConfigure(PrinterConfig* printer_cfg)
 
     printer->main_frequency = printer_cfg->main_frequency;
 
-    printer->motor_x = MOTOR_Configure(printer_cfg->x);
-    printer->motor_y = MOTOR_Configure(printer_cfg->y);
-    printer->motor_z = MOTOR_Configure(printer_cfg->z);
-    printer->motor_e = MOTOR_Configure(printer_cfg->e);
+    for (uint8_t i = 0; i < MOTOR_COUNT; ++i)
+    {
+        printer->motors[i] = MOTOR_Configure(printer_cfg->motors[i]);
+    }
 
     printer->acceleration_enabled = printer_cfg->acceleration_enabled;
     printer->accelerator = PULSE_Configure(PULSE_HIGHER);
@@ -488,17 +485,12 @@ PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter)
         printer->acceleration_distance += printer->acceleration_distance_increment;
     }
 
-    MOTOR_HandleTick(printer->motor_x);
-    MOTOR_HandleTick(printer->motor_y);
-    MOTOR_HandleTick(printer->motor_z);
-    MOTOR_HandleTick(printer->motor_e);
-
     uint8_t state = printer->printer_state_flags;
-
-    state |= MOTOR_GetState(printer->motor_x);
-    state |= MOTOR_GetState(printer->motor_y);
-    state |= MOTOR_GetState(printer->motor_z);
-    state |= MOTOR_GetState(printer->motor_e);
+    for (uint8_t i = 0; i < MOTOR_COUNT; ++i)
+    {
+        MOTOR_HandleTick(printer->motors[i]);
+        state |= MOTOR_GetState(printer->motors[i]);
+    }
 
     if (0 == state)
     {

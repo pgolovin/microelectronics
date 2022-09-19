@@ -20,6 +20,15 @@ typedef enum PRINTER_ACCELERATION_Type
     PRINTER_ACCELERATION_ENABLE = 1
 } PRINTER_ACCELERATION;
 
+typedef enum MOTOR_TYPES_type
+{
+    MOTOR_X = 0,
+    MOTOR_Y,
+    MOTOR_Z,
+    MOTOR_E,
+    MOTOR_COUNT,
+} MOTOR_TYPES;
+
 typedef struct PrinterConfig_type
 {
     // Handle to SD card that contains internal printer settings and data, 
@@ -32,10 +41,7 @@ typedef struct PrinterConfig_type
     uint16_t main_frequency;
 
     // Configuration settings of printer motors.
-    MotorConfig *x;
-    MotorConfig *y;
-    MotorConfig *z;
-    MotorConfig *e;
+    MotorConfig* motors[MOTOR_COUNT];
     // Flag to enable acceleration control or not.
     PRINTER_ACCELERATION acceleration_enabled;
 
