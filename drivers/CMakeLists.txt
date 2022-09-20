@@ -6,7 +6,8 @@ set(HEADERS
     "include/spibus.h"
     "include/pulse_engine.h"
     "include/equalizer.h"
-    "include/motor.h")
+    "include/motor.h"
+    "include/termal_regulator.h")
 
 set(SOURCES
     "sources/led.c"
@@ -15,7 +16,8 @@ set(SOURCES
     "sources/spibus.c"
     "sources/pulse_engine.c"
     "sources/equalizer.c"
-    "sources/motor.c")
+    "sources/motor.c"
+    "sources/termal_regulator.c")
 
     # add sub-project
 add_library(drivers STATIC ${HEADERS} ${SOURCES})

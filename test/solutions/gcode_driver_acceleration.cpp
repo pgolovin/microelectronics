@@ -357,24 +357,24 @@ TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_braking)
     PrinterNextCommand(printer_driver);
     CompleteCommand(PrinterNextCommand(printer_driver));
    
-    while (PrinterGetCommandsCount(printer_driver) > 3)
+    while (PrinterGetRemainingCommandsCount(printer_driver) > 3)
     {
         CompleteCommand(PrinterNextCommand(printer_driver));
     }
     // getting to the braking zone
     size_t steps = CalculateStepsCount(fetch_speed, steps_per_block, 100);
     size_t local_steps = CalculateStepsCount(fetch_speed, steps_per_block, 100);
-    while (PrinterGetCommandsCount(printer_driver))
+    while (PrinterGetRemainingCommandsCount(printer_driver))
     {
         local_steps = CompleteCommand(PrinterNextCommand(printer_driver));
-        ASSERT_GT(local_steps, steps) << "command: " << PrinterGetCommandsCount(printer_driver);
+        ASSERT_GT(local_steps, steps) << "command: " << PrinterGetRemainingCommandsCount(printer_driver);
         steps = local_steps;
     }
 }
 
 TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_can_be_printed)
 {
-    uint32_t printer_commands_count = PrinterGetCommandsCount(printer_driver);
+    uint32_t printer_commands_count = PrinterGetRemainingCommandsCount(printer_driver);
     for (size_t i = 0; i < printer_commands_count; ++i)
     {
         PRINTER_STATUS status = PrinterNextCommand(printer_driver);

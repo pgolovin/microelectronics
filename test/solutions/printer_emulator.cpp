@@ -1,6 +1,5 @@
 #include "solutions/printer_emulator.h"
 
-
 void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERATION enable_acceleration)
 {
     DeviceSettings ds;
@@ -15,8 +14,15 @@ void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERA
     //extruder engine starts extrusion and the start of the segment, to avoid gaps in the printing
     MotorConfig motor_e = {PULSE_HIGHER, &port_e_step, 0, &port_e_dir, 0 };
 
+    TermalRegulatorConfig nozzle = { &port_nozzle, 0, GPIO_PIN_SET, GPIO_PIN_RESET, 1.f, 0.f };
+    TermalRegulatorConfig table  = { &port_table, 0, GPIO_PIN_RESET, GPIO_PIN_SET, 1.f, 0.f };
+
     external_config = axis_config;
-    PrinterConfig cfg = { storage.get(), CONTROL_BLOCK_POSITION, PrinterEmulator::main_frequency, motor_x, motor_y, motor_z, motor_e, enable_acceleration, &external_config };
+    PrinterConfig cfg = { storage.get(), 
+        {&motor_x, &motor_y, &motor_z, &motor_e}, enable_acceleration,
+        &nozzle, &table,
+        &port_cooler, 0,
+        &external_config };
 
     printer_driver = PrinterConfigure(&cfg);
 }

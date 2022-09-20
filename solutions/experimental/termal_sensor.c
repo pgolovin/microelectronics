@@ -10,7 +10,7 @@
 #include "ff.h"
 #include "diskio.h"
 
-#include "include/equalizer.h"
+#include "include/termal_regulator.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -40,16 +40,6 @@ typedef struct
 
 typedef struct
 {
-    HEQUALIZER  equlizer;
-    uint16_t    value;
-    uint16_t    voltage[15];
-    uint16_t    step;
-
-    float       temperature;
-} TermalSensor;
-
-typedef struct
-{
     bool initialized;
     HSPIBUS main_bus;
     HSPIBUS secondary_bus;
@@ -75,8 +65,8 @@ typedef struct
     uint16_t    timer_value;
     bool        timer_updated;
     
-    TermalSensor nozzle;
-    TermalSensor table;
+    HTERMALREGULATOR nozzle;
+    HTERMALREGULATOR table;
     
     float current_temperature;
 
@@ -172,12 +162,12 @@ uint16_t calculateIncrement(float temperature)
     return (temperature - HeatingOffset)/HeatingAngle;
 }
 
-void updateValue(Experimental* exp, TermalSensor* sensor, float termal_increment)
+void updateValue(Experimental* exp, HTERMALREGULATOR regulator, int16_t termal_increment)
 {
-    sensor->value += termal_increment;
-    EQ_SetTargetValue(sensor->equlizer, sensor->value);
+    uint16_t target = TR_GetTargetTemperature(regulator) + termal_increment;
+    TR_SetTargetTemperature(regulator, target);
     char value[] = "NOZZLE=0000, TABLE=0000";
-    sprintf(value, "N=%d; T=%d", exp->nozzle.value, exp->table.value);
+    sprintf(value, "N=%d; T=%d", TR_GetTargetTemperature(exp->nozzle), TR_GetTargetTemperature(exp->table));
     PrintStatusMessage(exp->display, ES_WARNING, value);
     
     exp->timer_value = 0;
@@ -197,8 +187,8 @@ static bool savePrinterState(void* metadata)
     uint8_t buffer[512];
     *((uint32_t*)(&buffer[0])) = 'ram0';
     *((uint32_t*)(&buffer[4])) = 'gard';
-    *((uint16_t*)(&buffer[8])) = EQ_GetTargetValue(exp->nozzle.equlizer);
-    *((uint16_t*)(&buffer[10])) = EQ_GetTargetValue(exp->table.equlizer);
+    *((uint16_t*)(&buffer[8])) = TR_GetTargetTemperature(exp->nozzle);
+    *((uint16_t*)(&buffer[10])) = TR_GetTargetTemperature(exp->table);
     if (SDCARD_OK == SDCARD_WriteSingleBlock(exp->ram, buffer, 0))
     {
         PrintStatusMessage(exp->display, ES_OK, "State saved");
@@ -237,8 +227,7 @@ static bool restorePrinterState(void* metadata)
     uint16_t t = *((uint16_t*)&buffer[8]);
     if (t < 3000 && t > 2000)
     {
-        exp->nozzle.value   = t;
-        updateValue(exp, &exp->nozzle, 0);
+        updateValue(exp, exp->nozzle, t);
     }
     else 
     {
@@ -247,8 +236,7 @@ static bool restorePrinterState(void* metadata)
     t = *((uint16_t*)&buffer[10]);
     if (t < 4000 && t > 500)
     {
-        exp->table.value    = t;
-        updateValue(exp, &exp->table, 0);
+        updateValue(exp, exp->table, t);
     }
     else 
     {
@@ -259,44 +247,44 @@ static bool restorePrinterState(void* metadata)
 
 bool add100(void* metadata)
 {
-    updateValue((Experimental*)metadata, &((Experimental*)metadata)->nozzle, 100);
+    updateValue((Experimental*)metadata, ((Experimental*)metadata)->nozzle, 100);
     return true;
 }
 bool add50(void* metadata)
 {
-    updateValue((Experimental*)metadata, &((Experimental*)metadata)->nozzle,  50);
+    updateValue((Experimental*)metadata, ((Experimental*)metadata)->nozzle,  50);
     return true;
 }
 bool add10(void* metadata)
 {
-    updateValue((Experimental*)metadata, &((Experimental*)metadata)->nozzle,  10);
+    updateValue((Experimental*)metadata, ((Experimental*)metadata)->nozzle,  10);
     return true;
 }
 bool remove100(void* metadata)
 {
-    updateValue((Experimental*)metadata, &((Experimental*)metadata)->nozzle, -10);
+    updateValue((Experimental*)metadata, ((Experimental*)metadata)->nozzle, -10);
     return true;
 }
 
 bool tableRemove100(void* metadata)
 {
-    updateValue((Experimental*)metadata, &((Experimental*)metadata)->table, -100);
+    updateValue((Experimental*)metadata, ((Experimental*)metadata)->table, -100);
     return true;
 }
 bool tableAdd100(void* metadata)
 {
-    updateValue((Experimental*)metadata, &((Experimental*)metadata)->table,  100);
+    updateValue((Experimental*)metadata, ((Experimental*)metadata)->table,  100);
     return true;
 }
 
 bool reset(void* metadata)
 {
     Experimental* exp   = (Experimental*)metadata;
-    exp->nozzle.value   = 2200;
-    exp->table.value    = 3500;
+    TR_SetTargetTemperature(exp->nozzle, 2200);
+    TR_SetTargetTemperature(exp->table, 3500);
     
-    updateValue(exp, &exp->nozzle, 0);
-    updateValue(exp, &exp->table, 0);
+    updateValue(exp, exp->nozzle, 0);
+    updateValue(exp, exp->table, 0);
     
     exp->timer_value = 0;
     UI_SetIndicatorValue(exp->ui, exp->timer, false);
@@ -405,14 +393,6 @@ HEXPERIMENTAL EXPERIMENTAL_Configure(SPI_HandleTypeDef* hspi, SPI_HandleTypeDef*
     exp->secondary_bus  = SPIBUS_Configure(hspi_secondary, HAL_MAX_DELAY);
     exp->ram_bus        = SPIBUS_Configure(hspi_ram, HAL_MAX_DELAY);
 
-    exp->nozzle.value = 2200;
-    exp->nozzle.voltage[0] = 100;
-    exp->nozzle.step = 0;
-    
-    exp->table.value = 3400;    
-    exp->table.voltage[0] = 100;
-    exp->table.step = 0;
-    
     exp->e.running   = false;
     exp->e.direction = GPIO_PIN_RESET;
     exp->e.step_port = E_ENG_STEP_GPIO_Port;
@@ -493,13 +473,13 @@ HEXPERIMENTAL EXPERIMENTAL_Configure(SPI_HandleTypeDef* hspi, SPI_HandleTypeDef*
         int step = UI_GetWidthInGuides(exp->ui)/5;
         {
             char value[] = "Value=0000;";
-            sprintf(value, "%d;", exp->nozzle.value);
+            sprintf(value, "%d;", TR_GetCurrentTemperature(exp->nozzle));
             Rect ind_frame         = {0*step, 0, 1*step, 8};
             exp->nozzle_indicator  = UI_CreateIndicator(exp->ui, 0, ind_frame, value, 0, true);
         }
         {
             char value[] = "Value=0000;";
-            sprintf(value, "%d;", exp->table.value);
+            sprintf(value, "%d;", TR_GetCurrentTemperature(exp->table));
             Rect ind_frame          = {1*step, 0, 2*step, 8};
             exp->table_indicator    = UI_CreateIndicator(exp->ui, 0, ind_frame, value, 0, true);
         }
@@ -608,23 +588,19 @@ HEXPERIMENTAL EXPERIMENTAL_Configure(SPI_HandleTypeDef* hspi, SPI_HandleTypeDef*
         }
     }
     
-    EqualizerConfig eq_config = {
-        exp->nozzle.value,
-        onHeat,
-        onCool,
-        onTemperatureReached,
-        (void*)exp
+    TermalRegulatorConfig tr_config = {
+        EXTRUDER_HEATER_CONTROL_GPIO_Port, EXTRUDER_HEATER_CONTROL_Pin,
+        GPIO_PIN_SET, GPIO_PIN_RESET,
+        1.f, 0.f
     };
-    exp->nozzle.equlizer = EQ_Configure(&eq_config);
+    exp->nozzle = TR_Configure(&tr_config);
     
-    EqualizerConfig table_eq_config = {
-        exp->table.value,
-        onTableHeat,
-        onTableCool,
-        onTemperatureReached,
-        (void*)exp
+    TermalRegulatorConfig table_tr_config = {
+        TABLE_HEATER_CONTROL_GPIO_Port, TABLE_HEATER_CONTROL_Pin,
+        GPIO_PIN_RESET, GPIO_PIN_SET, 
+        1.f, 0.f
     };
-    exp->table.equlizer = EQ_Configure(&table_eq_config);
+    exp->table = TR_Configure(&table_tr_config);
     
     GCodeAxisConfig cfg = {100, 100, 100, 100};
     exp->gcode = GC_Configure(&cfg);
@@ -679,29 +655,15 @@ void EXPERIMENTAL_Reset(HEXPERIMENTAL experimental)
     restorePrinterState(exp);
 }
 
-static uint16_t UpdateTermalSensor(Experimental* exp, TermalSensor* sensor)
-{
-    uint16_t voltage = 0;
-    for (int i = 0; i < 15; ++i)
-    {
-        voltage += sensor->voltage[i];
-    }
-    voltage /= 15;
-    EQ_HandleTick(sensor->equlizer, voltage);
-    return voltage;
-}
-
 void EXPERIMENTAL_MainLoop(HEXPERIMENTAL experimental)
 {
 	Experimental* exp = (Experimental*)experimental;
     char name[32];
     
-    uint16_t voltage = UpdateTermalSensor(exp, &exp->nozzle);
-    sprintf(name, "%d", voltage);
+    sprintf(name, "%d", TR_GetCurrentTemperature(exp->nozzle));
     UI_SetIndicatorLabel(exp->ui, exp->nozzle_indicator, name);
     
-    voltage = UpdateTermalSensor(exp, &exp->table);
-    sprintf(name, "%d", voltage);
+    sprintf(name, "%d", TR_GetCurrentTemperature(exp->table));
     UI_SetIndicatorLabel(exp->ui, exp->table_indicator, name);
     
     if (exp->timer_updated)
@@ -775,26 +737,17 @@ void EXPERIMENTAL_MainLoop(HEXPERIMENTAL experimental)
     }
 }
 
-static void checkTermalSensor(TermalSensor* sensor, uint16_t value)
-{
-    sensor->voltage[sensor->step++] = value;
-    if (sensor->step == 15)
-    {
-        sensor->step = 0;
-    }
-}
-
 void EXPERIMENTAL_CheckTemperature(HEXPERIMENTAL experimental, ADC_HandleTypeDef* hadc)
 {
     Experimental* exp = (Experimental*)experimental;
-    checkTermalSensor(&exp->nozzle, HAL_ADC_GetValue(hadc));
+    TR_SetADCValue(exp->nozzle, HAL_ADC_GetValue(hadc));
     HAL_ADC_Stop(hadc);
 }
  
 void EXPERIMENTAL_CheckTableTemperature(HEXPERIMENTAL experimental, ADC_HandleTypeDef* hadc)
 {
     Experimental* exp = (Experimental*)experimental;
-    checkTermalSensor(&exp->table, HAL_ADC_GetValue(hadc));
+    TR_SetADCValue(exp->table, HAL_ADC_GetValue(hadc));
     HAL_ADC_Stop(hadc);
 }
  
@@ -810,6 +763,12 @@ void EXPERIMENTAL_OnTimer(HEXPERIMENTAL experimental)
     if (!exp->initialized)
     {
         return;
+    }
+    
+    if (0 == tick % 1000) // 10 times in a second
+    {
+        TR_HandleTick(exp->nozzle);
+        TR_HandleTick(exp->table);
     }
     
     if ((0 == tick % 10000) && (exp->timer_value > 0))

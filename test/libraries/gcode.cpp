@@ -536,7 +536,7 @@ INSTANTIATE_TEST_SUITE_P(
         CompilerCommand{ "heat_nozzle", "M104 S256", GCODE_SUBCOMMAND, GCODE_SET_NOZZLE_TEMPERATURE },
         CompilerCommand{ "heat_table", "M140 S256", GCODE_SUBCOMMAND, GCODE_SET_TABLE_TEMPERATURE },
         CompilerCommand{ "enable_cooler", "M106 S256", GCODE_SUBCOMMAND, GCODE_SET_COOLER_SPEED },
-        CompilerCommand{ "disable_cooler", "M107", GCODE_SUBCOMMAND, GCODE_DISABLE_COOLER },
+        CompilerCommand{ "disable_cooler", "M107", GCODE_SUBCOMMAND, GCODE_SET_COOLER_SPEED },
         CompilerCommand{ "wait_nozzle_to_heat", "M109 S256", GCODE_SUBCOMMAND, GCODE_WAIT_NOZZLE },
         CompilerCommand{ "wait_table_to_heat", "M190 S256", GCODE_SUBCOMMAND, GCODE_WAIT_TABLE }
 
@@ -662,7 +662,7 @@ protected:
         functions.commands[GCODE_SET]  = GCodeExecutorTest::set;
 
         functions.subcommands[GCODE_SET_NOZZLE_TEMPERATURE] = setNozzleTemp;
-        functions.subcommands[GCODE_DISABLE_COOLER] = disableCooler;
+        functions.subcommands[GCODE_SET_COOLER_SPEED] = disableCooler;
         functions.subcommands[GCODE_WAIT_NOZZLE] = waitNozzle;
     }
 
@@ -699,7 +699,7 @@ protected:
     static GCODE_COMMAND_STATE disableCooler(GCodeSubCommandParams* parameters, void* param)
     {
         void_parameter = *(uint32_t*)param;
-        results_list.emplace_back(Execution_Test{ (uint16_t)GCODE_DISABLE_COOLER | GCODE_SUBCOMMAND, GCodeCommandParams{ 0 }, *parameters });
+        results_list.emplace_back(Execution_Test{ (uint16_t)GCODE_SET_COOLER_SPEED | GCODE_SUBCOMMAND, GCodeCommandParams{ 0 }, *parameters });
         return GCODE_OK;
     }
 
@@ -820,6 +820,7 @@ TEST_F(GCodeExecutorTest, execute_set_temperature_subcommand)
 
 TEST_F(GCodeExecutorTest, execute_subcommand_parameters)
 {
+    // M107 command is the same as M106, but S parameter is forced to 0.
     std::string command = "M107 I2 S254";
     GC_ParseCommand(code, const_cast<char*>(command.c_str()));
     std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
@@ -827,7 +828,7 @@ TEST_F(GCodeExecutorTest, execute_subcommand_parameters)
     GC_ExecuteFromBuffer(&functions, (void*)&check_parameter, data.data());
     ASSERT_EQ(1, results_list.size());
     ASSERT_EQ(2, results_list[0].subcommand_execution_parameters.i);
-    ASSERT_EQ(254, results_list[0].subcommand_execution_parameters.s);
+    ASSERT_EQ(0, results_list[0].subcommand_execution_parameters.s);
 }
 
 TEST_F(GCodeExecutorTest, execute_forward_return_value)
