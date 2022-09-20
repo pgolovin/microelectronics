@@ -277,7 +277,8 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
             index = GCODE_SET_COOLER_SPEED;
             break;
         case 107:
-            index = GCODE_DISABLE_COOLER;
+            index = GCODE_SET_COOLER_SPEED;
+            gcode->command.m.s = 0;
             break;
         case 109:
             index = GCODE_WAIT_NOZZLE;

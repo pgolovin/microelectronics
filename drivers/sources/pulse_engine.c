@@ -81,3 +81,9 @@ bool PULSE_HandleTick(HPULSE pulse)
 	return result;
 }
 
+uint32_t PULSE_GetPower(HPULSE hpulse)
+{
+	PulseInternal* pulse = (PulseInternal*)hpulse;
+	return pulse->power;
+}
+

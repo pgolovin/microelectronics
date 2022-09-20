@@ -18,9 +18,10 @@ void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERA
     TermalRegulatorConfig table  = { &port_table, 0, GPIO_PIN_RESET, GPIO_PIN_SET, 1.f, 0.f };
 
     external_config = axis_config;
-    PrinterConfig cfg = { storage.get(), CONTROL_BLOCK_POSITION, PrinterEmulator::main_frequency, 
+    PrinterConfig cfg = { storage.get(), 
         {&motor_x, &motor_y, &motor_z, &motor_e}, enable_acceleration,
         &nozzle, &table,
+        &port_cooler, 0,
         &external_config };
 
     printer_driver = PrinterConfigure(&cfg);

@@ -27,7 +27,7 @@ void PULSE_Release(HPULSE pulse);
 void PULSE_SetPower(HPULSE pulse, uint32_t power);
 void PULSE_SetPeriod(HPULSE pulse, uint32_t period);
 bool PULSE_HandleTick(HPULSE pulse);
-
+uint32_t PULSE_GetPower(HPULSE pulse);
 #ifdef __cplusplus
 }
 #endif

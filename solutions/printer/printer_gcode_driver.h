@@ -34,11 +34,6 @@ typedef struct PrinterConfig_type
     // Handle to SD card that contains internal printer settings and data, 
     // internal Flash drive
     HSDCARD bytecode_storage;
-    // Position of control block in the flash drive. in 512B sectors.
-    uint32_t control_block_sector;
-
-    // Main frequency of external timer, this timer controls movement timers 
-    uint16_t main_frequency;
 
     // Configuration settings of printer motors.
     MotorConfig* motors[MOTOR_COUNT];
@@ -48,6 +43,10 @@ typedef struct PrinterConfig_type
     // Termal sensors configuration
     TermalRegulatorConfig *nozzle_config;
     TermalRegulatorConfig *table_config;
+
+    // Cooler connection
+    GPIO_TypeDef* cooler_port;
+    uint16_t      cooler_pin;
 
     // Working area settings
     // contains information about amount of steps per cantimeter
@@ -85,7 +84,7 @@ PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter);
 PRINTER_STATUS PrinterGetStatus(HPRINTER hprinter);
 
 //TODO: rename to remaining command count
-uint32_t       PrinterGetCommandsCount(HPRINTER hprinter);
+uint32_t       PrinterGetRemainingCommandsCount(HPRINTER hprinter);
 uint32_t       PrinterGetAccelerationRegion(HPRINTER hprinter);
 // returns speed and length of current path segment.
 // equals to relative command parameters
@@ -95,6 +94,7 @@ void PrinterUpdateVoltageT(HPRINTER hprinter, TERMO_REGULTAOR regulator, uint16_
 uint16_t PrinterGetTargetT(HPRINTER hprinter, TERMO_REGULTAOR regulator);
 uint16_t PrinterGetCurrentT(HPRINTER hprinter, TERMO_REGULTAOR regulator);
 
+uint8_t PrinterGetCoolerSpeed(HPRINTER hprinter);
 #ifdef __cplusplus
 }
 #endif
