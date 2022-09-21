@@ -372,6 +372,7 @@ PRINTER_STATUS PrinterStart(HPRINTER hprinter)
 
     PULSE_SetPeriod(printer->accelerator, STANDARD_ACCELERATION_SEGMENT);
     PULSE_SetPower(printer->accelerator, STANDARD_ACCELERATION_SEGMENT);
+    PULSE_SetPeriod(printer->cooler, COOLER_MAX_POWER);
     
     return status;
 }
