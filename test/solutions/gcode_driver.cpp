@@ -1084,3 +1084,49 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_enable_cooler_signals)
     }
     ASSERT_EQ(GPIO_PIN_SET, device->GetPinState(port_cooler, 0).state);
 }
+
+TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_enable_cooler_50_signals)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "M106 S127"
+    };
+    StartPrinting(commands);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    for (size_t i = 0; i < 100000; ++i)
+    {
+        PrinterExecuteCommand(printer_driver);
+    }
+    double power = 0;
+    auto pin = device->GetPinState(port_cooler, 0);
+    for (auto& state : pin.signals_log)
+    {
+        power += state;
+    }
+    ASSERT_EQ(50, (uint32_t)(100*power/pin.signals_log.size()));
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_enable_cooler_25_signals)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "M106 S65"
+    };
+    StartPrinting(commands);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    for (size_t i = 0; i < 100000; ++i)
+    {
+        PrinterExecuteCommand(printer_driver);
+    }
+    double power = 0;
+    auto pin = device->GetPinState(port_cooler, 0);
+    for (auto& state : pin.signals_log)
+    {
+        power += state;
+    }
+    ASSERT_EQ(25, (uint32_t)(100 * (1 - power / pin.signals_log.size())));
+}
