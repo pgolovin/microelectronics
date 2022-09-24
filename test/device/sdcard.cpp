@@ -158,8 +158,7 @@ TEST_F(SDcardMockTest, sdcard_cannot_write_outside_multiple)
 TEST_F(SDcardMockTest, sdcard_can_write_multiple_data)
 {
     std::vector<uint8_t> write_data(1024, 'N');
-  
-    ASSERT_EQ(SDCARD_OK, SDCARD_Write(sdcard.get(), write_data.data(), 2, 2));
+    ASSERT_EQ(1024, SDCARD_Write(sdcard.get(), write_data.data(), 2, 2));
 }
 
 TEST_F(SDcardMockTest, sdcard_read_written_data)
@@ -272,4 +271,35 @@ TEST_F(SDcardMockTest, sdcard_read_several_vlocks_written_data_positioning)
     {
         ASSERT_STREQ(text[sector].c_str(), (char*)&read_data[sector*SDcardMock::s_sector_size]);
     }
+}
+
+TEST(SDCardFileSystemTest, can_mount)
+{
+    SDcardMock sdcard(1024);
+    ASSERT_NO_THROW(SDcardMock::Mount(0, (HSDCARD)&sdcard));
+}
+
+TEST(SDCardFileSystemTest, can_get_mounted)
+{
+    SDcardMock sdcard(1024);
+    SDcardMock::Mount(0, (HSDCARD)&sdcard);
+    ASSERT_EQ(&sdcard, SDcardMock::GetCard(0));
+}
+
+TEST(SDCardFileSystemTest, cannot_get_unmounted)
+{
+    SDcardMock sdcard(1024);
+    SDcardMock::Mount(0, (HSDCARD)&sdcard);
+    SDcardMock::Mount(0, nullptr);
+    ASSERT_THROW(SDcardMock::GetCard(0), std::exception);
+}
+
+TEST(SDCardFileSystemTest, reset_file_system)
+{
+    SDcardMock sdcard(1024);
+    SDcardMock::Mount(0, (HSDCARD)&sdcard);
+    SDcardMock::Mount(1, (HSDCARD)&sdcard);
+    SDcardMock::ResetFS();
+    ASSERT_THROW(SDcardMock::GetCard(0), std::exception);
+    ASSERT_THROW(SDcardMock::GetCard(1), std::exception);
 }

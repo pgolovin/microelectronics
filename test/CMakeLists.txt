@@ -12,6 +12,7 @@ set(SOURCES
     "drivers/termal_regulator.cpp"
     "device/device.cpp"
     "device/sdcard.cpp"
+    "device/file_system.cpp"
     "libraries/gcode.cpp"
     "solutions/gcode_driver.cpp"
     "solutions/gcode_driver_acceleration.cpp"
@@ -22,7 +23,7 @@ add_executable(driver_tests ${SOURCES})
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/resources/wanhao.gcode" "${CMAKE_BINARY_DIR}/bin/wanhao.gcode" COPYONLY)
 
-target_link_libraries(driver_tests PUBLIC device_mock drivers libraries solutions GTest::gtest)
+target_link_libraries(driver_tests PUBLIC device_mock drivers libraries solutions fatfs GTest::gtest)
 target_include_directories(driver_tests PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME drivers 
          COMMAND driver_tests.exe)

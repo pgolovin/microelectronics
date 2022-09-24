@@ -43,6 +43,14 @@ SDCARD_Status SDCARD_Read(HSDCARD hsdcard, uint8_t* buffer, uint32_t sector, uin
 SDCARD_Status SDCARD_WriteSingleBlock(HSDCARD hsdcard, const uint8_t* data, uint32_t sector);
 size_t SDCARD_Write(HSDCARD hsdcard, const uint8_t* buffer, uint32_t sector, uint32_t count);
 
+SDCARD_Status SDCARD_FAT_Register(HSDCARD hsdcard, uint8_t drive_index);
+SDCARD_Status SDCARD_FAT_IsInitialized(uint8_t drive_index);
+SDCARD_Status SDCARD_FAT_Read(uint8_t drive_index, uint8_t* buffer, uint32_t sector, uint32_t count);
+SDCARD_Status SDCARD_FAT_Write(uint8_t drive_index, const uint8_t* buffer, uint32_t sector, uint32_t count);
+
+size_t SDCARD_FAT_GetSectorsCount(uint8_t drive_index);
+size_t SDCARD_FAT_GetSectorSize(uint8_t drive_index);
+
 #ifdef __cplusplus
 }
 #endif
