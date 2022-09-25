@@ -9,6 +9,7 @@
 extern "C" {
 #endif
 
+#define MEMORY_PAGE_SIZE 512
 #define CONTROL_BLOCK_POSITION 10
 #define CONTROL_BLOCK_SEC_CODE 'prnt'
 

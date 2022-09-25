@@ -1,4 +1,5 @@
 #include "device_mock.h"
+#include "printer/printer_memory_manager.h"
 #include "printer/printer_file_manager.h"
 #include "sdcard.h"
 #include "sdcard_mock.h"
@@ -12,8 +13,9 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_ram)
     Device device(ds);
     AttachDevice(device);
     SDcardMock card(1024);
+    MemoryManager mem;
 
-    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), 0));
+    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), 0, &mem));
 }
 
 TEST(GCodeFileConverterBasicTest, cannot_create_without_card)
@@ -22,8 +24,19 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_card)
     Device device(ds);
     AttachDevice(device);
     SDcardMock card(1024);
+    MemoryManager mem;
 
-    ASSERT_TRUE(nullptr == FileManagerConfigure(0, (HSDCARD)(&card)));
+    ASSERT_TRUE(nullptr == FileManagerConfigure(0, (HSDCARD)(&card), &mem));
+}
+
+TEST(GCodeFileConverterBasicTest, cannot_create_without_memory)
+{
+    DeviceSettings ds;
+    Device device(ds);
+    AttachDevice(device);
+    SDcardMock card(1024);
+
+    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), 0));
 }
 
 TEST(GCodeFileConverterBasicTest, can_create)
@@ -32,8 +45,9 @@ TEST(GCodeFileConverterBasicTest, can_create)
     Device device(ds);
     SDcardMock card(1024);
     AttachDevice(device);
+    MemoryManager mem;
 
-    ASSERT_TRUE(nullptr != FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card)));
+    ASSERT_TRUE(nullptr != FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), &mem));
 }
 
 class GCodeFileConverterTest : public ::testing::Test
@@ -46,8 +60,9 @@ protected:
         AttachDevice(*m_device);
 
         registerFileSystem();
+        m_memory_manager = MemoryManagerConfigure();
 
-        m_file_manager = FileManagerConfigure((HSDCARD)m_sdcard.get(), (HSDCARD)m_ram.get());
+        m_file_manager = FileManagerConfigure((HSDCARD)m_sdcard.get(), (HSDCARD)m_ram.get(), m_memory_manager);
     }
 
     virtual void TearDown()
@@ -87,6 +102,7 @@ protected:
     }
 
     HFILEMANAGER m_file_manager;
+    HMemoryManager m_memory_manager;
 
     std::unique_ptr<Device> m_device = nullptr;
     std::unique_ptr<SDcardMock> m_sdcard = nullptr;
@@ -155,5 +171,26 @@ TEST_F(GCodeFileConverterTest, multiple_commands)
 
     PrinterControlBlock control_block = *(PrinterControlBlock*)data;
     ASSERT_EQ(2, control_block.commands_count);
+}
+
+TEST_F(GCodeFileConverterTest, multiple_commands_content)
+{
+    std::string command = "G0 X0 Y0\nG1 X100 Y20 Z4 E1";
+    createFile("file.gcode", command.c_str(), command.size());
+    FileManagerCacheGCode(m_file_manager, "file.gcode");
+
+    uint8_t data[512];
+    m_ram->ReadSingleBlock(data, CONTROL_BLOCK_POSITION);
+
+    PrinterControlBlock control_block = *(PrinterControlBlock*)data;
+    m_ram->ReadSingleBlock(data, control_block.file_sector);
+    GCODE_COMMAND_LIST id = GCODE_MOVE;
+
+    GCodeCommandParams* param = GC_DecompileFromBuffer(data + GCODE_CHUNK_SIZE, &id);
+    ASSERT_TRUE(nullptr != param);
+    ASSERT_EQ(100, param->x);
+    ASSERT_EQ(20, param->y);
+    ASSERT_EQ(4, param->z);
+    ASSERT_EQ(1, param->e);
 }
 

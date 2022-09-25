@@ -6,6 +6,8 @@
 
 typedef struct
 {
+    HMemoryManager memory;
+
     HSDCARD sdcard;
     HSDCARD ram;
     FATFS file_system;
@@ -14,18 +16,24 @@ typedef struct
 
 } FileManager;
 
-HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram)
+HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, HMemoryManager memory)
 {
-    if (!ram || !sdcard)
+
+#ifndef PRINTER_FIRMWARE
+
+    if (!ram || !sdcard || !memory)
     {
         return 0;
     }
+
+#endif
 
     FileManager* fm = DeviceAlloc(sizeof(FileManager));
 
     fm->sdcard = sdcard;
     fm->ram = ram;
     fm->gcode_interpreter = GC_Configure(&axis_configuration);
+    fm->memory = memory;
 
     SDCARD_FAT_Register(sdcard, DEFAULT_DRIVE_ID);
     f_mount(&fm->file_system, "", 0);
@@ -43,12 +51,9 @@ PRINTER_STATUS FileManagerCacheGCode(HFILEMANAGER file, const char* filename)
     }
 
     // TODO: move data and output to memory management system (To Be Implemented).
-    uint8_t data[512] = { 0 };
-    uint8_t output[512] = { 0 };
-
     uint32_t byte_read = 0;
     uint32_t commands_count = 0;
-    if (FR_OK != f_read(&f, data, 512, &byte_read))
+    if (FR_OK != f_read(&f, fm->memory->primary_page, 512, &byte_read))
     {
         return PRINTER_SDCARD_FAILURE;
     }
@@ -58,7 +63,7 @@ PRINTER_STATUS FileManagerCacheGCode(HFILEMANAGER file, const char* filename)
         return PRINTER_FILE_NOT_GCODE;
     }
     
-    char* caret = data;
+    char* caret = fm->memory->primary_page;
 
     char line[64];
     char* line_caret = line;
@@ -78,14 +83,14 @@ PRINTER_STATUS FileManagerCacheGCode(HFILEMANAGER file, const char* filename)
                 return PRINTER_FILE_NOT_GCODE;
             }
 
-            GC_CompressCommand(fm->gcode_interpreter, output);
+            GC_CompressCommand(fm->gcode_interpreter, fm->memory->secondary_page);
             ++commands_count;
             line_caret = line;
         }
     }
 
     // final step: write control block
-    PrinterControlBlock* control_block = (PrinterControlBlock*)output;
+    PrinterControlBlock* control_block = (PrinterControlBlock*)fm->memory->secondary_page;
     control_block->secure_id = CONTROL_BLOCK_SEC_CODE;
     control_block->file_sector = CONTROL_BLOCK_POSITION + 1;
     control_block->commands_count = commands_count;
@@ -93,7 +98,7 @@ PRINTER_STATUS FileManagerCacheGCode(HFILEMANAGER file, const char* filename)
     {
         control_block->file_name[i] = filename[i];
     }
-    SDCARD_WriteSingleBlock(fm->ram, output, CONTROL_BLOCK_POSITION);
+    SDCARD_WriteSingleBlock(fm->ram, fm->memory->secondary_page, CONTROL_BLOCK_POSITION);
     
     return PRINTER_OK;
 }

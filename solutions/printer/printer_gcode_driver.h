@@ -5,6 +5,7 @@
 #include "include/motor.h"
 #include "include/termal_regulator.h"
 #include "printer/printer_entities.h"
+#include "printer/printer_memory_manager.h"
 
 #ifndef __PRINTER_GCODE_DRIVER__
 #define __PRINTER_GCODE_DRIVER__
@@ -31,6 +32,8 @@ typedef enum MOTOR_TYPES_type
 
 typedef struct PrinterConfig_type
 {
+    // Handle to available memory pages
+    HMemoryManager memory;
     // Handle to SD card that contains internal printer settings and data, 
     // internal Flash drive
     HSDCARD bytecode_storage;

@@ -2,10 +2,12 @@
 set(HEADERS
     "printer/printer_entities.h"
     "printer/printer_constants.h"
+    "printer/printer_memory_manager.h"
     "printer/printer_gcode_driver.h"
     "printer/printer_file_manager.h")
 
 set(SOURCES
+    "printer/printer_memory_manager.c"
     "printer/printer_gcode_driver.c"
     "printer/printer_file_manager.c")
 

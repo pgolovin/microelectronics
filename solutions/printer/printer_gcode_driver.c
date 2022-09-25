@@ -22,7 +22,8 @@ typedef struct PrinterDriverInternal_type
     HSDCARD  storage;
     uint32_t current_sector;
     uint8_t  caret_position;  // 256 is enought. number of commands in the block is 32
-    uint8_t  data_block[SDCARD_BLOCK_SIZE];
+    
+    HMemoryManager memory;
 
     // General gcode settings, interpreter and code execution
     GCodeFunctionList  setup_calls;
@@ -104,8 +105,7 @@ static void calculateAccelRegion(PrinterDriver* printer, uint32_t initial_region
 
     uint32_t current_caret = printer->caret_position + 1;
     GCODE_COMMAND_LIST command_id = GCODE_MOVE;
-    uint8_t* data_block = printer->data_block;
-    uint8_t next_block[SDCARD_BLOCK_SIZE];
+    uint8_t* data_block = printer->memory->primary_page;
 
     GCodeCommandParams last_segment = printer->current_segment;
     GCodeCommandParams last_position = printer->last_position;
@@ -117,8 +117,8 @@ static void calculateAccelRegion(PrinterDriver* printer, uint32_t initial_region
     {
         if (current_caret == commands_per_block)
         {
-            SDCARD_ReadSingleBlock(printer->storage, next_block, ++sector);
-            data_block = next_block;
+            SDCARD_ReadSingleBlock(printer->storage, printer->memory->secondary_page, ++sector);
+            data_block = printer->memory->secondary_page;
             current_caret = 0;
         }
 
@@ -269,7 +269,7 @@ HPRINTER PrinterConfigure(PrinterConfig* printer_cfg)
 
 #ifndef PRINTER_FIRMWARE
 
-    if (!printer_cfg || !printer_cfg->bytecode_storage || !printer_cfg->axis_configuration ||
+    if (!printer_cfg || !printer_cfg->bytecode_storage || !printer_cfg->memory || !printer_cfg->axis_configuration ||
         !printer_cfg->motors[MOTOR_X] || !printer_cfg->motors[MOTOR_Y] || !printer_cfg->motors[MOTOR_Z] || !printer_cfg->motors[MOTOR_E] ||
         !printer_cfg->nozzle_config || !printer_cfg->table_config || !printer_cfg->cooler_port)
     {
@@ -280,6 +280,7 @@ HPRINTER PrinterConfigure(PrinterConfig* printer_cfg)
 
     PrinterDriver* printer = DeviceAlloc(sizeof(PrinterDriver));
     printer->storage = printer_cfg->bytecode_storage;
+    printer->memory = printer_cfg->memory;
     printer->commands_count = 0;
 
     printer->setup_calls.commands[GCODE_MOVE] = setupMove;
@@ -330,8 +331,8 @@ PRINTER_STATUS PrinterReadControlBlock(HPRINTER hprinter, PrinterControlBlock* c
 
     PrinterDriver* printer = (PrinterDriver*)hprinter;
 
-    SDCARD_ReadSingleBlock(printer->storage, printer->data_block, CONTROL_BLOCK_POSITION);
-    *control_block = *(PrinterControlBlock*)printer->data_block;
+    SDCARD_ReadSingleBlock(printer->storage, printer->memory->primary_page, CONTROL_BLOCK_POSITION);
+    *control_block = *(PrinterControlBlock*)printer->memory->primary_page;
     if (control_block->secure_id != CONTROL_BLOCK_SEC_CODE)
     {
         return PRINTER_INVALID_CONTROL_BLOCK;
@@ -368,7 +369,7 @@ PRINTER_STATUS PrinterStart(HPRINTER hprinter)
     
     printer->commands_count = control_block.commands_count;
     printer->current_sector = control_block.file_sector;
-    SDCARD_ReadSingleBlock(printer->storage, printer->data_block, printer->current_sector);
+    SDCARD_ReadSingleBlock(printer->storage, printer->memory->primary_page, printer->current_sector);
 
     PULSE_SetPeriod(printer->accelerator, STANDARD_ACCELERATION_SEGMENT);
     PULSE_SetPower(printer->accelerator, STANDARD_ACCELERATION_SEGMENT);
@@ -415,10 +416,10 @@ PRINTER_STATUS PrinterNextCommand(HPRINTER hprinter)
     if (printer->commands_count)
     {
         --printer->commands_count;
-        printer->last_command_status = GC_ExecuteFromBuffer(&printer->setup_calls, printer, printer->data_block + (size_t)(GCODE_CHUNK_SIZE * printer->caret_position));
+        printer->last_command_status = GC_ExecuteFromBuffer(&printer->setup_calls, printer, printer->memory->primary_page + (size_t)(GCODE_CHUNK_SIZE * printer->caret_position));
         if (++printer->caret_position == SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE)
         {
-            SDCARD_ReadSingleBlock(printer->storage, printer->data_block, ++printer->current_sector);
+            SDCARD_ReadSingleBlock(printer->storage, printer->memory->primary_page, ++printer->current_sector);
             printer->caret_position = 0;
         }
     }

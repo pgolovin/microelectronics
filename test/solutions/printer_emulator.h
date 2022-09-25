@@ -18,6 +18,7 @@ public:
     HPRINTER printer_driver = nullptr;
     std::vector<uint8_t> buffer;
     GCodeAxisConfig external_config;
+    HMemoryManager m_memory;
 
     GPIO_TypeDef port_x_step = 0;
     GPIO_TypeDef port_x_dir = 1;
