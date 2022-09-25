@@ -115,54 +115,94 @@ protected:
 
 TEST_F(GCodeFileConverterTest, open_non_existing_file)
 {
-    ASSERT_EQ(0, FileManagerStartTranslatingGCode(m_file_manager, "file.gcode"));
+    ASSERT_EQ(0, FileManagerOpenGCode(m_file_manager, "file.gcode"));
 }
 
 TEST_F(GCodeFileConverterTest, open_existing_file)
 {
     createFile("file.gcode", "", 0);
-    ASSERT_EQ(0, FileManagerStartTranslatingGCode(m_file_manager, "file.gcode"));
+    ASSERT_EQ(0, FileManagerOpenGCode(m_file_manager, "file.gcode"));
 }
 
 TEST_F(GCodeFileConverterTest, open_existing_file_with_data)
 {
     std::string command = "This is not a GCODE file, just a file";
     createFile("file.gcode", command.c_str(), command.size());
-    ASSERT_EQ(1, FileManagerStartTranslatingGCode(m_file_manager, "file.gcode"));
+    ASSERT_EQ(1, FileManagerOpenGCode(m_file_manager, "file.gcode"));
 }
 
 TEST_F(GCodeFileConverterTest, open_existing_file_wrong_data)
 {
     std::string command = "This is not a GCODE file, just a file";
     createFile("file.gcode", command.c_str(), command.size());
-    FileManagerStartTranslatingGCode(m_file_manager, "file.gcode");
-    ASSERT_EQ(PRINTER_FILE_NOT_GCODE, FileManagerTranslateGCodeBlock(m_file_manager));
+    FileManagerOpenGCode(m_file_manager, "file.gcode");
+    ASSERT_EQ(PRINTER_FILE_NOT_GCODE, FileManagerReadGCodeBlock(m_file_manager));
 }
 
 TEST_F(GCodeFileConverterTest, open_valid_gcode)
 {
     std::string command = "G0 X0 Y0";
     createFile("file.gcode", command.c_str(), command.size());
-    FileManagerStartTranslatingGCode(m_file_manager, "file.gcode");
-    ASSERT_EQ(PRINTER_OK, FileManagerTranslateGCodeBlock(m_file_manager));
+    FileManagerOpenGCode(m_file_manager, "file.gcode");
+    ASSERT_EQ(PRINTER_OK, FileManagerReadGCodeBlock(m_file_manager));
 }
 
-TEST_F(GCodeFileConverterTest, sdcard_failure)
+TEST_F(GCodeFileConverterTest, open_sdcard_failure)
 {
     std::string command = "G0 X0 Y0";
     createFile("file.gcode", command.c_str(), command.size());
-    FileManagerStartTranslatingGCode(m_file_manager, "file.gcode");
     m_sdcard->SetCardStatus(SDCARD_NOT_READY);
-    ASSERT_EQ(PRINTER_SDCARD_FAILURE, FileManagerTranslateGCodeBlock(m_file_manager));
+    ASSERT_EQ(0, FileManagerOpenGCode(m_file_manager, "file.gcode"));
 }
+
+TEST_F(GCodeFileConverterTest, open_ram_failure)
+{
+    std::string command = "G0 X0 Y0";
+    createFile("file.gcode", command.c_str(), command.size());
+    m_ram->SetCardStatus(SDCARD_NOT_READY);
+    ASSERT_EQ(0, FileManagerOpenGCode(m_file_manager, "file.gcode"));
+}
+
+TEST_F(GCodeFileConverterTest, read_valid_gcode_out_of_scope)
+{
+    std::string command = "G0 X0 Y0";
+    createFile("file.gcode", command.c_str(), command.size());
+    FileManagerOpenGCode(m_file_manager, "file.gcode");
+    FileManagerReadGCodeBlock(m_file_manager);
+    ASSERT_EQ(PRINTER_FILE_NOT_GCODE, FileManagerReadGCodeBlock(m_file_manager));
+}
+
+TEST_F(GCodeFileConverterTest, read_sdcard_failure)
+{
+    std::string command = "G0 X0 Y0";
+    createFile("file.gcode", command.c_str(), command.size());
+    FileManagerOpenGCode(m_file_manager, "file.gcode");
+    m_sdcard->SetCardStatus(SDCARD_NOT_READY);
+    ASSERT_EQ(PRINTER_SDCARD_FAILURE, FileManagerReadGCodeBlock(m_file_manager));
+}
+
+TEST_F(GCodeFileConverterTest, read_ram_failure)
+{
+    std::string command = "G0 X0 Y0";
+    createFile("file.gcode", command.c_str(), command.size());
+    FileManagerOpenGCode(m_file_manager, "file.gcode");
+    m_ram->SetCardStatus(SDCARD_NOT_READY);
+    ASSERT_EQ(PRINTER_RAM_FAILURE, FileManagerReadGCodeBlock(m_file_manager));
+}
+
+TEST_F(GCodeFileConverterTest, read_unopened)
+{
+    ASSERT_EQ(PRINTER_FILE_NOT_GCODE, FileManagerReadGCodeBlock(m_file_manager));
+}
+
 
 TEST_F(GCodeFileConverterTest, single_command)
 {
     std::string command = "G0 X0 Y0";
     createFile("file.gcode", command.c_str(), command.size());
-    FileManagerStartTranslatingGCode(m_file_manager, "file.gcode");
-    FileManagerTranslateGCodeBlock(m_file_manager);
-    ASSERT_EQ(PRINTER_OK, FileManagerWriteControlBlock(m_file_manager));
+    FileManagerOpenGCode(m_file_manager, "file.gcode");
+    FileManagerReadGCodeBlock(m_file_manager);
+    ASSERT_EQ(PRINTER_OK, FileManagerCloseGCode(m_file_manager));
 
     uint8_t data[512];
     m_ram->ReadSingleBlock(data, CONTROL_BLOCK_POSITION);
@@ -178,9 +218,9 @@ TEST_F(GCodeFileConverterTest, multiple_commands)
 {
     std::string command = "G0 X0 Y0\nG1 X100 Y20 Z4 E1";
     createFile("file.gcode", command.c_str(), command.size());
-    FileManagerStartTranslatingGCode(m_file_manager, "file.gcode");
-    FileManagerTranslateGCodeBlock(m_file_manager);
-    ASSERT_EQ(PRINTER_OK, FileManagerWriteControlBlock(m_file_manager));
+    FileManagerOpenGCode(m_file_manager, "file.gcode");
+    FileManagerReadGCodeBlock(m_file_manager);
+    ASSERT_EQ(PRINTER_OK, FileManagerCloseGCode(m_file_manager));
 
     uint8_t data[512];
     m_ram->ReadSingleBlock(data, CONTROL_BLOCK_POSITION);
@@ -194,9 +234,9 @@ TEST_F(GCodeFileConverterTest, multiple_commands_content)
     std::string command = "G0 X0 Y0\nG1 X100 Y20 Z4 E1";
     createFile("file.gcode", command.c_str(), command.size());
 
-    FileManagerStartTranslatingGCode(m_file_manager, "file.gcode");
-    FileManagerTranslateGCodeBlock(m_file_manager);
-    ASSERT_EQ(PRINTER_OK, FileManagerWriteControlBlock(m_file_manager));
+    FileManagerOpenGCode(m_file_manager, "file.gcode");
+    FileManagerReadGCodeBlock(m_file_manager);
+    ASSERT_EQ(PRINTER_OK, FileManagerCloseGCode(m_file_manager));
 
     uint8_t data[512];
     m_ram->ReadSingleBlock(data, CONTROL_BLOCK_POSITION);
@@ -211,5 +251,20 @@ TEST_F(GCodeFileConverterTest, multiple_commands_content)
     ASSERT_EQ(20 * axis_configuration.y_steps_per_mm, param->y);
     ASSERT_EQ(4 * axis_configuration.z_steps_per_mm, param->z);
     ASSERT_EQ(1 * axis_configuration.e_steps_per_mm, param->e);
+}
+
+TEST_F(GCodeFileConverterTest, close_ram_failure)
+{
+    std::string command = "G0 X0 Y0";
+    createFile("file.gcode", command.c_str(), command.size());
+    FileManagerOpenGCode(m_file_manager, "file.gcode");
+    FileManagerReadGCodeBlock(m_file_manager);
+    m_ram->SetCardStatus(SDCARD_NOT_READY);
+    ASSERT_EQ(PRINTER_RAM_FAILURE, FileManagerCloseGCode(m_file_manager));
+}
+
+TEST_F(GCodeFileConverterTest, close_unopened)
+{
+    ASSERT_EQ(PRINTER_FILE_NOT_GCODE, FileManagerCloseGCode(m_file_manager));
 }
 

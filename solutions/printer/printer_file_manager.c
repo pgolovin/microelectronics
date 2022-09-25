@@ -58,7 +58,7 @@ HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, HMemoryManager me
     return (HFILEMANAGER)fm;
 }
 
-size_t FileManagerStartTranslatingGCode(HFILEMANAGER hfile, const char* filename)
+size_t FileManagerOpenGCode(HFILEMANAGER hfile, const char* filename)
 {
     FileManager* fm = (FileManager*)hfile;
     if (FR_OK != f_open(&fm->file, filename, FA_OPEN_EXISTING | FA_READ))
@@ -95,7 +95,7 @@ size_t FileManagerStartTranslatingGCode(HFILEMANAGER hfile, const char* filename
     return (f_size(&fm->file) + SDCARD_BLOCK_SIZE - 1)/SDCARD_BLOCK_SIZE;
 }
 
-PRINTER_STATUS FileManagerTranslateGCodeBlock(HFILEMANAGER hfile)
+PRINTER_STATUS FileManagerReadGCodeBlock(HFILEMANAGER hfile)
 {
     FileManager* fm = (FileManager*)hfile;
 
@@ -104,7 +104,7 @@ PRINTER_STATUS FileManagerTranslateGCodeBlock(HFILEMANAGER hfile)
     uint32_t byte_read = 0;
     if (FR_OK != f_read(&fm->file, fm->memory->primary_page, SDCARD_BLOCK_SIZE, &byte_read))
     {
-        return PRINTER_SDCARD_FAILURE;
+        return SDCARD_IsInitialized(fm->sdcard) == SDCARD_OK ? PRINTER_FILE_NOT_GCODE : PRINTER_SDCARD_FAILURE;
     }
 
     if (0 == byte_read)
@@ -156,10 +156,15 @@ PRINTER_STATUS FileManagerTranslateGCodeBlock(HFILEMANAGER hfile)
     return PRINTER_OK;
 }
 
-PRINTER_STATUS FileManagerWriteControlBlock(HFILEMANAGER hfile)
+// final step: write control block
+PRINTER_STATUS FileManagerCloseGCode(HFILEMANAGER hfile)
 {
     FileManager* fm = (FileManager*)hfile;
-    // final step: write control block
+    if (FR_OK != f_close(&fm->file))
+    {
+        return PRINTER_FILE_NOT_GCODE;
+    }
+
     PrinterControlBlock* control_block = (PrinterControlBlock*)fm->memory->secondary_page;
     *control_block = fm->control_block.gcode;
     if (SDCARD_OK != SDCARD_WriteSingleBlock(fm->ram, fm->memory->secondary_page, CONTROL_BLOCK_POSITION))
