@@ -98,7 +98,7 @@ typedef struct GCodeAxisConfig_type
 
 typedef GCode_Type* HGCODE;
 
-HGCODE                  GC_Configure(GCodeAxisConfig* config);
+HGCODE                  GC_Configure(const GCodeAxisConfig* config);
 
 //parser
 GCODE_ERROR             GC_ParseCommand(HGCODE hcode, char* command_line);

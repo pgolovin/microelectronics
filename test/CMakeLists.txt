@@ -16,6 +16,7 @@ set(SOURCES
     "libraries/gcode.cpp"
     "solutions/gcode_driver.cpp"
     "solutions/gcode_driver_acceleration.cpp"
+    "solutions/printer_file_manager.cpp"
     "solutions/printer_emulator.h"
     "solutions/printer_emulator.cpp")
 # add sub-project

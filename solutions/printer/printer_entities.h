@@ -1,6 +1,6 @@
 #include "main.h"
 #include "stm32f7xx_hal_spi.h"
-#include "sdcard.h"
+#include "include/gcode.h"
 
 #ifndef __PRINTER_ENTITIES__
 #define __PRINTER_ENTITIES__
@@ -19,14 +19,7 @@ extern "C" {
 #define STANDARD_ACCELERATION 60
 #define STANDARD_ACCELERATION_SEGMENT 100U
 #define MAIN_TIMER_FREQUENCY 10000
-
-const GCodeAxisConfig axis_configuration =
-{
-    100,
-    100,
-    400,
-    104
-};
+#define FILE_NAME_LEN 32
 
 typedef struct PrinterControlBlock_Type
 {
@@ -34,9 +27,25 @@ typedef struct PrinterControlBlock_Type
     uint32_t secure_id;
 
     uint32_t file_sector;
-    char     file_name[32];
+    char     file_name[FILE_NAME_LEN];
     uint32_t commands_count;
 } PrinterControlBlock;
+
+typedef enum PRINTER_STATUS_Type
+{
+    PRINTER_OK = 0,
+    PRINTER_FINISHED = GCODE_COMMAND_ERROR_COUNT,
+    PRINTER_INVALID_CONTROL_BLOCK,
+    PRINTER_INVALID_PARAMETER,
+    PRINTER_ALREADY_STARTED,
+    
+    PRINTER_SDCARD_FAILURE,
+    PRINTER_RAM_FAILURE,
+
+    PRINTER_FILE_NOT_FOUND,
+    PRINTER_FILE_NOT_GCODE,
+    PRINTER_FILE_NOT_MATERIAL,
+} PRINTER_STATUS;
 
 #ifdef __cplusplus
 }

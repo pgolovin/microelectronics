@@ -147,7 +147,7 @@ static GCODE_ERROR parseSubCommandParams(GCodeSubCommandParams* params, char* co
     return GCODE_OK_COMMAND_CREATED;
 }
 
-HGCODE GC_Configure(GCodeAxisConfig* config)
+HGCODE GC_Configure(const GCodeAxisConfig* config)
 {
     if (!config)
     {
