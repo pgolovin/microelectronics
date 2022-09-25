@@ -1,6 +1,7 @@
 #include "device_mock.h"
 #include "printer/printer_memory_manager.h"
 #include "printer/printer_file_manager.h"
+#include "printer/printer_constants.h"
 #include "sdcard.h"
 #include "sdcard_mock.h"
 #include "ff.h"
@@ -114,41 +115,54 @@ protected:
 
 TEST_F(GCodeFileConverterTest, open_non_existing_file)
 {
-    ASSERT_EQ(PRINTER_FILE_NOT_FOUND, FileManagerCacheGCode(m_file_manager, "file.gcode"));
+    ASSERT_EQ(0, FileManagerStartTranslatingGCode(m_file_manager, "file.gcode"));
 }
 
 TEST_F(GCodeFileConverterTest, open_existing_file)
 {
     createFile("file.gcode", "", 0);
-    ASSERT_EQ(PRINTER_FILE_NOT_GCODE, FileManagerCacheGCode(m_file_manager, "file.gcode"));
+    ASSERT_EQ(0, FileManagerStartTranslatingGCode(m_file_manager, "file.gcode"));
+}
+
+TEST_F(GCodeFileConverterTest, open_existing_file_with_data)
+{
+    std::string command = "This is not a GCODE file, just a file";
+    createFile("file.gcode", command.c_str(), command.size());
+    ASSERT_EQ(1, FileManagerStartTranslatingGCode(m_file_manager, "file.gcode"));
 }
 
 TEST_F(GCodeFileConverterTest, open_existing_file_wrong_data)
 {
     std::string command = "This is not a GCODE file, just a file";
     createFile("file.gcode", command.c_str(), command.size());
-    ASSERT_EQ(PRINTER_FILE_NOT_GCODE, FileManagerCacheGCode(m_file_manager, "file.gcode"));
+    FileManagerStartTranslatingGCode(m_file_manager, "file.gcode");
+    ASSERT_EQ(PRINTER_FILE_NOT_GCODE, FileManagerTranslateGCodeBlock(m_file_manager));
 }
 
 TEST_F(GCodeFileConverterTest, open_valid_gcode)
 {
     std::string command = "G0 X0 Y0";
     createFile("file.gcode", command.c_str(), command.size());
-    ASSERT_EQ(PRINTER_OK, FileManagerCacheGCode(m_file_manager, "file.gcode"));
+    FileManagerStartTranslatingGCode(m_file_manager, "file.gcode");
+    ASSERT_EQ(PRINTER_OK, FileManagerTranslateGCodeBlock(m_file_manager));
 }
 
 TEST_F(GCodeFileConverterTest, sdcard_failure)
 {
     std::string command = "G0 X0 Y0";
     createFile("file.gcode", command.c_str(), command.size());
-    ASSERT_EQ(PRINTER_OK, FileManagerCacheGCode(m_file_manager, "file.gcode"));
+    FileManagerStartTranslatingGCode(m_file_manager, "file.gcode");
+    m_sdcard->SetCardStatus(SDCARD_NOT_READY);
+    ASSERT_EQ(PRINTER_SDCARD_FAILURE, FileManagerTranslateGCodeBlock(m_file_manager));
 }
 
 TEST_F(GCodeFileConverterTest, single_command)
 {
     std::string command = "G0 X0 Y0";
     createFile("file.gcode", command.c_str(), command.size());
-    FileManagerCacheGCode(m_file_manager, "file.gcode");
+    FileManagerStartTranslatingGCode(m_file_manager, "file.gcode");
+    FileManagerTranslateGCodeBlock(m_file_manager);
+    ASSERT_EQ(PRINTER_OK, FileManagerWriteControlBlock(m_file_manager));
 
     uint8_t data[512];
     m_ram->ReadSingleBlock(data, CONTROL_BLOCK_POSITION);
@@ -164,7 +178,9 @@ TEST_F(GCodeFileConverterTest, multiple_commands)
 {
     std::string command = "G0 X0 Y0\nG1 X100 Y20 Z4 E1";
     createFile("file.gcode", command.c_str(), command.size());
-    FileManagerCacheGCode(m_file_manager, "file.gcode");
+    FileManagerStartTranslatingGCode(m_file_manager, "file.gcode");
+    FileManagerTranslateGCodeBlock(m_file_manager);
+    ASSERT_EQ(PRINTER_OK, FileManagerWriteControlBlock(m_file_manager));
 
     uint8_t data[512];
     m_ram->ReadSingleBlock(data, CONTROL_BLOCK_POSITION);
@@ -177,7 +193,10 @@ TEST_F(GCodeFileConverterTest, multiple_commands_content)
 {
     std::string command = "G0 X0 Y0\nG1 X100 Y20 Z4 E1";
     createFile("file.gcode", command.c_str(), command.size());
-    FileManagerCacheGCode(m_file_manager, "file.gcode");
+
+    FileManagerStartTranslatingGCode(m_file_manager, "file.gcode");
+    FileManagerTranslateGCodeBlock(m_file_manager);
+    ASSERT_EQ(PRINTER_OK, FileManagerWriteControlBlock(m_file_manager));
 
     uint8_t data[512];
     m_ram->ReadSingleBlock(data, CONTROL_BLOCK_POSITION);
@@ -188,9 +207,9 @@ TEST_F(GCodeFileConverterTest, multiple_commands_content)
 
     GCodeCommandParams* param = GC_DecompileFromBuffer(data + GCODE_CHUNK_SIZE, &id);
     ASSERT_TRUE(nullptr != param);
-    ASSERT_EQ(100, param->x);
-    ASSERT_EQ(20, param->y);
-    ASSERT_EQ(4, param->z);
-    ASSERT_EQ(1, param->e);
+    ASSERT_EQ(100 * axis_configuration.x_steps_per_mm, param->x);
+    ASSERT_EQ(20 * axis_configuration.y_steps_per_mm, param->y);
+    ASSERT_EQ(4 * axis_configuration.z_steps_per_mm, param->z);
+    ASSERT_EQ(1 * axis_configuration.e_steps_per_mm, param->e);
 }
 

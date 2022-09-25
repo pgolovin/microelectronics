@@ -16,7 +16,30 @@ typedef struct FILE_MANAGER
 } *HFILEMANAGER;
 
 HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, HMemoryManager memory);
-PRINTER_STATUS FileManagerCacheGCode(HFILEMANAGER file, const char* filename);
+
+// The following operation is split on 3 steps: [start -> work -> complete] to avoid blocking UI
+
+/// <summary>
+/// Initiating translation of the external gcode file to ram
+/// </summary>
+/// <param name="hfile">handle to file manager</param>
+/// <param name="filename">name of the file on SDCARD to be cashed into RAM</param>
+/// <returns>number of blocks in the incoming file</returns>
+size_t FileManagerStartTranslatingGCode(HFILEMANAGER hfile, const char* filename);
+
+/// <summary>
+/// Converting GCode file to RAM using single SDCARD_BLOCK_SIZE chunk of memory
+/// </summary>
+/// <param name="hfile">handle to file manager</param>
+/// <returns>Operation status. PRINTER_OK if no error occured</returns>
+PRINTER_STATUS FileManagerTranslateGCodeBlock(HFILEMANAGER hfile);
+
+/// <summary>
+/// Completes file translation by writing control block
+/// </summary>
+/// <param name="hfile">handle to file manager</param>
+/// <returns>Operation status. PRINTER_OK if no error ocured</returns>
+PRINTER_STATUS FileManagerWriteControlBlock(HFILEMANAGER hfile);
 
 #ifdef __cplusplus
 }
