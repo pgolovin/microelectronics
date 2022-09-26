@@ -10,14 +10,16 @@
 extern "C" {
 #endif
 
+#define MEMORY_PAGES_COUNT 4
+
 typedef struct
 {
-    char primary_page[MEMORY_PAGE_SIZE];
-    char secondary_page[MEMORY_PAGE_SIZE];
+    char* memory_pool;
+    char* pages[MEMORY_PAGES_COUNT];
 } MemoryManager, *HMemoryManager;
 
 
-HMemoryManager MemoryManagerConfigure();
+void MemoryManagerConfigure(HMemoryManager memory_manager);
 
 #ifdef __cplusplus
 }

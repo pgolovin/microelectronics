@@ -61,9 +61,9 @@ protected:
         AttachDevice(*m_device);
 
         registerFileSystem();
-        m_memory_manager = MemoryManagerConfigure();
+        MemoryManagerConfigure(&m_memory_manager);
 
-        m_file_manager = FileManagerConfigure((HSDCARD)m_sdcard.get(), (HSDCARD)m_ram.get(), m_memory_manager);
+        m_file_manager = FileManagerConfigure((HSDCARD)m_sdcard.get(), (HSDCARD)m_ram.get(), &m_memory_manager);
     }
 
     virtual void TearDown()
@@ -103,7 +103,7 @@ protected:
     }
 
     HFILEMANAGER m_file_manager;
-    HMemoryManager m_memory_manager;
+    MemoryManager m_memory_manager;
 
     std::unique_ptr<Device> m_device = nullptr;
     std::unique_ptr<SDcardMock> m_sdcard = nullptr;
@@ -146,6 +146,15 @@ TEST_F(GCodeFileConverterTest, open_valid_gcode)
     FileManagerOpenGCode(m_file_manager, "file.gcode");
     ASSERT_EQ(PRINTER_OK, FileManagerReadGCodeBlock(m_file_manager));
 }
+
+TEST_F(GCodeFileConverterTest, open_valid_gcode_comment)
+{
+    std::string command = ";G0 X0 Y0";
+    createFile("file.gcode", command.c_str(), command.size());
+    FileManagerOpenGCode(m_file_manager, "file.gcode");
+    ASSERT_EQ(PRINTER_OK, FileManagerReadGCodeBlock(m_file_manager));
+}
+
 
 TEST_F(GCodeFileConverterTest, open_sdcard_failure)
 {
@@ -194,7 +203,6 @@ TEST_F(GCodeFileConverterTest, read_unopened)
 {
     ASSERT_EQ(PRINTER_FILE_NOT_GCODE, FileManagerReadGCodeBlock(m_file_manager));
 }
-
 
 TEST_F(GCodeFileConverterTest, single_command)
 {
@@ -245,7 +253,12 @@ TEST_F(GCodeFileConverterTest, multiple_commands_content)
     m_ram->ReadSingleBlock(data, control_block.file_sector);
     GCODE_COMMAND_LIST id = GCODE_MOVE;
 
-    GCodeCommandParams* param = GC_DecompileFromBuffer(data + GCODE_CHUNK_SIZE, &id);
+    GCodeCommandParams* param = GC_DecompileFromBuffer(data, &id);
+    ASSERT_TRUE(nullptr != param);
+    ASSERT_EQ(0, param->x);
+    ASSERT_EQ(0, param->y);
+
+    param = GC_DecompileFromBuffer(data + GCODE_CHUNK_SIZE, &id);
     ASSERT_TRUE(nullptr != param);
     ASSERT_EQ(100 * axis_configuration.x_steps_per_mm, param->x);
     ASSERT_EQ(20 * axis_configuration.y_steps_per_mm, param->y);
@@ -266,5 +279,68 @@ TEST_F(GCodeFileConverterTest, close_ram_failure)
 TEST_F(GCodeFileConverterTest, close_unopened)
 {
     ASSERT_EQ(PRINTER_FILE_NOT_GCODE, FileManagerCloseGCode(m_file_manager));
+}
+
+TEST_F(GCodeFileConverterTest, multiple_blocks)
+{
+    std::string command = "G0 X0 Y0\n";
+    while (command.size() < 2 * SDCARD_BLOCK_SIZE + 1)
+    {
+        command += "G1 X100 Y20 Z4 E1\n";
+    }
+    createFile("file.gcode", command.c_str(), command.size());
+
+    ASSERT_EQ(3, FileManagerOpenGCode(m_file_manager, "file.gcode"));
+}
+
+TEST_F(GCodeFileConverterTest, multiple_blocks_read)
+{
+    std::string command = "G0 X0 Y0\n";
+    while (command.size() < 2 * SDCARD_BLOCK_SIZE + 1)
+    {
+        command += "G1 X100 Y20 Z4 E1\n";
+    }
+    createFile("file.gcode", command.c_str(), command.size());
+
+    uint32_t blocks = FileManagerOpenGCode(m_file_manager, "file.gcode");
+    for (uint32_t i = 0; i < blocks; ++i)
+    {
+        ASSERT_EQ(PRINTER_OK, FileManagerReadGCodeBlock(m_file_manager)) << i <<"th block reading failed";
+    }
+    ASSERT_EQ(PRINTER_FILE_NOT_GCODE, FileManagerReadGCodeBlock(m_file_manager));
+}
+
+TEST_F(GCodeFileConverterTest, multiple_blocks_read_comments)
+{
+    std::string command = "G0 X0 Y0\n;the next code will be generated\n";
+    while (command.size() < 2 * SDCARD_BLOCK_SIZE + 1)
+    {
+        command += "G1 X100 Y20 Z4 E1\n";
+    }
+    createFile("file.gcode", command.c_str(), command.size());
+
+    uint32_t blocks = FileManagerOpenGCode(m_file_manager, "file.gcode");
+    for (uint32_t i = 0; i < blocks; ++i)
+    {
+        ASSERT_EQ(PRINTER_OK, FileManagerReadGCodeBlock(m_file_manager)) << i << "th block reading failed";
+    }
+    ASSERT_EQ(PRINTER_FILE_NOT_GCODE, FileManagerReadGCodeBlock(m_file_manager));
+}
+
+TEST_F(GCodeFileConverterTest, multiple_blocks_read_empty_lines)
+{
+    std::string command = "G0 X0 Y0\n   \n\n";
+    while (command.size() < 2 * SDCARD_BLOCK_SIZE + 1)
+    {
+        command += "G1 X100 Y20 Z4 E1\n";
+    }
+    createFile("file.gcode", command.c_str(), command.size());
+
+    uint32_t blocks = FileManagerOpenGCode(m_file_manager, "file.gcode");
+    for (uint32_t i = 0; i < blocks; ++i)
+    {
+        ASSERT_EQ(PRINTER_OK, FileManagerReadGCodeBlock(m_file_manager)) << i << "th block reading failed";
+    }
+    ASSERT_EQ(PRINTER_FILE_NOT_GCODE, FileManagerReadGCodeBlock(m_file_manager));
 }
 

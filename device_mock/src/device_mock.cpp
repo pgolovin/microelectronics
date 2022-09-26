@@ -33,7 +33,7 @@ void* Device::AllocateObject(size_t object_size)
         return nullptr;
     }
 
-    void* ptr = (void*)&m_heap[m_heap_position];
+    void* ptr = ((char*)m_heap.data() + m_heap_position);
     m_heap_position += object_size;
 
     return ptr;

@@ -105,7 +105,7 @@ static void calculateAccelRegion(PrinterDriver* printer, uint32_t initial_region
 
     uint32_t current_caret = printer->caret_position + 1;
     GCODE_COMMAND_LIST command_id = GCODE_MOVE;
-    uint8_t* data_block = printer->memory->primary_page;
+    uint8_t* data_block = printer->memory->pages[0];
 
     GCodeCommandParams last_segment = printer->current_segment;
     GCodeCommandParams last_position = printer->last_position;
@@ -117,8 +117,8 @@ static void calculateAccelRegion(PrinterDriver* printer, uint32_t initial_region
     {
         if (current_caret == commands_per_block)
         {
-            SDCARD_ReadSingleBlock(printer->storage, printer->memory->secondary_page, ++sector);
-            data_block = printer->memory->secondary_page;
+            SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[1], ++sector);
+            data_block = printer->memory->pages[1];
             current_caret = 0;
         }
 
@@ -331,8 +331,8 @@ PRINTER_STATUS PrinterReadControlBlock(HPRINTER hprinter, PrinterControlBlock* c
 
     PrinterDriver* printer = (PrinterDriver*)hprinter;
 
-    SDCARD_ReadSingleBlock(printer->storage, printer->memory->primary_page, CONTROL_BLOCK_POSITION);
-    *control_block = *(PrinterControlBlock*)printer->memory->primary_page;
+    SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[0], CONTROL_BLOCK_POSITION);
+    *control_block = *(PrinterControlBlock*)printer->memory->pages[0];
     if (control_block->secure_id != CONTROL_BLOCK_SEC_CODE)
     {
         return PRINTER_INVALID_CONTROL_BLOCK;
@@ -369,7 +369,7 @@ PRINTER_STATUS PrinterStart(HPRINTER hprinter)
     
     printer->commands_count = control_block.commands_count;
     printer->current_sector = control_block.file_sector;
-    SDCARD_ReadSingleBlock(printer->storage, printer->memory->primary_page, printer->current_sector);
+    SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[0], printer->current_sector);
 
     PULSE_SetPeriod(printer->accelerator, STANDARD_ACCELERATION_SEGMENT);
     PULSE_SetPower(printer->accelerator, STANDARD_ACCELERATION_SEGMENT);
@@ -416,10 +416,10 @@ PRINTER_STATUS PrinterNextCommand(HPRINTER hprinter)
     if (printer->commands_count)
     {
         --printer->commands_count;
-        printer->last_command_status = GC_ExecuteFromBuffer(&printer->setup_calls, printer, printer->memory->primary_page + (size_t)(GCODE_CHUNK_SIZE * printer->caret_position));
+        printer->last_command_status = GC_ExecuteFromBuffer(&printer->setup_calls, printer, printer->memory->pages[0] + (size_t)(GCODE_CHUNK_SIZE * printer->caret_position));
         if (++printer->caret_position == SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE)
         {
-            SDCARD_ReadSingleBlock(printer->storage, printer->memory->primary_page, ++printer->current_sector);
+            SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[0], ++printer->current_sector);
             printer->caret_position = 0;
         }
     }

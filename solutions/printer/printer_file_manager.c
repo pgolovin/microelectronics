@@ -23,7 +23,7 @@ typedef struct
     //file data
     FIL file;
     uint8_t caret;
-    char line[GCODE_LINE_LENGTH];
+    uint32_t bytes_read;
 
     union ParsedFiles
     {
@@ -68,13 +68,13 @@ size_t FileManagerOpenGCode(HFILEMANAGER hfile, const char* filename)
     // Reset control block and clear control block in the ram. in this case if any error happened during transferring
     // printer will not have invalid file stored in the RAM
 
-    PrinterControlBlock* cb = (PrinterControlBlock*)fm->memory->secondary_page;
+    PrinterControlBlock* cb = (PrinterControlBlock*)fm->memory->pages[1];
     cb->file_name[0] = 0;
     cb->commands_count = 0;
     cb->file_sector = 0;
     cb->secure_id = 0;
 
-    if (SDCARD_OK != SDCARD_WriteSingleBlock(fm->ram, fm->memory->secondary_page, CONTROL_BLOCK_POSITION))
+    if (SDCARD_OK != SDCARD_WriteSingleBlock(fm->ram, fm->memory->pages[1], CONTROL_BLOCK_POSITION))
     {
         return 0; // UGH hard to understand if SDCARD issue or file_not_found
     }
@@ -89,7 +89,7 @@ size_t FileManagerOpenGCode(HFILEMANAGER hfile, const char* filename)
     new_cb->secure_id = CONTROL_BLOCK_SEC_CODE;
     new_cb->file_sector = CONTROL_BLOCK_POSITION + 1;
     new_cb->commands_count = 0;
-
+    fm->bytes_read = 0;
     fm->caret = 0;
     
     return (f_size(&fm->file) + SDCARD_BLOCK_SIZE - 1)/SDCARD_BLOCK_SIZE;
@@ -102,7 +102,7 @@ PRINTER_STATUS FileManagerReadGCodeBlock(HFILEMANAGER hfile)
     PrinterControlBlock* cb = &fm->control_block.gcode;
 
     uint32_t byte_read = 0;
-    if (FR_OK != f_read(&fm->file, fm->memory->primary_page, SDCARD_BLOCK_SIZE, &byte_read))
+    if (FR_OK != f_read(&fm->file, fm->memory->pages[0], SDCARD_BLOCK_SIZE, &byte_read))
     {
         return SDCARD_IsInitialized(fm->sdcard) == SDCARD_OK ? PRINTER_FILE_NOT_GCODE : PRINTER_SDCARD_FAILURE;
     }
@@ -112,41 +112,39 @@ PRINTER_STATUS FileManagerReadGCodeBlock(HFILEMANAGER hfile)
         return PRINTER_FILE_NOT_GCODE;
     }
 
-    char* caret = fm->memory->primary_page;
-
     uint16_t buffer_size = 0;
     for (uint16_t i = 0; i < byte_read; ++i)
     {
-        fm->line[fm->caret] = *caret;
-        ++caret;
-        // just ignore all symbols after GCODE_LINE_LENGTH in 100% cases it is comment
-        if (fm->caret < GCODE_LINE_LENGTH - 1)
-        {
-            ++fm->caret;
-        }
+        char caret = *(fm->memory->pages[0] + i);
+        *(fm->memory->pages[2] + fm->caret++) = (caret == '\n') ? 0 : caret;
+        ++fm->bytes_read;
 
-        if ('\n' != *caret && *caret)
+        bool eof = f_size(&fm->file) == fm->bytes_read;
+
+        if (caret != '\n' && !eof)
         {
             continue;
         }
 
-        bool eof = 0 == *caret;
+        GCODE_ERROR error = GC_ParseCommand(fm->gcode_interpreter, fm->memory->pages[2]);
+        if (GCODE_OK_NO_COMMAND == error)
+        {
+            // comment or empty line
+            fm->caret = 0;
+            continue;
+        }
 
-        ++i;
-        ++caret;
-        fm->line[fm->caret] = 0;
-
-        if (GCODE_OK != GC_ParseCommand(fm->gcode_interpreter, fm->line))
+        if (GCODE_OK != error)
         {
             return PRINTER_FILE_NOT_GCODE;
         }
 
-        buffer_size += GC_CompressCommand(fm->gcode_interpreter, fm->memory->secondary_page + buffer_size);
+        buffer_size += GC_CompressCommand(fm->gcode_interpreter, fm->memory->pages[1] + buffer_size);
         ++cb->commands_count;
         fm->caret = 0;
         if (SDCARD_BLOCK_SIZE == buffer_size || eof)
         {
-            if (SDCARD_OK != SDCARD_WriteSingleBlock(fm->ram, fm->memory->secondary_page, CONTROL_BLOCK_POSITION + 1))
+            if (SDCARD_OK != SDCARD_WriteSingleBlock(fm->ram, fm->memory->pages[1], CONTROL_BLOCK_POSITION + 1))
             {
                 return PRINTER_RAM_FAILURE;
             }
@@ -165,9 +163,9 @@ PRINTER_STATUS FileManagerCloseGCode(HFILEMANAGER hfile)
         return PRINTER_FILE_NOT_GCODE;
     }
 
-    PrinterControlBlock* control_block = (PrinterControlBlock*)fm->memory->secondary_page;
+    PrinterControlBlock* control_block = (PrinterControlBlock*)fm->memory->pages[1];
     *control_block = fm->control_block.gcode;
-    if (SDCARD_OK != SDCARD_WriteSingleBlock(fm->ram, fm->memory->secondary_page, CONTROL_BLOCK_POSITION))
+    if (SDCARD_OK != SDCARD_WriteSingleBlock(fm->ram, fm->memory->pages[1], CONTROL_BLOCK_POSITION))
     {
         return PRINTER_RAM_FAILURE;
     }

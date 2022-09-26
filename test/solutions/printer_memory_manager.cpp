@@ -8,6 +8,8 @@ TEST(MemoryManagerBasicTest, can_create)
     DeviceSettings ds;
     Device device(ds);
     AttachDevice(device);
-
-    ASSERT_TRUE(nullptr != MemoryManagerConfigure());
+    MemoryManager mgr;
+    mgr.memory_pool = nullptr;
+    ASSERT_NO_THROW(MemoryManagerConfigure(&mgr));
+    ASSERT_TRUE(nullptr != mgr.memory_pool);
 }
