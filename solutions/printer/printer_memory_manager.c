@@ -8,5 +8,4 @@ void MemoryManagerConfigure(HMemoryManager manager)
     {
         manager->pages[i] = manager->memory_pool + SDCARD_BLOCK_SIZE * i;
     }
-    return manager;
 }

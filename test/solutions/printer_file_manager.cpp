@@ -16,7 +16,7 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_ram)
     SDcardMock card(1024);
     MemoryManager mem;
 
-    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), 0, &mem));
+    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), 0, &mem, &axis_configuration));
 }
 
 TEST(GCodeFileConverterBasicTest, cannot_create_without_card)
@@ -27,7 +27,7 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_card)
     SDcardMock card(1024);
     MemoryManager mem;
 
-    ASSERT_TRUE(nullptr == FileManagerConfigure(0, (HSDCARD)(&card), &mem));
+    ASSERT_TRUE(nullptr == FileManagerConfigure(0, (HSDCARD)(&card), &mem, &axis_configuration));
 }
 
 TEST(GCodeFileConverterBasicTest, cannot_create_without_memory)
@@ -37,7 +37,7 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_memory)
     AttachDevice(device);
     SDcardMock card(1024);
 
-    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), 0));
+    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), 0, &axis_configuration));
 }
 
 TEST(GCodeFileConverterBasicTest, can_create)
@@ -48,7 +48,7 @@ TEST(GCodeFileConverterBasicTest, can_create)
     AttachDevice(device);
     MemoryManager mem;
 
-    ASSERT_TRUE(nullptr != FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), &mem));
+    ASSERT_TRUE(nullptr != FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), &mem, &axis_configuration));
 }
 
 class GCodeFileConverterTest : public ::testing::Test
@@ -63,7 +63,7 @@ protected:
         registerFileSystem();
         MemoryManagerConfigure(&m_memory_manager);
 
-        m_file_manager = FileManagerConfigure((HSDCARD)m_sdcard.get(), (HSDCARD)m_ram.get(), &m_memory_manager);
+        m_file_manager = FileManagerConfigure((HSDCARD)m_sdcard.get(), (HSDCARD)m_ram.get(), &m_memory_manager, &axis_configuration);
     }
 
     virtual void TearDown()
@@ -175,6 +175,19 @@ TEST_F(GCodeFileConverterTest, open_ram_failure)
 TEST_F(GCodeFileConverterTest, read_valid_gcode_out_of_scope)
 {
     std::string command = "G0 X0 Y0";
+    createFile("file.gcode", command.c_str(), command.size());
+    FileManagerOpenGCode(m_file_manager, "file.gcode");
+    FileManagerReadGCodeBlock(m_file_manager);
+    ASSERT_EQ(PRINTER_FILE_NOT_GCODE, FileManagerReadGCodeBlock(m_file_manager));
+}
+
+TEST_F(GCodeFileConverterTest, read_valid_long_line)
+{
+    std::string command = "G0 X0 Y0 ;";
+    for (uint32_t i = 0; i < SDCARD_BLOCK_SIZE; ++i)
+    {
+        command += "A";
+    }
     createFile("file.gcode", command.c_str(), command.size());
     FileManagerOpenGCode(m_file_manager, "file.gcode");
     FileManagerReadGCodeBlock(m_file_manager);
@@ -342,5 +355,136 @@ TEST_F(GCodeFileConverterTest, multiple_blocks_read_empty_lines)
         ASSERT_EQ(PRINTER_OK, FileManagerReadGCodeBlock(m_file_manager)) << i << "th block reading failed";
     }
     ASSERT_EQ(PRINTER_FILE_NOT_GCODE, FileManagerReadGCodeBlock(m_file_manager));
+}
+
+TEST_F(GCodeFileConverterTest, multiple_blocks_commands_count)
+{
+    std::string command = "G0 X0 Y0\n;This is very important comment that cannot be skipped.\n\n";
+    size_t count = 1;
+    while (command.size() < 10 * SDCARD_BLOCK_SIZE + 1)
+    {
+        ++count;
+        command += "G1 X100 Y20 Z4 E1\n";
+    }
+    createFile("file.gcode", command.c_str(), command.size());
+
+    uint32_t blocks = FileManagerOpenGCode(m_file_manager, "file.gcode");
+    for (uint32_t i = 0; i < blocks; ++i)
+    {
+        FileManagerReadGCodeBlock(m_file_manager);
+    }
+    FileManagerCloseGCode(m_file_manager);
+
+    uint8_t data[512];
+    m_ram->ReadSingleBlock(data, CONTROL_BLOCK_POSITION);
+
+    PrinterControlBlock control_block = *(PrinterControlBlock*)data;
+    ASSERT_EQ(count, control_block.commands_count);
+}
+
+TEST_F(GCodeFileConverterTest, multiple_blocks_commands_validity)
+{
+    std::string command = "G0 X0 Y0\n;This is very important comment that cannot be skipped.\n\n";
+    size_t count = 1;
+    while (command.size() < 10 * SDCARD_BLOCK_SIZE + 1)
+    {
+        ++count;
+        command += "G1 X100 Y20 Z4 E1\n";
+    }
+    createFile("file.gcode", command.c_str(), command.size());
+
+    uint32_t blocks = FileManagerOpenGCode(m_file_manager, "file.gcode");
+    for (uint32_t i = 0; i < blocks; ++i)
+    {
+        FileManagerReadGCodeBlock(m_file_manager);
+    }
+    FileManagerCloseGCode(m_file_manager);
+
+    uint8_t data[512];
+    m_ram->ReadSingleBlock(data, CONTROL_BLOCK_POSITION);
+
+    PrinterControlBlock control_block = *(PrinterControlBlock*)data;
+    uint32_t blocks_count = (1 + (control_block.commands_count * GCODE_CHUNK_SIZE) / SDCARD_BLOCK_SIZE);
+    std::vector<uint8_t> content(blocks_count * SDCARD_BLOCK_SIZE);
+    SDCARD_Read(m_ram.get(), content.data(), control_block.file_sector, blocks_count);
+    uint8_t* content_caret = content.data();
+    for (uint32_t i = 0; i < control_block.commands_count; ++i)
+    { 
+        GCODE_COMMAND_LIST command;
+        ASSERT_TRUE(nullptr != GC_DecompileFromBuffer(content_caret, &command)) << i << "th command decompilation failed";
+    }
+}
+
+TEST_F(GCodeFileConverterTest, multiple_blocks_commands_correctness)
+{
+    std::string command = "G0 F1800 X0 Y0\n;This is very important comment that cannot be skipped.\n\n";
+    size_t count = 1;
+    std::vector<GCodeCommandParams> parameters;
+    parameters.emplace_back(GCodeCommandParams{ 0, 0, 0, 0, 1800 });
+    while (command.size() < 10 * SDCARD_BLOCK_SIZE + 1)
+    {
+        ++count;
+        
+        parameters.emplace_back(GCodeCommandParams{ rand() % 200 - 100, rand() % 200 - 100, rand() % 20 - 10, rand() % 10 - 5, rand() % 5 * 600 });
+        std::stringstream str;
+        str << "G1 F" << parameters.back().fetch_speed <<
+            " X" << parameters.back().x <<
+            " Y" << parameters.back().y <<
+            " Z" << parameters.back().z <<
+            " E" << parameters.back().e << "\n";
+        command += str.str();
+    }
+    createFile("file.gcode", command.c_str(), command.size());
+
+    uint32_t blocks = FileManagerOpenGCode(m_file_manager, "file.gcode");
+    for (uint32_t i = 0; i < blocks; ++i)
+    {
+        ASSERT_EQ(PRINTER_OK, FileManagerReadGCodeBlock(m_file_manager)) << i << "th iteration failed";
+    }
+    FileManagerCloseGCode(m_file_manager);
+
+    uint8_t data[512];
+    m_ram->ReadSingleBlock(data, CONTROL_BLOCK_POSITION);
+
+    PrinterControlBlock control_block = *(PrinterControlBlock*)data;
+    uint32_t blocks_count = (1 + (control_block.commands_count * GCODE_CHUNK_SIZE) / SDCARD_BLOCK_SIZE);
+    std::vector<uint8_t> content(blocks_count * SDCARD_BLOCK_SIZE);
+    SDCARD_Read(m_ram.get(), content.data(), control_block.file_sector, blocks_count);
+    uint8_t* content_caret = content.data();
+    for (uint32_t i = 0; i < control_block.commands_count; ++i)
+    {
+        GCODE_COMMAND_LIST command;
+        GCodeCommandParams* param = GC_DecompileFromBuffer(content_caret, &command);
+        ASSERT_EQ(parameters[i].x * axis_configuration.x_steps_per_mm, param->x) << "command index " << i;
+        ASSERT_EQ(parameters[i].y * axis_configuration.y_steps_per_mm, param->y) << "command index " << i;
+        ASSERT_EQ(parameters[i].z * axis_configuration.z_steps_per_mm, param->z) << "command index " << i;
+        ASSERT_EQ(parameters[i].e * axis_configuration.e_steps_per_mm, param->e) << "command index " << i;
+        content_caret += GCODE_CHUNK_SIZE;
+    }
+}
+
+TEST_F(GCodeFileConverterTest, read_and_transfer_from_file)
+{
+    FILE *file;
+    fopen_s(&file, "wanhao.gcode", "r");
+    ASSERT_TRUE(nullptr != file) << "required file not found";
+
+    std::vector<char> content;
+    while (!feof(file))
+    {
+        char symbol;
+        fread_s(&symbol, 1, 1, 1, file);
+        content.push_back(symbol);
+    }
+    fclose(file);
+
+    createFile("wanhao.gcode", content.data(), content.size());
+
+    uint32_t blocks = FileManagerOpenGCode(m_file_manager, "wanhao.gcode");
+    for (uint32_t i = 0; i < blocks; ++i)
+    {
+        ASSERT_EQ(PRINTER_OK, FileManagerReadGCodeBlock(m_file_manager)) << i << "th iteration failed";
+    }
+    ASSERT_EQ(PRINTER_OK, FileManagerCloseGCode(m_file_manager));
 }
 

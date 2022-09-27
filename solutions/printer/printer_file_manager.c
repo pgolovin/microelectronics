@@ -24,6 +24,8 @@ typedef struct
     FIL file;
     uint8_t caret;
     uint32_t bytes_read;
+    uint32_t current_block;
+    uint32_t buffer_size;
 
     union ParsedFiles
     {
@@ -33,7 +35,7 @@ typedef struct
 
 } FileManager;
 
-HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, HMemoryManager memory)
+HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, HMemoryManager memory, const GCodeAxisConfig* config)
 {
 
 #ifndef PRINTER_FIRMWARE
@@ -49,7 +51,7 @@ HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, HMemoryManager me
 
     fm->sdcard = sdcard;
     fm->ram = ram;
-    fm->gcode_interpreter = GC_Configure(&axis_configuration);
+    fm->gcode_interpreter = GC_Configure(config);
     fm->memory = memory;
 
     SDCARD_FAT_Register(sdcard, DEFAULT_DRIVE_ID);
@@ -91,6 +93,8 @@ size_t FileManagerOpenGCode(HFILEMANAGER hfile, const char* filename)
     new_cb->commands_count = 0;
     fm->bytes_read = 0;
     fm->caret = 0;
+    fm->buffer_size = 0;
+    fm->current_block = new_cb->file_sector;
     
     return (f_size(&fm->file) + SDCARD_BLOCK_SIZE - 1)/SDCARD_BLOCK_SIZE;
 }
@@ -112,7 +116,6 @@ PRINTER_STATUS FileManagerReadGCodeBlock(HFILEMANAGER hfile)
         return PRINTER_FILE_NOT_GCODE;
     }
 
-    uint16_t buffer_size = 0;
     for (uint16_t i = 0; i < byte_read; ++i)
     {
         char caret = *(fm->memory->pages[0] + i);
@@ -139,12 +142,13 @@ PRINTER_STATUS FileManagerReadGCodeBlock(HFILEMANAGER hfile)
             return PRINTER_FILE_NOT_GCODE;
         }
 
-        buffer_size += GC_CompressCommand(fm->gcode_interpreter, fm->memory->pages[1] + buffer_size);
+        fm->buffer_size += GC_CompressCommand(fm->gcode_interpreter, fm->memory->pages[1] + fm->buffer_size);
         ++cb->commands_count;
         fm->caret = 0;
-        if (SDCARD_BLOCK_SIZE == buffer_size || eof)
+        if (SDCARD_BLOCK_SIZE == fm->buffer_size || eof)
         {
-            if (SDCARD_OK != SDCARD_WriteSingleBlock(fm->ram, fm->memory->pages[1], CONTROL_BLOCK_POSITION + 1))
+            fm->buffer_size = 0;
+            if (SDCARD_OK != SDCARD_WriteSingleBlock(fm->ram, fm->memory->pages[1], fm->current_block++))
             {
                 return PRINTER_RAM_FAILURE;
             }

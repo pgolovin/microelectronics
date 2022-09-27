@@ -139,14 +139,16 @@ protected:
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
 
-        storage = std::make_unique<SDcardMock>(1024);
+        m_storage = std::make_unique<SDcardMock>(1024);
+        m_sdcard = std::make_unique<SDcardMock>(1024);
         MemoryManagerConfigure(&m_memory);
         
         TermalRegulatorConfig ts = { &port, 0, GPIO_PIN_SET, GPIO_PIN_RESET, 1.f, 0.f };
         MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
-        PrinterConfig cfg = { &m_memory, storage.get(), &motor, &motor, &motor, &motor, PRINTER_ACCELERATION_DISABLE, &ts, &ts, &port, 0, &axis_cfg };
+        PrinterConfig cfg = { &m_memory, m_storage.get(), &motor, &motor, &motor, &motor, PRINTER_ACCELERATION_DISABLE, &ts, &ts, &port, 0, &axis_cfg };
 
         printer_driver = PrinterConfigure(&cfg);
+        RegisterSDCard();
     }
 
 

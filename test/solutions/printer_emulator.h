@@ -1,6 +1,7 @@
 #pragma once
 
 #include "printer/printer_gcode_driver.h"
+#include "printer/printer_file_manager.h"
 #include "device_mock.h"
 #include "sdcard_mock.h"
 #include <memory>
@@ -14,11 +15,14 @@ public:
     uint16_t main_frequency; //Hz
 
     std::unique_ptr<Device> device;
-    std::unique_ptr<SDcardMock> storage;
+    std::unique_ptr<SDcardMock> m_storage;
+    std::unique_ptr<SDcardMock> m_sdcard;
     HPRINTER printer_driver = nullptr;
     std::vector<uint8_t> buffer;
     GCodeAxisConfig external_config;
     MemoryManager m_memory;
+    HFILEMANAGER m_file_manager;
+    GCodeAxisConfig axis = { 1,1,1,1 };
 
     GPIO_TypeDef port_x_step = 0;
     GPIO_TypeDef port_x_dir = 1;
@@ -46,5 +50,7 @@ public:
     void CreateGCodeData(const std::vector<std::string>& gcode_command_list);
 
     void WriteControlBlock(uint32_t sec_code, uint32_t commands_count);
+
+    void RegisterSDCard();
 };
 

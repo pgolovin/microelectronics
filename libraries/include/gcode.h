@@ -58,11 +58,12 @@ typedef struct
     uint32_t id;
 } GCode_Type;
 
+//TODO: low resolution of int16.
 typedef struct GCodeParamsG_type
 {
     int16_t x;
     int16_t y;
-    int16_t z;
+    int16_t z; // in certain cases if deltaZ > 75 mm we have a trouble with number of steps, it is bigger than 0xFFFF
     int16_t e;
     int16_t fetch_speed;
 } GCodeCommandParams;
