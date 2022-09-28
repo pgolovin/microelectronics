@@ -77,7 +77,6 @@ PRINTER_STATUS PrinterNextCommand(HPRINTER hprinter);
 PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter);
 PRINTER_STATUS PrinterGetStatus(HPRINTER hprinter);
 
-//TODO: rename to remaining command count
 uint32_t       PrinterGetRemainingCommandsCount(HPRINTER hprinter);
 uint32_t       PrinterGetAccelerationRegion(HPRINTER hprinter);
 // returns speed and length of current path segment.

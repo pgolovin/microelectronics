@@ -425,7 +425,7 @@ TEST_F(GCodeFileConverterTest, multiple_blocks_commands_correctness)
     {
         ++count;
         
-        parameters.emplace_back(GCodeCommandParams{ rand() % 200 - 100, rand() % 200 - 100, rand() % 20 - 10, rand() % 10 - 5, rand() % 5 * 600 });
+        parameters.emplace_back(GCodeCommandParams{ rand() % 200 - 100, rand() % 200 - 100, rand() % 200 - 100, rand() % 100 - 50, rand() % 5 * 600 });
         std::stringstream str;
         str << "G1 F" << parameters.back().fetch_speed <<
             " X" << parameters.back().x <<

@@ -193,7 +193,7 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hprinter)
         {
             calculateAccelRegion(printer, time);
 
-            int16_t fetch_speed = printer->current_segment.fetch_speed / SECONDS_IN_MINUTE;
+            parameterType fetch_speed = printer->current_segment.fetch_speed / SECONDS_IN_MINUTE;
             uint32_t acceleration_time = MAIN_TIMER_FREQUENCY * fetch_speed / STANDARD_ACCELERATION;
             
             // number of segments required to get full speed;
@@ -401,8 +401,6 @@ GCodeCommandParams* PrinterGetCurrentPath(HPRINTER hprinter)
     PrinterDriver* printer = (PrinterDriver*)hprinter;
     return &printer->current_segment;
 }
-
-//TODO: what if commands count can replase both caret position and current sector ?
 
 PRINTER_STATUS PrinterNextCommand(HPRINTER hprinter)
 {

@@ -475,7 +475,7 @@ TEST_F(GCodeCompilerTest, compress_command_data)
 {
     std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
     GC_CompressCommand(code, data.data());
-    GCodeCommandParams* params = reinterpret_cast<GCodeCommandParams*>(data.data() + sizeof(uint16_t));
+    GCodeCommandParams* params = reinterpret_cast<GCodeCommandParams*>(data.data() + sizeof(parameterType));
     GCodeCommandParams* g = GC_GetCurrentCommand(code);
     ASSERT_EQ(g->fetch_speed, params->fetch_speed);
     ASSERT_EQ(g->x, params->x);
