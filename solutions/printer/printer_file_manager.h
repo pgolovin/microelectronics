@@ -41,6 +41,14 @@ PRINTER_STATUS FileManagerReadGCodeBlock(HFILEMANAGER hfile);
 /// <returns>Operation status. PRINTER_OK if no error ocured</returns>
 PRINTER_STATUS FileManagerCloseGCode(HFILEMANAGER hfile);
 
+/// <summary>
+/// Performs flash of mtl file into RAM
+/// </summary>
+/// <param name="hfile">handle to file manager</param>
+/// <param name="filename">name of the file on SDCARD to be flashed into RAM</param>
+/// <returns>number of blocks in the incoming file</returns>
+PRINTER_STATUS FileManagerSaveMTL(HFILEMANAGER hfile, const char* filename);
+
 #ifdef __cplusplus
 }
 #endif

@@ -26,13 +26,8 @@ typedef struct
     uint32_t bytes_read;
     uint32_t current_block;
     uint32_t buffer_size;
-
-    union ParsedFiles
-    {
-        PrinterControlBlock gcode;
-        MTLControlBlock mtl;
-    } control_block;
-
+    PrinterControlBlock gcode;
+    
 } FileManager;
 
 HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, HMemoryManager memory, const GCodeAxisConfig* config)
@@ -82,7 +77,7 @@ size_t FileManagerOpenGCode(HFILEMANAGER hfile, const char* filename)
     }
 
     // start filling new command block
-    PrinterControlBlock *new_cb = &fm->control_block.gcode;
+    PrinterControlBlock *new_cb = &fm->gcode;
     for (uint8_t i = 0; i < FILE_NAME_LEN; ++i)
     {
         new_cb->file_name[i] = filename[i];
@@ -103,7 +98,7 @@ PRINTER_STATUS FileManagerReadGCodeBlock(HFILEMANAGER hfile)
 {
     FileManager* fm = (FileManager*)hfile;
 
-    PrinterControlBlock* cb = &fm->control_block.gcode;
+    PrinterControlBlock* cb = &fm->gcode;
 
     uint32_t byte_read = 0;
     if (FR_OK != f_read(&fm->file, fm->memory->pages[0], SDCARD_BLOCK_SIZE, &byte_read))
@@ -168,11 +163,23 @@ PRINTER_STATUS FileManagerCloseGCode(HFILEMANAGER hfile)
     }
 
     PrinterControlBlock* control_block = (PrinterControlBlock*)fm->memory->pages[1];
-    *control_block = fm->control_block.gcode;
+    *control_block = fm->gcode;
     if (SDCARD_OK != SDCARD_WriteSingleBlock(fm->ram, fm->memory->pages[1], CONTROL_BLOCK_POSITION))
     {
         return PRINTER_RAM_FAILURE;
     }
     
+    return PRINTER_OK;
+}
+
+PRINTER_STATUS FileManagerSaveMTL(HFILEMANAGER hfile, const char* filename)
+{
+    FileManager* fm = (FileManager*)hfile;
+    FIL f;
+    if (FR_OK != f_open(&f, filename, FA_OPEN_EXISTING))
+    {
+        return PRINTER_FILE_NOT_FOUND;
+    }
+
     return PRINTER_OK;
 }

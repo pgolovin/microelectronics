@@ -1,4 +1,6 @@
 // material editor and compiler. creates mtl file that can be used to add custom settings for printer
+#include "printer\printer_constants.h"
+
 #include <iostream>
 #include <string>
 #include <algorithm>
@@ -66,8 +68,9 @@ int main(int argc, char** argv)
     {
         name[i] = std::toupper(material_name[i]);
     }
-
-    fwrite(name, sizeof(char),  sizeof(name), f);
+    uint32_t sec_code = MATERIAL_SEC_CODE;
+    fwrite(&sec_code,           sizeof(sec_code), 1, f);
+    fwrite(name,                sizeof(char), sizeof(name), f);
     fwrite(&nozzle_temperature, sizeof(nozzle_temperature), 1, f);
     fwrite(&table_temperature,  sizeof(table_temperature), 1, f);
     fwrite(&e_flow_percent,     sizeof(e_flow_percent), 1, f);

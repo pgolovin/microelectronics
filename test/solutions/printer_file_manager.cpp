@@ -488,3 +488,21 @@ TEST_F(GCodeFileConverterTest, read_and_transfer_from_file)
     ASSERT_EQ(PRINTER_OK, FileManagerCloseGCode(m_file_manager));
 }
 
+class MTLFileConverterTest : public GCodeFileConverterTest
+{
+protected:
+    struct Material
+    {
+        uint32_t sec_code;
+        char name[9];
+        uint16_t nozzle_temp;
+        uint16_t table_temp;
+        uint16_t e_flow;
+        uint16_t cooler_power;
+    };
+};
+
+TEST_F(MTLFileConverterTest, open_non_existing_file)
+{
+    ASSERT_EQ(PRINTER_FILE_NOT_FOUND, FileManagerSaveMTL(m_file_manager, "file.mtl"));
+}

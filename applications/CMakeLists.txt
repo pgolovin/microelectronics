@@ -7,5 +7,5 @@ set(SOURCES
 
     # add sub-project
 add_executable(MaterialEditor ${HEADERS} ${SOURCES})
-
+target_link_libraries(MaterialEditor PUBLIC solutions)
 
