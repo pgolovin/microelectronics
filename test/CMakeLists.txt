@@ -24,6 +24,7 @@ set(SOURCES
 add_executable(driver_tests ${SOURCES})
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/resources/wanhao.gcode" "${CMAKE_BINARY_DIR}/bin/wanhao.gcode" COPYONLY)
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/resources/pla.mtl" "${CMAKE_BINARY_DIR}/bin/pla.mtl" COPYONLY)
 
 target_link_libraries(driver_tests PUBLIC device_mock drivers libraries solutions fatfs GTest::gtest)
 target_include_directories(driver_tests PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
