@@ -9,9 +9,11 @@
 extern "C" {
 #endif
 
-#define MEMORY_PAGE_SIZE 512
 #define CONTROL_BLOCK_POSITION 10
 #define CONTROL_BLOCK_SEC_CODE 'prnt'
+
+#define MATERIAL_BLOCK_POSITION 5
+#define MATERIAL_SEC_CODE 'mtrl'
 
 #define SECONDS_IN_MINUTE 60
 #define TERMO_REQUEST_PER_SECOND 10
@@ -20,6 +22,7 @@ extern "C" {
 #define STANDARD_ACCELERATION 60
 #define STANDARD_ACCELERATION_SEGMENT 100U
 #define MAIN_TIMER_FREQUENCY 10000
+
 #define FILE_NAME_LEN 32
 
 typedef struct PrinterControlBlock_Type
@@ -31,6 +34,18 @@ typedef struct PrinterControlBlock_Type
     char     file_name[FILE_NAME_LEN];
     uint32_t commands_count;
 } PrinterControlBlock;
+
+typedef struct 
+{
+    uint32_t security_code;
+    char name[9];
+    uint16_t nozzle_temperature;
+    uint16_t table_temperature;
+    uint16_t e_flow_percent;
+    uint16_t cooler_power;
+} MaterialFile;
+
+#define MATERIALS_MAX_COUNT SDCARD_BLOCK_SIZE/sizeof(MaterialFile)
 
 typedef enum PRINTER_STATUS_Type
 {
@@ -48,6 +63,7 @@ typedef enum PRINTER_STATUS_Type
     PRINTER_FILE_NOT_MATERIAL,
 
     PRINTER_GCODE_LINE_TOO_LONG,
+    PRINTER_TOO_MANY_MATERIALS,
 } PRINTER_STATUS;
 
 #ifdef __cplusplus

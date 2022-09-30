@@ -42,12 +42,27 @@ PRINTER_STATUS FileManagerReadGCodeBlock(HFILEMANAGER hfile);
 PRINTER_STATUS FileManagerCloseGCode(HFILEMANAGER hfile);
 
 /// <summary>
-/// Performs flash of mtl file into RAM
+/// Flash mtl file into RAM
 /// </summary>
 /// <param name="hfile">handle to file manager</param>
 /// <param name="filename">name of the file on SDCARD to be flashed into RAM</param>
-/// <returns>number of blocks in the incoming file</returns>
+/// <returns>Operation status. PRINTER_OK if no error ocured</returns>
 PRINTER_STATUS FileManagerSaveMTL(HFILEMANAGER hfile, const char* filename);
+
+/// <summary>
+/// Removes mtl file from RAM by material name
+/// </summary>
+/// <param name="hfile">handle to file manager</param>
+/// <param name="filename">name of the material to be removed</param>
+/// <returns>Operation status. PRINTER_OK if no error ocured</returns>
+PRINTER_STATUS FileManagerRemoveMTL(HFILEMANAGER hfile, const char* material_name);
+
+/// <summary>
+/// Removes mtl file from RAM by material name
+/// </summary>
+/// <param name="hfile">handle to file manager</param>
+/// <returns>Pointer to valid material or nullptr otherwise</returns>
+MaterialFile* FileManagerGetNextMTL(HFILEMANAGER hfile);
 
 #ifdef __cplusplus
 }

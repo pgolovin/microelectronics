@@ -1,4 +1,5 @@
 #include "printer/printer_gcode_driver.h"
+#include "printer/printer_entities.h"
 #include "include/motor.h"
 #include <math.h>
 

@@ -27,6 +27,8 @@ typedef struct
     uint32_t current_block;
     uint32_t buffer_size;
     PrinterControlBlock gcode;
+
+    uint8_t mtl_caret;
     
 } FileManager;
 
@@ -48,6 +50,7 @@ HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, HMemoryManager me
     fm->ram = ram;
     fm->gcode_interpreter = GC_Configure(config);
     fm->memory = memory;
+    fm->mtl_caret = 0;
 
     SDCARD_FAT_Register(sdcard, DEFAULT_DRIVE_ID);
     f_mount(&fm->file_system, "", 0);
@@ -172,14 +175,115 @@ PRINTER_STATUS FileManagerCloseGCode(HFILEMANAGER hfile)
     return PRINTER_OK;
 }
 
+static bool streq(const char* str1, const char* str2, uint8_t len)
+{
+    for (uint8_t c = 0; c < len; ++c)
+    {
+        if (str1[c] != str2[c])
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 PRINTER_STATUS FileManagerSaveMTL(HFILEMANAGER hfile, const char* filename)
 {
     FileManager* fm = (FileManager*)hfile;
     FIL f;
-    if (FR_OK != f_open(&f, filename, FA_OPEN_EXISTING))
+    if (FR_OK != f_open(&f, filename, FA_OPEN_EXISTING | FA_READ))
     {
         return PRINTER_FILE_NOT_FOUND;
     }
+    MaterialFile material;
+    uint32_t bytes_read;
+    f_read(&f, &material, sizeof(material), &bytes_read);
+
+    if (bytes_read != sizeof(material) || MATERIAL_SEC_CODE != material.security_code)
+    {
+        return PRINTER_FILE_NOT_MATERIAL;
+    }
+
+    if (SDCARD_OK != SDCARD_ReadSingleBlock(fm->ram, fm->memory->pages[0], MATERIAL_BLOCK_POSITION))
+    {
+        return PRINTER_RAM_FAILURE;
+    }
+       
+    // find empty material place or material with the same name to be rewritten
+    bool saved = false;
+    for (uint32_t i = 0; i < MATERIALS_MAX_COUNT; ++i)
+    {
+        MaterialFile* mtl = (MaterialFile*)(fm->memory->pages[0]) + i;
+
+        if (mtl->security_code != MATERIAL_SEC_CODE || streq(mtl->name, material.name, 9))
+        {
+            *mtl = material;
+            saved = true;
+            break;
+        }
+    }
+
+    if (!saved)
+    {
+        return PRINTER_TOO_MANY_MATERIALS;
+    }
+
+    if (SDCARD_OK != SDCARD_WriteSingleBlock(fm->ram, fm->memory->pages[0], MATERIAL_BLOCK_POSITION))
+    {
+        return PRINTER_RAM_FAILURE;
+    }
 
     return PRINTER_OK;
+}
+
+PRINTER_STATUS FileManagerRemoveMTL(HFILEMANAGER hfile, const char* material_name)
+{
+    FileManager* fm = (FileManager*)hfile;
+
+    if (SDCARD_OK != SDCARD_ReadSingleBlock(fm->ram, fm->memory->pages[0], MATERIAL_BLOCK_POSITION))
+    {
+        return PRINTER_RAM_FAILURE;
+    }
+
+    for (uint32_t i = 0; i < MATERIALS_MAX_COUNT; ++i)
+    {
+        MaterialFile* mtl = (MaterialFile*)(fm->memory->pages[0]) + i;
+
+        if (mtl->security_code == MATERIAL_SEC_CODE && streq(mtl->name, material_name, 9))
+        {
+            mtl->security_code = 0;
+            
+            if (SDCARD_OK != SDCARD_WriteSingleBlock(fm->ram, fm->memory->pages[0], MATERIAL_BLOCK_POSITION))
+            {
+                return PRINTER_RAM_FAILURE;
+            }
+
+            return PRINTER_OK;
+        }
+    }
+
+    return PRINTER_FILE_NOT_FOUND;
+}
+
+MaterialFile* FileManagerGetNextMTL(HFILEMANAGER hfile)
+{
+    FileManager* fm = (FileManager*)hfile;
+
+    if (SDCARD_OK != SDCARD_ReadSingleBlock(fm->ram, fm->memory->pages[0], MATERIAL_BLOCK_POSITION))
+    {
+        return 0;
+    }
+
+    for (uint32_t i = fm->mtl_caret; i < MATERIALS_MAX_COUNT; ++i)
+    {
+        MaterialFile* mtl = (MaterialFile*)(fm->memory->pages[0]) + i;
+        if (mtl->security_code == MATERIAL_SEC_CODE)
+        {
+            fm->mtl_caret = i + 1;
+            return mtl;
+        }
+    }
+
+    fm->mtl_caret = 0;
+    return 0;
 }

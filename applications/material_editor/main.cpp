@@ -1,5 +1,6 @@
 // material editor and compiler. creates mtl file that can be used to add custom settings for printer
 #include "printer\printer_constants.h"
+#include "printer\printer_entities.h"
 
 #include <iostream>
 #include <string>
@@ -9,10 +10,7 @@ int main(int argc, char** argv)
 {
     std::cout << "Material editor v0.0.0\n";
     std::string material_name;
-    uint16_t nozzle_temperature = 0;
-    uint16_t table_temperature = 0;
-    uint16_t e_flow_percent = 100;
-    uint16_t cooler_power = 100;
+    MaterialFile material = { 0 };
 
     bool valid = true;
 
@@ -43,17 +41,17 @@ int main(int argc, char** argv)
     while (!valid);
 
     std::cout << "Nozzle temperature in celsius: "; 
-    std::cin >> nozzle_temperature;
+    std::cin >> material.nozzle_temperature;
     std::cout << "Table temperature in celsius: ";
-    std::cin >> table_temperature;
+    std::cin >> material.table_temperature;
     std::cout << "E flow in percents (default is 100): ";
-    std::cin >> e_flow_percent;
-    if (e_flow_percent == 0)
+    std::cin >> material.e_flow_percent;
+    if (material.e_flow_percent == 0)
     {
-        e_flow_percent = 100;
+        material.e_flow_percent = 100;
     }
     std::cout << "Cooler power [0-255]: ";
-    std::cin >> cooler_power;
+    std::cin >> material.cooler_power;
 
     FILE* f = nullptr;
     fopen_s(&f, (material_name + ".mtl").c_str(), "w");
@@ -63,18 +61,12 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    char name[9] = {0};
     for (size_t i = 0; i < 8; ++i)
     {
-        name[i] = std::toupper(material_name[i]);
+        material.name[i] = std::toupper(material_name[i]);
     }
-    uint32_t sec_code = MATERIAL_SEC_CODE;
-    fwrite(&sec_code,           sizeof(sec_code), 1, f);
-    fwrite(name,                sizeof(char), sizeof(name), f);
-    fwrite(&nozzle_temperature, sizeof(nozzle_temperature), 1, f);
-    fwrite(&table_temperature,  sizeof(table_temperature), 1, f);
-    fwrite(&e_flow_percent,     sizeof(e_flow_percent), 1, f);
-    fwrite(&cooler_power,       sizeof(cooler_power), 1, f);
+    material.security_code = MATERIAL_SEC_CODE;
+    fwrite(&material, sizeof(material), 1, f);
 
     fclose(f);
 

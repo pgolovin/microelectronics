@@ -2,6 +2,7 @@
 
 #include "printer/printer_gcode_driver.h"
 #include "printer/printer_file_manager.h"
+#include "printer/printer_entities.h"
 #include "device_mock.h"
 #include "sdcard_mock.h"
 #include <memory>

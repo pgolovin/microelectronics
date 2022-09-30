@@ -2,6 +2,7 @@
 #include "printer/printer_memory_manager.h"
 #include "printer/printer_file_manager.h"
 #include "printer/printer_constants.h"
+#include "printer/printer_entities.h"
 #include "sdcard.h"
 #include "sdcard_mock.h"
 #include "ff.h"
@@ -491,18 +492,193 @@ TEST_F(GCodeFileConverterTest, read_and_transfer_from_file)
 class MTLFileConverterTest : public GCodeFileConverterTest
 {
 protected:
-    struct Material
+
+    virtual void SetUp()
     {
-        uint32_t sec_code;
-        char name[9];
-        uint16_t nozzle_temp;
-        uint16_t table_temp;
-        uint16_t e_flow;
-        uint16_t cooler_power;
-    };
+        GCodeFileConverterTest::SetUp();
+        createFile("pla.mtl", &m_pla, sizeof(m_pla));
+        createFile("petg.mtl", &m_petg, sizeof(m_petg));
+    }
+
+    MaterialFile m_pla = { MATERIAL_SEC_CODE, "pla", 210, 40, 100, 255 };
+    MaterialFile m_petg = { MATERIAL_SEC_CODE, "petg", 240, 60, 100, 255 };
 };
 
 TEST_F(MTLFileConverterTest, open_non_existing_file)
 {
     ASSERT_EQ(PRINTER_FILE_NOT_FOUND, FileManagerSaveMTL(m_file_manager, "file.mtl"));
 }
+
+TEST_F(MTLFileConverterTest, open_invalid_file_size)
+{
+    MaterialFile mtl = { MATERIAL_SEC_CODE, 0 };
+    createFile("file.mtl", &mtl, sizeof(mtl)/2);
+    ASSERT_EQ(PRINTER_FILE_NOT_MATERIAL, FileManagerSaveMTL(m_file_manager, "file.mtl"));
+}
+
+TEST_F(MTLFileConverterTest, open_invalid_sec_id)
+{
+    MaterialFile mtl = { 0 };
+    createFile("file.mtl", &mtl, sizeof(mtl));
+    ASSERT_EQ(PRINTER_FILE_NOT_MATERIAL, FileManagerSaveMTL(m_file_manager, "file.mtl"));
+}
+
+TEST_F(MTLFileConverterTest, open_valid)
+{
+    ASSERT_EQ(PRINTER_OK, FileManagerSaveMTL(m_file_manager, "pla.mtl"));
+}
+
+TEST_F(MTLFileConverterTest, ram_failure)
+{
+    m_ram->SetCardStatus(SDCARD_NOT_READY);
+    ASSERT_EQ(PRINTER_RAM_FAILURE, FileManagerSaveMTL(m_file_manager, "pla.mtl"));
+}
+
+TEST_F(MTLFileConverterTest, save_in_ram)
+{
+    FileManagerSaveMTL(m_file_manager, "pla.mtl");
+    uint8_t out[SDCARD_BLOCK_SIZE] = { 'F' };
+    SDCARD_ReadSingleBlock(m_ram.get(), out, MATERIAL_BLOCK_POSITION);
+    MaterialFile test = *(MaterialFile*)out;
+    ASSERT_STREQ(m_pla.name, test.name);
+}
+
+TEST_F(MTLFileConverterTest, rewrite)
+{
+    MaterialFile pla = { MATERIAL_SEC_CODE, "pla", 190, 20, 100, 255 };
+    createFile("pla1.mtl", &pla, sizeof(MaterialFile));
+
+    FileManagerSaveMTL(m_file_manager, "pla.mtl");
+    FileManagerSaveMTL(m_file_manager, "pla1.mtl");
+    uint8_t out[SDCARD_BLOCK_SIZE] = { 'F' };
+    SDCARD_ReadSingleBlock(m_ram.get(), out, MATERIAL_BLOCK_POSITION);
+    MaterialFile test = *(MaterialFile*)out;
+    ASSERT_STREQ(pla.name, test.name);
+    ASSERT_EQ(pla.nozzle_temperature, test.nozzle_temperature);
+}
+
+TEST_F(MTLFileConverterTest, add_new)
+{
+    FileManagerSaveMTL(m_file_manager, "pla.mtl");
+    FileManagerSaveMTL(m_file_manager, "petg.mtl");
+    uint8_t out[SDCARD_BLOCK_SIZE] = { 'F' };
+    SDCARD_ReadSingleBlock(m_ram.get(), out, MATERIAL_BLOCK_POSITION);
+
+    MaterialFile test = *(MaterialFile*)out;
+    ASSERT_STREQ(m_pla.name, test.name);
+
+    test = *(MaterialFile*)(out + sizeof(MaterialFile));
+    ASSERT_STREQ(m_petg.name, test.name);
+}
+
+TEST_F(MTLFileConverterTest, reach_the_limit)
+{
+    for (uint32_t i = 0; i < MATERIALS_MAX_COUNT; ++i)
+    {
+        std::stringstream file_name;
+        file_name << "MTL_" << i;
+        MaterialFile test{ MATERIAL_SEC_CODE, "", 0 };
+        strcpy_s(test.name, file_name.str().c_str());
+        file_name << ".mtl";
+        createFile(file_name.str(), &test, sizeof(test));
+        ASSERT_EQ(PRINTER_OK, FileManagerSaveMTL(m_file_manager, file_name.str().c_str()));
+    }
+    MaterialFile test{ MATERIAL_SEC_CODE, "FAIL", 0 };
+    createFile("FAIL.mtl", &test, sizeof(test));
+
+    ASSERT_EQ(PRINTER_TOO_MANY_MATERIALS, FileManagerSaveMTL(m_file_manager, "FAIL.mtl"));
+}
+
+TEST_F(MTLFileConverterTest, remove_unexisting_mtl)
+{
+    ASSERT_EQ(PRINTER_FILE_NOT_FOUND, FileManagerRemoveMTL(m_file_manager, "PLA"));
+}
+
+TEST_F(MTLFileConverterTest, remove_existing_mtl)
+{
+    FileManagerSaveMTL(m_file_manager, "pla.mtl");
+    FileManagerSaveMTL(m_file_manager, "petg.mtl");
+    ASSERT_EQ(PRINTER_OK, FileManagerRemoveMTL(m_file_manager, m_petg.name));
+}
+
+TEST_F(MTLFileConverterTest, create_after_remove_existing_mtl)
+{
+    FileManagerSaveMTL(m_file_manager, "pla.mtl");
+    FileManagerSaveMTL(m_file_manager, "petg.mtl");
+    FileManagerRemoveMTL(m_file_manager, m_petg.name);
+    ASSERT_EQ(PRINTER_OK, FileManagerSaveMTL(m_file_manager, "petg.mtl"));
+}
+
+TEST_F(MTLFileConverterTest, cycle_empty_list)
+{
+    ASSERT_TRUE(nullptr == FileManagerGetNextMTL(m_file_manager));
+}
+
+TEST_F(MTLFileConverterTest, cycle_ram_failure)
+{
+    FileManagerSaveMTL(m_file_manager, "pla.mtl");
+    m_ram->SetCardStatus(SDCARD_NOT_READY);
+    ASSERT_TRUE(nullptr == FileManagerGetNextMTL(m_file_manager));
+}
+
+TEST_F(MTLFileConverterTest, cycle_material_list)
+{
+    FileManagerSaveMTL(m_file_manager, "pla.mtl");
+    FileManagerSaveMTL(m_file_manager, "petg.mtl");
+
+    MaterialFile* mtl = FileManagerGetNextMTL(m_file_manager);
+    ASSERT_TRUE(nullptr != mtl);
+    ASSERT_STREQ(m_pla.name, mtl->name);
+
+    mtl = FileManagerGetNextMTL(m_file_manager);
+    ASSERT_TRUE(nullptr != mtl);
+    ASSERT_STREQ(m_petg.name, mtl->name);
+
+    mtl = FileManagerGetNextMTL(m_file_manager);
+    ASSERT_TRUE(nullptr == mtl);
+}
+
+TEST_F(MTLFileConverterTest, cycle_material_list_loop)
+{
+    FileManagerSaveMTL(m_file_manager, "pla.mtl");
+    FileManagerSaveMTL(m_file_manager, "petg.mtl");
+
+    FileManagerGetNextMTL(m_file_manager); // pla
+    FileManagerGetNextMTL(m_file_manager); // petg
+    FileManagerGetNextMTL(m_file_manager); // default(gcode)
+
+    // second loop
+    MaterialFile* mtl = FileManagerGetNextMTL(m_file_manager);
+    ASSERT_TRUE(nullptr != mtl);
+    ASSERT_STREQ(m_pla.name, mtl->name);
+
+    mtl = FileManagerGetNextMTL(m_file_manager);
+    ASSERT_TRUE(nullptr != mtl);
+    ASSERT_STREQ(m_petg.name, mtl->name);
+
+    mtl = FileManagerGetNextMTL(m_file_manager);
+    ASSERT_TRUE(nullptr == mtl);
+}
+
+TEST_F(MTLFileConverterTest, cycle_material_list_with_deleted)
+{
+    FileManagerSaveMTL(m_file_manager, "pla.mtl");
+    FileManagerSaveMTL(m_file_manager, "petg.mtl");
+    FileManagerRemoveMTL(m_file_manager, m_petg.name);
+
+    FileManagerGetNextMTL(m_file_manager); // pla
+    MaterialFile* mtl = FileManagerGetNextMTL(m_file_manager);
+    ASSERT_TRUE(nullptr == mtl) << "material remained cycled after removal: " << mtl->name; // default(gcode)
+}
+
+TEST_F(MTLFileConverterTest, cycle_material_list_delete_current)
+{
+    FileManagerSaveMTL(m_file_manager, "pla.mtl");
+    FileManagerSaveMTL(m_file_manager, "petg.mtl");
+    FileManagerGetNextMTL(m_file_manager); // pla
+
+    FileManagerRemoveMTL(m_file_manager, m_petg.name);
+    MaterialFile* mtl = FileManagerGetNextMTL(m_file_manager);
+    ASSERT_TRUE(nullptr == mtl) << "material remained cycled after removal: " << mtl->name; // default(gcode)
+}
+
