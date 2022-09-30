@@ -16,8 +16,9 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_ram)
     AttachDevice(device);
     SDcardMock card(1024);
     MemoryManager mem;
+    FIL f;
 
-    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), 0, &mem, &axis_configuration));
+    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), 0, &mem, &axis_configuration, &f));
 }
 
 TEST(GCodeFileConverterBasicTest, cannot_create_without_card)
@@ -27,8 +28,9 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_card)
     AttachDevice(device);
     SDcardMock card(1024);
     MemoryManager mem;
+    FIL f;
 
-    ASSERT_TRUE(nullptr == FileManagerConfigure(0, (HSDCARD)(&card), &mem, &axis_configuration));
+    ASSERT_TRUE(nullptr == FileManagerConfigure(0, (HSDCARD)(&card), &mem, &axis_configuration, &f));
 }
 
 TEST(GCodeFileConverterBasicTest, cannot_create_without_memory)
@@ -37,8 +39,9 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_memory)
     Device device(ds);
     AttachDevice(device);
     SDcardMock card(1024);
+    FIL f;
 
-    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), 0, &axis_configuration));
+    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), 0, &axis_configuration, &f));
 }
 
 TEST(GCodeFileConverterBasicTest, can_create)
@@ -48,8 +51,9 @@ TEST(GCodeFileConverterBasicTest, can_create)
     SDcardMock card(1024);
     AttachDevice(device);
     MemoryManager mem;
+    FIL f;
 
-    ASSERT_TRUE(nullptr != FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), &mem, &axis_configuration));
+    ASSERT_TRUE(nullptr != FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), &mem, &axis_configuration, &f));
 }
 
 class GCodeFileConverterTest : public ::testing::Test
@@ -64,7 +68,7 @@ protected:
         registerFileSystem();
         MemoryManagerConfigure(&m_memory_manager);
 
-        m_file_manager = FileManagerConfigure((HSDCARD)m_sdcard.get(), (HSDCARD)m_ram.get(), &m_memory_manager, &axis_configuration);
+        m_file_manager = FileManagerConfigure((HSDCARD)m_sdcard.get(), (HSDCARD)m_ram.get(), &m_memory_manager, &axis_configuration, m_f.get());
     }
 
     virtual void TearDown()
@@ -92,6 +96,7 @@ protected:
         f_mkfs("0", &fs_params, working_buffer.data(), working_buffer.size());
 
         f_mount(&m_fatfs, "", 0);
+        m_f = std::make_unique<FIL>();
     }
 
     void createFile(const std::string& name, const void* content, size_t size)
@@ -105,6 +110,7 @@ protected:
 
     HFILEMANAGER m_file_manager;
     MemoryManager m_memory_manager;
+    std::unique_ptr<FIL> m_f;
 
     std::unique_ptr<Device> m_device = nullptr;
     std::unique_ptr<SDcardMock> m_sdcard = nullptr;
@@ -554,7 +560,7 @@ TEST_F(MTLFileConverterTest, rewrite)
     SDCARD_ReadSingleBlock(m_ram.get(), out, MATERIAL_BLOCK_POSITION);
     MaterialFile test = *(MaterialFile*)out;
     ASSERT_STREQ(pla.name, test.name);
-    ASSERT_EQ(pla.nozzle_temperature, test.nozzle_temperature);
+    ASSERT_EQ(pla.temperature[TERMO_NOZZLE], test.temperature[TERMO_NOZZLE]);
 }
 
 TEST_F(MTLFileConverterTest, add_new)

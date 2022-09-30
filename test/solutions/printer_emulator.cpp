@@ -55,14 +55,14 @@ void PrinterEmulator::RegisterSDCard()
         throw str.str();
     }
 
-    m_file_manager = FileManagerConfigure(m_sdcard.get(), m_storage.get(), &m_memory, &axis);
+    m_file_manager = FileManagerConfigure(m_sdcard.get(), m_storage.get(), &m_memory, &axis, &m_f);
 }
 
-void PrinterEmulator::StartPrinting(const std::vector<std::string>& commands)
+void PrinterEmulator::StartPrinting(const std::vector<std::string>& commands, MaterialFile* material_override)
 {
     CreateGCodeData(commands);
 
-    PrinterStart(printer_driver);
+    PrinterStart(printer_driver, material_override);
 }
 
 void PrinterEmulator::MoveToCommand(uint32_t index)

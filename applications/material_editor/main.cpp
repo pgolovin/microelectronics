@@ -41,9 +41,9 @@ int main(int argc, char** argv)
     while (!valid);
 
     std::cout << "Nozzle temperature in celsius: "; 
-    std::cin >> material.nozzle_temperature;
+    std::cin >> material.temperature[TERMO_NOZZLE];
     std::cout << "Table temperature in celsius: ";
-    std::cin >> material.table_temperature;
+    std::cin >> material.temperature[TERMO_TABLE];
     std::cout << "E flow in percents (default is 100): ";
     std::cin >> material.e_flow_percent;
     if (material.e_flow_percent == 0)

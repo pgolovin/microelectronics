@@ -21,7 +21,7 @@ typedef struct
     HGCODE gcode_interpreter;
 
     //file data
-    FIL file;
+    FIL* file;
     uint8_t caret;
     uint32_t bytes_read;
     uint32_t current_block;
@@ -32,7 +32,7 @@ typedef struct
     
 } FileManager;
 
-HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, HMemoryManager memory, const GCodeAxisConfig* config)
+HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, HMemoryManager memory, const GCodeAxisConfig* config, FIL* file_handle)
 {
 
 #ifndef PRINTER_FIRMWARE
@@ -51,6 +51,7 @@ HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, HMemoryManager me
     fm->gcode_interpreter = GC_Configure(config);
     fm->memory = memory;
     fm->mtl_caret = 0;
+    fm->file = file_handle;
 
     SDCARD_FAT_Register(sdcard, DEFAULT_DRIVE_ID);
     f_mount(&fm->file_system, "", 0);
@@ -61,7 +62,7 @@ HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, HMemoryManager me
 size_t FileManagerOpenGCode(HFILEMANAGER hfile, const char* filename)
 {
     FileManager* fm = (FileManager*)hfile;
-    if (FR_OK != f_open(&fm->file, filename, FA_OPEN_EXISTING | FA_READ))
+    if (FR_OK != f_open(fm->file, filename, FA_OPEN_EXISTING | FA_READ))
     {
         return 0;
     }
@@ -94,7 +95,7 @@ size_t FileManagerOpenGCode(HFILEMANAGER hfile, const char* filename)
     fm->buffer_size = 0;
     fm->current_block = new_cb->file_sector;
     
-    return (f_size(&fm->file) + SDCARD_BLOCK_SIZE - 1)/SDCARD_BLOCK_SIZE;
+    return (f_size(fm->file) + SDCARD_BLOCK_SIZE - 1)/SDCARD_BLOCK_SIZE;
 }
 
 PRINTER_STATUS FileManagerReadGCodeBlock(HFILEMANAGER hfile)
@@ -104,7 +105,7 @@ PRINTER_STATUS FileManagerReadGCodeBlock(HFILEMANAGER hfile)
     PrinterControlBlock* cb = &fm->gcode;
 
     uint32_t byte_read = 0;
-    if (FR_OK != f_read(&fm->file, fm->memory->pages[0], SDCARD_BLOCK_SIZE, &byte_read))
+    if (FR_OK != f_read(fm->file, fm->memory->pages[0], SDCARD_BLOCK_SIZE, &byte_read))
     {
         return SDCARD_IsInitialized(fm->sdcard) == SDCARD_OK ? PRINTER_FILE_NOT_GCODE : PRINTER_SDCARD_FAILURE;
     }
@@ -120,7 +121,7 @@ PRINTER_STATUS FileManagerReadGCodeBlock(HFILEMANAGER hfile)
         *(fm->memory->pages[2] + fm->caret++) = (caret == '\n') ? 0 : caret;
         ++fm->bytes_read;
 
-        bool eof = f_size(&fm->file) == fm->bytes_read;
+        bool eof = f_size(fm->file) == fm->bytes_read;
 
         if (caret != '\n' && !eof)
         {
@@ -160,7 +161,7 @@ PRINTER_STATUS FileManagerReadGCodeBlock(HFILEMANAGER hfile)
 PRINTER_STATUS FileManagerCloseGCode(HFILEMANAGER hfile)
 {
     FileManager* fm = (FileManager*)hfile;
-    if (FR_OK != f_close(&fm->file))
+    if (FR_OK != f_close(fm->file))
     {
         return PRINTER_FILE_NOT_GCODE;
     }
