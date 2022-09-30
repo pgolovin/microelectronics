@@ -35,12 +35,18 @@ typedef struct PrinterControlBlock_Type
     uint32_t commands_count;
 } PrinterControlBlock;
 
+typedef enum TERMO_REGULTAOR_Type
+{
+    TERMO_NOZZLE = 0,
+    TERMO_TABLE = 1,
+    TERMO_REGULATORS_COUNT
+} TERMO_REGULTAOR;
+
 typedef struct 
 {
     uint32_t security_code;
     char name[9];
-    uint16_t nozzle_temperature;
-    uint16_t table_temperature;
+    uint16_t temperature[TERMO_REGULATORS_COUNT];
     uint16_t e_flow_percent;
     uint16_t cooler_power;
 } MaterialFile;

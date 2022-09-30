@@ -193,7 +193,7 @@ TEST_F(GCodeDriverTest, printer_verify_control_block_data)
 TEST_F(GCodeDriverTest, printer_start_read_command_list)
 {
     WriteControlBlock(CONTROL_BLOCK_SEC_CODE, 124);
-    ASSERT_EQ(PRINTER_OK, PrinterStart(printer_driver));
+    ASSERT_EQ(PRINTER_OK, PrinterStart(printer_driver, nullptr));
 }
 
 TEST_F(GCodeDriverTest, printer_get_remaining_commands_initial)
@@ -204,7 +204,7 @@ TEST_F(GCodeDriverTest, printer_get_remaining_commands_initial)
 TEST_F(GCodeDriverTest, printer_cannot_start_with_invalid_control_block)
 {
     WriteControlBlock('fail', 0);
-    ASSERT_EQ(PRINTER_INVALID_CONTROL_BLOCK, PrinterStart(printer_driver));
+    ASSERT_EQ(PRINTER_INVALID_CONTROL_BLOCK, PrinterStart(printer_driver, nullptr));
 }
 
 TEST_F(GCodeDriverTest, printer_run_commands)
@@ -215,7 +215,7 @@ TEST_F(GCodeDriverTest, printer_run_commands)
     };
 
     CreateGCodeData(gcode_command_list);
-    PrinterStart(printer_driver);
+    PrinterStart(printer_driver, nullptr);
     ASSERT_NO_THROW(PrinterNextCommand(printer_driver));
     ASSERT_NO_THROW(PrinterNextCommand(printer_driver));
 }
@@ -229,9 +229,9 @@ TEST_F(GCodeDriverTest, printer_double_start)
     };
 
     CreateGCodeData(gcode_command_list);
-    PrinterStart(printer_driver);
+    PrinterStart(printer_driver, nullptr);
     PrinterNextCommand(printer_driver);
-    ASSERT_EQ(PRINTER_ALREADY_STARTED, PrinterStart(printer_driver));
+    ASSERT_EQ(PRINTER_ALREADY_STARTED, PrinterStart(printer_driver, nullptr));
     ASSERT_EQ(gcode_command_list.size() - 1, PrinterGetRemainingCommandsCount(printer_driver));
 }
 
@@ -243,7 +243,7 @@ TEST_F(GCodeDriverTest, printer_get_remaining_commands_count)
     };
 
     CreateGCodeData(gcode_command_list);
-    PrinterStart(printer_driver);
+    PrinterStart(printer_driver, nullptr);
 
     ASSERT_EQ(gcode_command_list.size(), PrinterGetRemainingCommandsCount(printer_driver));
 }
@@ -255,7 +255,7 @@ TEST_F(GCodeDriverTest, printer_run_command)
         "G0 X10 Y0 Z0 E0",
     };
     CreateGCodeData(gcode_command_list);
-    PrinterStart(printer_driver);
+    PrinterStart(printer_driver, nullptr);
     ASSERT_EQ(PRINTER_OK, PrinterNextCommand(printer_driver));
 }
 
@@ -277,7 +277,7 @@ TEST_F(GCodeDriverTest, printer_run_command_reduce_count)
         "G0 X10 Y0 Z0 E0",
     };
     CreateGCodeData(gcode_command_list);
-    PrinterStart(printer_driver);
+    PrinterStart(printer_driver, nullptr);
 
     PrinterNextCommand(printer_driver);
     ASSERT_EQ(gcode_command_list.size() - 1, PrinterGetRemainingCommandsCount(printer_driver));
@@ -289,7 +289,7 @@ TEST_F(GCodeDriverTest, printer_printing_finished)
         "G0 F1600 X0 Y0 Z0 E0",
     };
     CreateGCodeData(gcode_command_list);
-    PrinterStart(printer_driver);
+    PrinterStart(printer_driver, nullptr);
     PrinterNextCommand(printer_driver);
     ASSERT_EQ(PRINTER_FINISHED, PrinterNextCommand(printer_driver));
 }
@@ -315,7 +315,7 @@ protected:
             "G1 F1600 X0 Y0 Z0 E0",
         };
 
-        StartPrinting(gcode_command_list);
+        StartPrinting(gcode_command_list, nullptr);
     }   
 };
 
@@ -446,7 +446,7 @@ TEST_P(GCodeDriverPathTest, printer_motion)
         initial_command,
         path_settings.path_command,
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
     PrinterNextCommand(printer_driver);
     PRINTER_STATUS status = PrinterNextCommand(printer_driver);
 
@@ -529,7 +529,7 @@ TEST_P(GCodeDriverSpeedTest, printer_motion)
         initial_command,
         speed_settings.command,
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
     PrinterNextCommand(printer_driver);
     PRINTER_STATUS status = PrinterNextCommand(printer_driver);
     ASSERT_EQ(speed_settings.expected_status, status);
@@ -597,7 +597,7 @@ TEST_P(GCodeDriverNormalizedSpeedTest, printer_motion)
         initial_command,
         speed_settings.command,
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
     PrinterNextCommand(printer_driver);
     PRINTER_STATUS status = PrinterNextCommand(printer_driver);
 
@@ -666,7 +666,7 @@ protected:
         }
         commands_count = commands.size();
 
-        StartPrinting(commands);
+        StartPrinting(commands, nullptr);
     }
 };
 
@@ -733,7 +733,7 @@ TEST_F(GCodeDriverCommandsTest, printer_commands_set_command)
         "G0 F1800 X200 Y100 Z0 E0",
         "G92 X0 Y0"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
@@ -748,7 +748,7 @@ TEST_F(GCodeDriverCommandsTest, printer_commands_set_sets_value)
         "G92 X0 Y0",
         "G0 F1800 X200 Y100 Z0 E0",
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
@@ -764,7 +764,7 @@ TEST_F(GCodeDriverCommandsTest, printer_commands_set_params)
         "G92 X0 Y0",
         "G0 F1800 X120 Y33 Z0 E0",
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
@@ -782,7 +782,7 @@ TEST_F(GCodeDriverCommandsTest, printer_commands_home_command)
         "G0 F1800 X200 Y100 Z0 E0",
         "G28 X0 Y0"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
@@ -796,7 +796,7 @@ TEST_F(GCodeDriverCommandsTest, printer_commands_home_command_params)
         "G0 F1800 X200 Y100 Z0 E0",
         "G28 X0 Y0"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
@@ -812,7 +812,7 @@ TEST_F(GCodeDriverCommandsTest, printer_commands_home_zero)
         "G0 F1800 X0 Y0 Z0 E0",
         "G28 X0 Y0"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
@@ -824,7 +824,7 @@ TEST_F(GCodeDriverCommandsTest, printer_commands_print)
         "G0 F1800 X0 Y0 Z0 E0",
         "G1 F1800 X100 Y200 Z2 E15"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
@@ -881,7 +881,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_hotend_temp)
         "G0 F1800 X0 Y0 Z0 E0",
         "M104 S210"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
@@ -893,7 +893,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_hotend_temp_value)
         "G0 F1800 X0 Y0 Z0 E0",
         "M104 S210"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     PrinterNextCommand(printer_driver);
@@ -907,7 +907,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_hotend_temp)
         "G0 F1800 X0 Y0 Z0 E0",
         "M109 S210"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
@@ -919,7 +919,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_hotend_temp_target_v
         "G0 F1800 X0 Y0 Z0 E0",
         "M109 S210"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     PrinterNextCommand(printer_driver);
@@ -932,7 +932,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_hotend_temp_current_
         "G0 F1800 X0 Y0 Z0 E0",
         "M109 S210"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     PRINTER_STATUS status = PrinterNextCommand(printer_driver);
@@ -956,7 +956,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_table_temp)
         "G0 F1800 X0 Y0 Z0 E0",
         "M140 S110"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
@@ -968,7 +968,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_table_temp_value)
         "G0 F1800 X0 Y0 Z0 E0",
         "M140 S110"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     PrinterNextCommand(printer_driver);
@@ -982,7 +982,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_table_temp)
         "G0 F1800 X0 Y0 Z0 E0",
         "M190 S110"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
@@ -994,7 +994,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_table_temp_target_va
         "G0 F1800 X0 Y0 Z0 E0",
         "M190 S110"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     PrinterNextCommand(printer_driver);
@@ -1007,7 +1007,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_table_temp_current_v
         "G0 F1800 X0 Y0 Z0 E0",
         "M190 S110"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     PRINTER_STATUS status = PrinterNextCommand(printer_driver);
@@ -1031,7 +1031,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_disbale_cooler)
         "G0 F1800 X0 Y0 Z0 E0",
         "M107"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
@@ -1043,7 +1043,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_disbale_cooler_value)
         "G0 F1800 X0 Y0 Z0 E0",
         "M107"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     PrinterNextCommand(printer_driver);
@@ -1056,7 +1056,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_disbale_cooler_signals)
         "G0 F1800 X0 Y0 Z0 E0",
         "M107"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     PrinterNextCommand(printer_driver);
@@ -1073,7 +1073,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_enable_cooler)
         "G0 F1800 X0 Y0 Z0 E0",
         "M106 S255"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
@@ -1085,7 +1085,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_enable_cooler_value)
         "G0 F1800 X0 Y0 Z0 E0",
         "M106 S255"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     PrinterNextCommand(printer_driver);
@@ -1098,7 +1098,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_enable_cooler_signals)
         "G0 F1800 X0 Y0 Z0 E0",
         "M106 S255"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     PrinterNextCommand(printer_driver);
@@ -1115,7 +1115,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_enable_cooler_50_signals)
         "G0 F1800 X0 Y0 Z0 E0",
         "M106 S127"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     PrinterNextCommand(printer_driver);
@@ -1138,7 +1138,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_enable_cooler_25_signals)
         "G0 F1800 X0 Y0 Z0 E0",
         "M106 S65"
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
     PrinterNextCommand(printer_driver);
@@ -1153,4 +1153,108 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_enable_cooler_25_signals)
         power += state;
     }
     ASSERT_EQ(25, (uint32_t)(100 * (1 - power / pin.signals_log.size())));
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_override_nozzle_temp)
+{
+    MaterialFile mtl = { MATERIAL_SEC_CODE, "PLA", 180, 20, 100, 255 };
+    std::vector<std::string> commands = {
+       "G0 F1800 X0 Y0 Z0 E0",
+       "M104 S210"
+    };
+    StartPrinting(commands, &mtl);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    ASSERT_EQ(180, PrinterGetTargetT(printer_driver, TERMO_NOZZLE));
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_override_nozzle_temp_blocking)
+{
+    MaterialFile mtl = { MATERIAL_SEC_CODE, "PLA", 180, 20, 100, 255 };
+    std::vector<std::string> commands = {
+       "G0 F1800 X0 Y0 Z0 E0",
+       "M109 S210"
+    };
+    StartPrinting(commands, &mtl);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    ASSERT_EQ(180, PrinterGetTargetT(printer_driver, TERMO_NOZZLE));
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_cannot_override_nozzle_temp_off)
+{
+    MaterialFile mtl = { MATERIAL_SEC_CODE, "PLA", 180, 20, 100, 255 };
+    std::vector<std::string> commands = {
+       "G0 F1800 X0 Y0 Z0 E0",
+       "M104 S0"
+    };
+    StartPrinting(commands, &mtl);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    ASSERT_EQ(0, PrinterGetTargetT(printer_driver, TERMO_NOZZLE));
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_override_table_temp)
+{
+    MaterialFile mtl = { MATERIAL_SEC_CODE, "PLA", 180, 20, 100, 255 };
+    std::vector<std::string> commands = {
+       "G0 F1800 X0 Y0 Z0 E0",
+       "M140 S210"
+    };
+    StartPrinting(commands, &mtl);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    ASSERT_EQ(20, PrinterGetTargetT(printer_driver, TERMO_TABLE));
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_override_table_temp_blocking)
+{
+    MaterialFile mtl = { MATERIAL_SEC_CODE, "PLA", 180, 20, 100, 255 };
+    std::vector<std::string> commands = {
+       "G0 F1800 X0 Y0 Z0 E0",
+       "M190 S210"
+    };
+    StartPrinting(commands, &mtl);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    ASSERT_EQ(20, PrinterGetTargetT(printer_driver, TERMO_TABLE));
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_cannot_override_table_temp_off)
+{
+    MaterialFile mtl = { MATERIAL_SEC_CODE, "PLA", {180, 20}, 100, 255 };
+    std::vector<std::string> commands = {
+       "G0 F1800 X0 Y0 Z0 E0",
+       "M140 S0"
+    };
+    StartPrinting(commands, &mtl);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    ASSERT_EQ(0, PrinterGetTargetT(printer_driver, TERMO_TABLE));
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_override_cooler_power)
+{
+    MaterialFile mtl = { MATERIAL_SEC_CODE, "PLA", 180, 20, 100, 255 };
+    std::vector<std::string> commands = {
+       "G0 F1800 X0 Y0 Z0 E0",
+       "M106 S65"
+    };
+    StartPrinting(commands, &mtl);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    ASSERT_EQ(255, PrinterGetCoolerSpeed(printer_driver));
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_cannot_override_cooler_off)
+{
+    MaterialFile mtl = { MATERIAL_SEC_CODE, "PLA", 180, 20, 100, 255 };
+    std::vector<std::string> commands = {
+       "G0 F1800 X0 Y0 Z0 E0",
+       "M107"
+    };
+    StartPrinting(commands, &mtl);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    ASSERT_EQ(0, PrinterGetCoolerSpeed(printer_driver));
 }

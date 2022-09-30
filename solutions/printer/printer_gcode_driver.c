@@ -47,6 +47,7 @@ typedef struct PrinterDriverInternal_type
     uint8_t  acceleration_distance_increment;
     uint32_t acceleration_subsequent_region_length;
 
+    MaterialFile *material_override;
     // Heaters: nozzle and table
     HTERMALREGULATOR regulators[TERMO_REGULATORS_COUNT];
     uint8_t termo_regulators_state;
@@ -180,7 +181,6 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hprinter)
 
     // basic fetch speed is calculated as velocity of the head, without velocity of the table, it is calculated independently.
     uint32_t time = calculateTime(printer, &printer->current_segment);
-   
     MOTOR_SetProgram(printer->motors[MOTOR_X], time, printer->current_segment.x);
     MOTOR_SetProgram(printer->motors[MOTOR_Y], time, printer->current_segment.y);
     MOTOR_SetProgram(printer->motors[MOTOR_Z], time, printer->current_segment.z);
@@ -222,18 +222,26 @@ static GCODE_COMMAND_STATE setupSet(GCodeCommandParams* params, void* hprinter)
     return GCODE_OK;
 }
 
+static void setTemperature(PrinterDriver* printer, TERMO_REGULTAOR regulator, uint16_t value)
+{
+    if (printer->material_override && value)
+    {
+        value = printer->material_override->temperature[regulator];
+    }
+
+    TR_SetTargetTemperature(printer->regulators[regulator], value);
+}
+
 static GCODE_COMMAND_STATE setNozzleTemperature(GCodeSubCommandParams* params, void* hprinter)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-    TR_SetTargetTemperature(printer->regulators[TERMO_NOZZLE], params->s);
-
+    setTemperature((PrinterDriver*)hprinter, TERMO_NOZZLE, params->s);
     return GCODE_OK;
 }
 
 static GCODE_COMMAND_STATE setNozzleTemperatureBlocking(GCodeSubCommandParams* params, void* hprinter)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
-    TR_SetTargetTemperature(printer->regulators[TERMO_NOZZLE], params->s);
+    setTemperature(printer, TERMO_NOZZLE, params->s);
 
     printer->mode = MODE_WAIT_NOZZLE;
 
@@ -242,8 +250,7 @@ static GCODE_COMMAND_STATE setNozzleTemperatureBlocking(GCodeSubCommandParams* p
 
 static GCODE_COMMAND_STATE setTableTemperature(GCodeSubCommandParams* params, void* hprinter)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-    TR_SetTargetTemperature(printer->regulators[TERMO_TABLE], params->s);
+    setTemperature((PrinterDriver*)hprinter, TERMO_TABLE, params->s);
 
     return GCODE_OK;
 }
@@ -251,8 +258,7 @@ static GCODE_COMMAND_STATE setTableTemperature(GCodeSubCommandParams* params, vo
 static GCODE_COMMAND_STATE setTableTemperatureBlocking(GCodeSubCommandParams* params, void* hprinter)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
-    TR_SetTargetTemperature(printer->regulators[TERMO_TABLE], params->s);
-
+    setTemperature((PrinterDriver*)hprinter, TERMO_TABLE, params->s);
     printer->mode = MODE_WAIT_TABLE;
 
     return GCODE_INCOMPLETE;
@@ -261,7 +267,12 @@ static GCODE_COMMAND_STATE setTableTemperatureBlocking(GCodeSubCommandParams* pa
 static GCODE_COMMAND_STATE setCoolerSpeed(GCodeSubCommandParams* params, void* hprinter)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
-    PULSE_SetPower(printer->cooler, params->s);
+    uint16_t speed = params->s;
+    if (printer->material_override && params->s)
+    {
+        speed = printer->material_override->cooler_power;
+    }
+    PULSE_SetPower(printer->cooler, speed);
     return GCODE_OK;
 }
 
@@ -341,7 +352,7 @@ PRINTER_STATUS PrinterReadControlBlock(HPRINTER hprinter, PrinterControlBlock* c
     return PRINTER_OK;
 }
 
-PRINTER_STATUS PrinterStart(HPRINTER hprinter)
+PRINTER_STATUS PrinterStart(HPRINTER hprinter, MaterialFile* material_override)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
     if (printer->commands_count > 0)
@@ -360,6 +371,8 @@ PRINTER_STATUS PrinterStart(HPRINTER hprinter)
     printer->last_position.y = 0;
     printer->last_position.z = 0;
     printer->last_position.e = 0;
+
+    printer->material_override = material_override;
 
     PrinterControlBlock control_block;
     PRINTER_STATUS status = PrinterReadControlBlock(hprinter, &control_block);

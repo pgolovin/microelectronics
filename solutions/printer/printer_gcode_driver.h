@@ -61,18 +61,11 @@ typedef struct PrinterDriver_type
     uint32_t id;
 } *HPRINTER;
 
-typedef enum TERMO_REGULTAOR_Type
-{
-    TERMO_NOZZLE = 0,
-    TERMO_TABLE = 1,
-    TERMO_REGULATORS_COUNT
-} TERMO_REGULTAOR;
-
 
 HPRINTER       PrinterConfigure(PrinterConfig* printer_cfg);
 PRINTER_STATUS PrinterReadControlBlock(HPRINTER hprinter, PrinterControlBlock* control_block);
 
-PRINTER_STATUS PrinterStart(HPRINTER hprinter);
+PRINTER_STATUS PrinterStart(HPRINTER hprinter, MaterialFile* material_override);
 PRINTER_STATUS PrinterNextCommand(HPRINTER hprinter);
 PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter);
 PRINTER_STATUS PrinterGetStatus(HPRINTER hprinter);

@@ -27,7 +27,7 @@ TEST_F(GCodeDriverAccelerationBasicTest, printer_region_zero_if_accel_is_disable
 {
     SetupPrinter(axis_configuration, PRINTER_ACCELERATION_DISABLE);
    
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
@@ -38,7 +38,7 @@ TEST_F(GCodeDriverAccelerationBasicTest, printer_region_nonzero_if_accel_is_enab
 {
     SetupPrinter(axis_configuration, PRINTER_ACCELERATION_ENABLE);
 
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
@@ -68,7 +68,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_single)
         initial_command,
         "G0 F1800 X100 Y0 Z0 E0",
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
@@ -83,7 +83,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_series)
         "G0 X200 Y0 Z0 E0",
         "G0 X300 Y0 Z0 E0",
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
@@ -98,7 +98,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_speed_change)
         "G0 X300 Y0 Z0 E0",
         "G0 F2700 X400 Y0 Z0 E0",
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
@@ -113,7 +113,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_command_change)
         "G92 X0 Y0",
         "G0 X400 Y0 Z0 E0",
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
@@ -128,7 +128,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_subcommand)
         "G92 X0 Y0",
         "G0 X400 Y0 Z0 E0",
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
@@ -142,7 +142,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_big_XY_angle)
         "G0 F1800 X100 Y0 Z0 E0",
         "G0 X100 Y100 Z0 E0",
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
@@ -156,7 +156,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_big_Z_angle)
         "G0 F1800 X100 Y0 Z0 E0",
         "G0 X100 Y0 Z1 E0",
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
@@ -170,7 +170,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_z_direction_works)
         "G0 F1800 X100 Y0 Z0 E0",
         "G0 X200 Y0 Z1 E0",
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
@@ -184,7 +184,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_subregions)
         "G0 F1800 X100 Y0 Z0 E0",
         "G0 F1800 X200 Y0 Z0 E0",
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
     PrinterNextCommand(printer_driver);
     PRINTER_STATUS status = PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
@@ -204,7 +204,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_subsequent_regions)
         "G0 F600 Z200",
         "G0 F600 Z400",
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
     PrinterNextCommand(printer_driver);
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
@@ -220,7 +220,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_zero_regions)
         "G0 X0 Y0",
         "G0 X100 Y0",
     };
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
@@ -239,7 +239,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_exceeds_single_command_block)
         commands.push_back(command.str());
     }
 
-    StartPrinting(commands);
+    StartPrinting(commands, nullptr);
     PrinterNextCommand(printer_driver);
     ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
@@ -273,7 +273,7 @@ protected:
         }
         commands_count = commands.size();
 
-        StartPrinting(commands);
+        StartPrinting(commands, nullptr);
     }
 };
 
@@ -410,7 +410,7 @@ protected:
         }
         commands_count = commands.size();
 
-        StartPrinting(commands);
+        StartPrinting(commands, nullptr);
     }
 };
 
@@ -471,7 +471,7 @@ protected:
         }
         commands_count = commands.size();
 
-        StartPrinting(commands);
+        StartPrinting(commands, nullptr);
     }
 };
 

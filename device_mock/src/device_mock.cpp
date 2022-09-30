@@ -3,7 +3,7 @@
 Device::Device(const DeviceSettings& settings)
     : m_throw_exception(settings.throw_out_of_memory)
 {
-    m_heap.resize(settings.available_heap);
+    m_heap.resize(settings.available_heap + 1);
     m_ports.resize(settings.ports_count);
     for (auto& adc : m_adc)
     {
@@ -17,7 +17,7 @@ size_t Device::GetAvailableMemory() const
     {
         return 0;
     }
-    return m_heap.size() - m_heap_position;
+    return m_heap.size() - m_heap_position - 1;
 }
 
 void* Device::AllocateObject(size_t object_size)

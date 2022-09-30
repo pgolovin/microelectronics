@@ -3,6 +3,7 @@
 #include "printer/printer_gcode_driver.h"
 #include "printer/printer_file_manager.h"
 #include "printer/printer_entities.h"
+#include "ff.h"
 #include "device_mock.h"
 #include "sdcard_mock.h"
 #include <memory>
@@ -24,6 +25,7 @@ public:
     MemoryManager m_memory;
     HFILEMANAGER m_file_manager;
     GCodeAxisConfig axis = { 1,1,1,1 };
+    FIL m_f;
 
     GPIO_TypeDef port_x_step = 0;
     GPIO_TypeDef port_x_dir = 1;
@@ -42,7 +44,7 @@ public:
 
     void SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERATION enable_acceleration);
 
-    void StartPrinting(const std::vector<std::string>& commands);
+    void StartPrinting(const std::vector<std::string>& commands, MaterialFile* material_override);
 
     void MoveToCommand(uint32_t index);
     size_t CompleteCommand(PRINTER_STATUS command_status);
