@@ -1,4 +1,6 @@
 #include "solutions/printer_emulator.h"
+#include "ff.h"
+#include <sstream>
 
 void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERATION enable_acceleration)
 {
@@ -6,7 +8,8 @@ void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERA
     device = std::make_unique<Device>(ds);
     AttachDevice(*device);
 
-    storage = std::make_unique<SDcardMock>(1024);
+    m_storage = std::make_unique<SDcardMock>(1024);
+    m_sdcard = std::make_unique<SDcardMock>(1024);
 
     MotorConfig motor_x = {PULSE_LOWER, &port_x_step, 0, &port_x_dir, 0 };
     MotorConfig motor_y = {PULSE_LOWER, &port_y_step, 0, &port_y_dir, 0 };
@@ -17,14 +20,42 @@ void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERA
     TermalRegulatorConfig nozzle = { &port_nozzle, 0, GPIO_PIN_SET, GPIO_PIN_RESET, 1.f, 0.f };
     TermalRegulatorConfig table  = { &port_table, 0, GPIO_PIN_RESET, GPIO_PIN_SET, 1.f, 0.f };
 
+    MemoryManagerConfigure(&m_memory);
+
+    RegisterSDCard();
+
     external_config = axis_config;
-    PrinterConfig cfg = { storage.get(), 
+    PrinterConfig cfg = { &m_memory, m_storage.get(),
         {&motor_x, &motor_y, &motor_z, &motor_e}, enable_acceleration,
         &nozzle, &table,
         &port_cooler, 0,
         &external_config };
 
     printer_driver = PrinterConfigure(&cfg);
+}
+
+void PrinterEmulator::RegisterSDCard()
+{
+    MKFS_PARM fs_params =
+    {
+        FM_FAT,
+        1,
+        0,
+        0,
+        SDcardMock::s_sector_size
+    };
+
+    SDCARD_FAT_Register(m_sdcard.get(), 0);
+    std::vector<uint8_t> working_buffer(512);
+    FRESULT file_error = f_mkfs("0", &fs_params, working_buffer.data(), working_buffer.size());
+    if (FR_OK != file_error)
+    {
+        std::stringstream str;
+        str << "file creation failed with error " << file_error;
+        throw str.str();
+    }
+
+    m_file_manager = FileManagerConfigure(m_sdcard.get(), m_storage.get(), &m_memory, &axis);
 }
 
 void PrinterEmulator::StartPrinting(const std::vector<std::string>& commands)
@@ -65,50 +96,48 @@ size_t PrinterEmulator::CalculateStepsCount(uint32_t fetch_speed, uint32_t dista
 
 void PrinterEmulator::CreateGCodeData(const std::vector<std::string>& gcode_command_list)
 {
-    //gcode will write data in steps. not mm's
-    GCodeAxisConfig axis = { 1,1,1,1 };
-    HGCODE interpreter = GC_Configure(&axis);
-    if (nullptr == interpreter)
+    // write commands to the printer sdcard
+    FIL f;
+    FRESULT file_error = f_open(&f, "tmp.gcode", FA_CREATE_ALWAYS | FA_WRITE);
+    if (FR_OK != file_error)
     {
-        throw "gcode configurator failed";
+        std::stringstream str;
+        str << "file creation failed with error " << file_error;
+        throw str.str();
     }
-    std::vector<uint8_t> file_buffer(GCODE_CHUNK_SIZE * gcode_command_list.size());
-    uint8_t* caret = file_buffer.data();
-    uint8_t* block_start = caret;
-    size_t position = data_position;
-    uint32_t commands_count = 0;
     for (const auto& command : gcode_command_list)
     {
-        if (GCODE_OK_COMMAND_CREATED != GC_ParseCommand(interpreter, const_cast<char*>(command.c_str())))
+        std::string complete_command = command + "\n";
+        uint32_t out;
+        file_error = f_write(&f, complete_command.c_str(), complete_command.size(), &out);
+        if (FR_OK != file_error)
         {
-            throw "command error" + command;
-        }
-        if (GCODE_CHUNK_SIZE != GC_CompressCommand(interpreter, caret))
-        {
-            throw "command compression failed";
-        }
-        caret += GCODE_CHUNK_SIZE;
-        ++commands_count;
-        if (caret - block_start >= SDcardMock::s_sector_size)
-        {
-            if (SDCARD_OK != SDCARD_WriteSingleBlock(storage.get(), block_start, (uint32_t)position))
-            {
-                throw "sd_card infrastructure error";
-            }
-            block_start = caret;
-            position++;
+            std::stringstream str;
+            str << "file write failed with error " << file_error;
+            throw str.str();
         }
     }
-    //write the rest of commands that didn't fit into any block
-    if (block_start != caret)
+    file_error = f_close(&f);
+    if (FR_OK != file_error)
     {
-        if (SDCARD_OK != SDCARD_WriteSingleBlock(storage.get(), block_start, (uint32_t)position))
+        std::stringstream str;
+        str << "file close failed with error " << file_error;
+        throw str.str();
+    }
+
+    // open file and transfer its content from sdcard to ram
+    uint32_t blocks_count = FileManagerOpenGCode(m_file_manager, "tmp.gcode");
+    for (uint32_t i = 0; i < blocks_count; ++i)
+    {
+        PRINTER_STATUS status = FileManagerReadGCodeBlock(m_file_manager);
+        if (PRINTER_OK != status)
         {
-            throw "sd_card infrastructure error";
+            std::stringstream str;
+            str << "file parsing failed with error " << status;
+            throw str.str();
         }
     }
-    // write header
-    WriteControlBlock(CONTROL_BLOCK_SEC_CODE, commands_count);
+    FileManagerCloseGCode(m_file_manager);
 }
 
 void PrinterEmulator::WriteControlBlock(uint32_t sec_code, uint32_t commands_count)
@@ -122,7 +151,7 @@ void PrinterEmulator::WriteControlBlock(uint32_t sec_code, uint32_t commands_cou
     };
     std::vector<uint8_t> data(SDcardMock::s_sector_size, 0);
     memcpy(data.data(), &block, sizeof(PrinterControlBlock));
-    if (SDCARD_OK != SDCARD_WriteSingleBlock(storage.get(), data.data(), CONTROL_BLOCK_POSITION))
+    if (SDCARD_OK != SDCARD_WriteSingleBlock(m_storage.get(), data.data(), CONTROL_BLOCK_POSITION))
     {
         throw "sd_card infrastructure error";
     }

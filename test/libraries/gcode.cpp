@@ -104,6 +104,12 @@ TEST_F(GCodeParserTest, trailing_comment)
     ASSERT_EQ((int)GCODE_OK_COMMAND_CREATED, (int)GC_ParseCommand(code, const_cast<char*>(command.c_str())));
 }
 
+TEST_F(GCodeParserTest, trailing_comment_nospace)
+{
+    std::string command = "M104;some additional comment";
+    ASSERT_EQ((int)GCODE_ERROR_UNKNOWN_PARAM, (int)GC_ParseCommand(code, const_cast<char*>(command.c_str())));
+}
+
 TEST_F(GCodeParserTest, empty_line)
 {
     std::string command = ";this is the comment in gcode";
@@ -469,7 +475,7 @@ TEST_F(GCodeCompilerTest, compress_command_data)
 {
     std::vector<uint8_t> data(GCODE_CHUNK_SIZE);
     GC_CompressCommand(code, data.data());
-    GCodeCommandParams* params = reinterpret_cast<GCodeCommandParams*>(data.data() + sizeof(uint16_t));
+    GCodeCommandParams* params = reinterpret_cast<GCodeCommandParams*>(data.data() + sizeof(parameterType));
     GCodeCommandParams* g = GC_GetCurrentCommand(code);
     ASSERT_EQ(g->fetch_speed, params->fetch_speed);
     ASSERT_EQ(g->x, params->x);

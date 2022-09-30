@@ -58,21 +58,22 @@ typedef struct
     uint32_t id;
 } GCode_Type;
 
+typedef int32_t parameterType;
 typedef struct GCodeParamsG_type
 {
-    int16_t x;
-    int16_t y;
-    int16_t z;
-    int16_t e;
-    int16_t fetch_speed;
+    parameterType x;
+    parameterType y;
+    parameterType z; // in certain cases if deltaZ > 75 mm we have a trouble with number of steps, it is bigger than 0xFFFF
+    parameterType e;
+    parameterType fetch_speed;
 } GCodeCommandParams;
 
 typedef struct GCodeParamsM_type
 {
-    int16_t p;
-    int16_t s;
-    int16_t r;
-    int16_t i;
+    parameterType p;
+    parameterType s;
+    parameterType r;
+    parameterType i;
 } GCodeSubCommandParams;
 
 typedef GCODE_COMMAND_STATE(GCodeCommandFunction)(GCodeCommandParams* parameters, void* additional_parameter);
@@ -86,19 +87,19 @@ typedef struct GCodeFunctionList_type
 //command type + command index + parameters + alignment
 //due to memory alignment in 512 bytes we should have integer
 //number of elements. so chunk size is bigger than both commands.
-#define GCODE_CHUNK_SIZE 16U
+#define GCODE_CHUNK_SIZE 32U
 
 typedef struct GCodeAxisConfig_type
 {
-    int16_t x_steps_per_mm;
-    int16_t y_steps_per_mm;
-    int16_t z_steps_per_mm;
-    int16_t e_steps_per_mm;
+    parameterType x_steps_per_mm;
+    parameterType y_steps_per_mm;
+    parameterType z_steps_per_mm;
+    parameterType e_steps_per_mm;
 } GCodeAxisConfig;
 
 typedef GCode_Type* HGCODE;
 
-HGCODE                  GC_Configure(GCodeAxisConfig* config);
+HGCODE                  GC_Configure(const GCodeAxisConfig* config);
 
 //parser
 GCODE_ERROR             GC_ParseCommand(HGCODE hcode, char* command_line);
@@ -109,7 +110,7 @@ GCodeCommandParams*     GC_DecompileFromBuffer(uint8_t* buffer, GCODE_COMMAND_LI
 GCODE_COMMAND_STATE     GC_ExecuteFromBuffer(GCodeFunctionList* functions, void* additional_parameter, uint8_t* buffer);
 
 //diagnostics
-uint16_t                GC_GetCurrentCommandCode(HGCODE hcode);
+parameterType           GC_GetCurrentCommandCode(HGCODE hcode);
 GCodeCommandParams*     GC_GetCurrentCommand(HGCODE hcode);
 GCodeSubCommandParams*  GC_GetCurrentSubCommand(HGCODE hcode);
 

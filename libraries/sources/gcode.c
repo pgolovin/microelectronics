@@ -5,7 +5,7 @@
 
 typedef struct GCodeCommand_type
 {
-    uint16_t                code;
+    parameterType           code;
     GCodeCommandParams      g;
     GCodeSubCommandParams   m;
 } GCodeCommand;
@@ -26,9 +26,9 @@ static char* trimSpaces(char* command_line)
 }
 
 //simple atof introduce 5kb of new code, that i cannot afford. lets replace it by home brewed function
-static char* parseValue(char* command_line, int16_t multiplier, int16_t* value)
+static char* parseValue(char* command_line, parameterType multiplier, parameterType* value)
 {
-    int32_t sign = 1;
+    parameterType sign = 1;
     float result = 0;
     if ('-' == *command_line)
     {
@@ -62,15 +62,15 @@ static char* parseValue(char* command_line, int16_t multiplier, int16_t* value)
         ++command_line;
     }
 
-    *value = (int16_t)(sign * result * multiplier);
+    *value = (parameterType)(sign * result * multiplier);
     return trimSpaces(command_line);
 }
 
 static char* parseCommand(GCodeCommand* command, GCODE_COMMAND_TYPE command_type, char* command_line)
 {
-    int16_t command_index = 0;
+    parameterType command_index = 0;
     command_line = parseValue(command_line, 1, &command_index);
-    command->code = (uint16_t)(command_type | command_index);
+    command->code = (parameterType)(command_type | command_index);
 
     return command_line;
 }
@@ -78,7 +78,7 @@ static char* parseCommand(GCodeCommand* command, GCODE_COMMAND_TYPE command_type
 static GCODE_ERROR parseCommandParams(GCodeCommandParams* params, GCodeAxisConfig* cfg, char* command_line)
 {
     uint16_t multiplier = 1;
-    int16_t* param = 0;
+    parameterType* param = 0;
     
     while (*command_line)
     {
@@ -117,7 +117,7 @@ static GCODE_ERROR parseCommandParams(GCodeCommandParams* params, GCodeAxisConfi
 
 static GCODE_ERROR parseSubCommandParams(GCodeSubCommandParams* params, char* command_line)
 {
-    int16_t* param = 0;
+    parameterType* param = 0;
     
     while (*command_line)
     {
@@ -147,7 +147,7 @@ static GCODE_ERROR parseSubCommandParams(GCodeSubCommandParams* params, char* co
     return GCODE_OK_COMMAND_CREATED;
 }
 
-HGCODE GC_Configure(GCodeAxisConfig* config)
+HGCODE GC_Configure(const GCodeAxisConfig* config)
 {
     if (!config)
     {
@@ -206,7 +206,7 @@ GCODE_ERROR GC_ParseCommand(HGCODE hcode, char* command_line)
     return result;
 }
 
-uint16_t GC_GetCurrentCommandCode(HGCODE hcode)
+parameterType GC_GetCurrentCommandCode(HGCODE hcode)
 {
     GCode* gcode = (GCode*)hcode;
     return gcode->command.code;
@@ -245,7 +245,7 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
         // current implementation supports necessary commands only. 
         // Absolute mode is used and cannot be overrided
         // Metric coordinates are suported
-        uint16_t index = GCODE_MOVE;
+        uint32_t index = GCODE_MOVE;
         switch (gcode->command.code & 0x00FF)
         {
         case 0:
@@ -262,12 +262,12 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
             //G90 and G21 are ignored
             return 0;
         }
-        *(GCodeCommandParams*)(buffer + sizeof(uint16_t)) = gcode->command.g;
-        *(uint16_t*)buffer = GCODE_COMMAND | index;
+        *(GCodeCommandParams*)(buffer + sizeof(parameterType)) = gcode->command.g;
+        *(uint32_t*)buffer = GCODE_COMMAND | index;
     }
     else if (gcode->command.code & GCODE_SUBCOMMAND)
     {
-        uint16_t index = GCODE_SET_NOZZLE_TEMPERATURE;
+        uint32_t index = GCODE_SET_NOZZLE_TEMPERATURE;
         switch (gcode->command.code & 0x00FF)
         {
         case 104:
@@ -294,8 +294,8 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
             //others are just ignored
             return 0;
         }
-        *(GCodeSubCommandParams*)(buffer + sizeof(uint16_t)) = gcode->command.m;
-        *(uint16_t*)buffer = GCODE_SUBCOMMAND | index;
+        *(GCodeSubCommandParams*)(buffer + sizeof(parameterType)) = gcode->command.m;
+        *(parameterType*)buffer = GCODE_SUBCOMMAND | index;
     }
     return GCODE_CHUNK_SIZE;
 }
@@ -307,10 +307,10 @@ GCodeCommandParams* GC_DecompileFromBuffer(uint8_t* buffer, GCODE_COMMAND_LIST* 
         return 0;
     }
 
-    if (*(uint16_t*)buffer & GCODE_COMMAND)
+    if (*(uint32_t*)buffer & GCODE_COMMAND)
     {
         *out_command_id = (GCODE_COMMAND_LIST)buffer[0];
-        return (GCodeCommandParams*)(buffer + 2);
+        return (GCodeCommandParams*)(buffer + sizeof(parameterType));
     }
     return 0;
 }
@@ -325,14 +325,14 @@ GCODE_COMMAND_STATE GC_ExecuteFromBuffer(GCodeFunctionList* functions, void* add
     {
         return GCODE_FATAL_ERROR_NO_DATA;
     }
-    uint16_t code = *(uint16_t*)buffer;
+    parameterType code = *(parameterType*)buffer;
     if (code & GCODE_COMMAND)
     {
-        return functions->commands[buffer[0]]((GCodeCommandParams*)(buffer + 2), additional_parameter);
+        return functions->commands[buffer[0]]((GCodeCommandParams*)(buffer + sizeof(parameterType)), additional_parameter);
     }
     if (code & GCODE_SUBCOMMAND)
     {
-        return functions->subcommands[buffer[0]]((GCodeSubCommandParams*)(buffer + 2), additional_parameter);
+        return functions->subcommands[buffer[0]]((GCodeSubCommandParams*)(buffer + sizeof(parameterType)), additional_parameter);
     }
     return GCODE_FATAL_ERROR_UNKNOWN_COMMAND;
 }

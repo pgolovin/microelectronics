@@ -4,6 +4,7 @@
 #include <main.h>
 #include <sdcard.h>
 #include <vector>
+#include <map>
 
 class SDcardMock
 {
@@ -30,7 +31,17 @@ public:
 
 	//State control functions;
 	void SetCardStatus(SDCARD_Status new_status);
+
+	void* GetMemoryPtr();
+	size_t GetMemorySize();
+	size_t GetSectorsCount();
+
+	static void Mount(uint8_t drive, HSDCARD hcard);
+	static HSDCARD GetCard(uint8_t drive);
+	static void ResetFS();
 private:
 	SDCARD_Status m_status;
 	std::vector<uint8_t> m_data;
+
+	static std::map<uint8_t, HSDCARD> s_file_systems;
 };

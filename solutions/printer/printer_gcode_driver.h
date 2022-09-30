@@ -5,6 +5,7 @@
 #include "include/motor.h"
 #include "include/termal_regulator.h"
 #include "printer/printer_entities.h"
+#include "printer/printer_memory_manager.h"
 
 #ifndef __PRINTER_GCODE_DRIVER__
 #define __PRINTER_GCODE_DRIVER__
@@ -31,6 +32,8 @@ typedef enum MOTOR_TYPES_type
 
 typedef struct PrinterConfig_type
 {
+    // Handle to available memory pages
+    HMemoryManager memory;
     // Handle to SD card that contains internal printer settings and data, 
     // internal Flash drive
     HSDCARD bytecode_storage;
@@ -58,15 +61,6 @@ typedef struct PrinterDriver_type
     uint32_t id;
 } *HPRINTER;
 
-typedef enum PRINTER_STATUS_Type
-{
-    PRINTER_OK = 0,
-    PRINTER_FINISHED = GCODE_COMMAND_ERROR_COUNT,
-    PRINTER_INVALID_CONTROL_BLOCK,
-    PRINTER_INVALID_PARAMETER,
-    PRINTER_ALREADY_STARTED,
-} PRINTER_STATUS;
-
 typedef enum TERMO_REGULTAOR_Type
 {
     TERMO_NOZZLE = 0,
@@ -83,7 +77,6 @@ PRINTER_STATUS PrinterNextCommand(HPRINTER hprinter);
 PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter);
 PRINTER_STATUS PrinterGetStatus(HPRINTER hprinter);
 
-//TODO: rename to remaining command count
 uint32_t       PrinterGetRemainingCommandsCount(HPRINTER hprinter);
 uint32_t       PrinterGetAccelerationRegion(HPRINTER hprinter);
 // returns speed and length of current path segment.

@@ -1,5 +1,5 @@
-
 #include "printer/printer_gcode_driver.h"
+#include "printer/printer_constants.h"
 #include "include/gcode.h"
 #include "solutions/printer_emulator.h"
 #include <gtest/gtest.h>
