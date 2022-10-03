@@ -42,7 +42,7 @@ TEST_F(GCodeDriverAccelerationBasicTest, printer_region_nonzero_if_accel_is_enab
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(333U, region_length);
+    ASSERT_EQ(416U, region_length);
 }
 
 class GCodeDriverAccelerationTest : public ::testing::Test, public PrinterEmulator
@@ -72,7 +72,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_single)
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(333U, region_length);
+    ASSERT_EQ(416u, region_length);
 }
 
 TEST_F(GCodeDriverAccelerationTest, printer_region_series)
@@ -87,7 +87,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_series)
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(999U, region_length);
+    ASSERT_EQ(1248U, region_length);
 }
 
 TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_speed_change)
@@ -102,7 +102,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_speed_change)
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(999U, region_length);
+    ASSERT_EQ(1249U, region_length);
 }
 
 TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_command_change)
@@ -117,7 +117,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_command_change)
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(333U, region_length);
+    ASSERT_EQ(416U, region_length);
 }
 
 TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_subcommand)
@@ -132,7 +132,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_subcommand)
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(333U, region_length);
+    ASSERT_EQ(416U, region_length);
 }
 
 TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_big_XY_angle)
@@ -146,7 +146,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_big_XY_angle)
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(333U, region_length);
+    ASSERT_EQ(416U, region_length);
 }
 
 TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_big_Z_angle)
@@ -160,7 +160,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_ends_by_big_Z_angle)
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(333U, region_length);
+    ASSERT_EQ(416U, region_length);
 }
 
 TEST_F(GCodeDriverAccelerationTest, printer_region_z_direction_works)
@@ -174,7 +174,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_z_direction_works)
     PrinterNextCommand(printer_driver);
     PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(666U, region_length);
+    ASSERT_EQ(832U, region_length);
 }
 
 TEST_F(GCodeDriverAccelerationTest, printer_region_subregions)
@@ -188,11 +188,11 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_subregions)
     PrinterNextCommand(printer_driver);
     PRINTER_STATUS status = PrinterNextCommand(printer_driver);
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(666U, region_length);
+    ASSERT_EQ(832U, region_length);
     CompleteCommand(status);
     status = PrinterNextCommand(printer_driver);
     region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(333U, region_length);
+    ASSERT_EQ(416U, region_length);
 }
 
 TEST_F(GCodeDriverAccelerationTest, printer_region_subsequent_regions)
@@ -201,8 +201,8 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_subsequent_regions)
         initial_command,
         "G0 F1800 X100 Y0 Z0 E0",
         "G0 F1800 X200 Y0 Z0 E0",
-        "G0 F600 Z200",
-        "G0 F600 Z400",
+        "G0 F300 Z200",
+        "G0 F300 Z400",
     };
     StartPrinting(commands, nullptr);
     PrinterNextCommand(printer_driver);
@@ -243,7 +243,7 @@ TEST_F(GCodeDriverAccelerationTest, printer_region_exceeds_single_command_block)
     PrinterNextCommand(printer_driver);
     ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
     uint32_t region_length = PrinterGetAccelerationRegion(printer_driver);
-    ASSERT_EQ(33U * command_block_size * 3, region_length);
+    ASSERT_EQ(41U * command_block_size * 3, region_length);
 }
 
 class GCodeDriverAccelLongRegionTest : public ::testing::Test, public PrinterEmulator
@@ -319,7 +319,7 @@ TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_max_speed)
     }
     ++cmd_index;
     steps = CompleteCommand(PrinterNextCommand(printer_driver));
-    ASSERT_EQ(steps, CalculateStepsCount(fetch_speed, steps_per_block, 100)) << "Command number: " << cmd_index;
+    ASSERT_EQ(steps, CalculateStepsCount(fetch_speed, steps_per_block, 80)) << "Command number: " << cmd_index;
 }
 
 TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_end)

@@ -617,18 +617,18 @@ TEST_P(GCodeDriverNormalizedSpeedTest, printer_motion)
 INSTANTIATE_TEST_SUITE_P(
     PrinterNormalizedSpeedTest, GCodeDriverNormalizedSpeedTest,
     ::testing::Values(
-        SpeedTest{ "only_X",    "G0 F1800 X124 Y0 Z0 E0",      PRINTER_OK,  413 }, // 30mm/sec ~ 30 * x_steps_per_mm steps/sec
-        SpeedTest{ "only_Y",    "G0 F2400 X0 Y120 Z0 E0",      PRINTER_OK,  300 }, // steps * 10000 * 60 / fetch
-        SpeedTest{ "only_Z",    "G0 F600 X0 Y0 Z600 E0",       PRINTER_OK, 1500 }, 
+        SpeedTest{ "only_X",    "G0 F1800 X124 Y0 Z0 E0",      PRINTER_OK,  516 }, // 30mm/sec ~ 30 * x_steps_per_mm steps/sec
+        SpeedTest{ "only_Y",    "G0 F2400 X0 Y120 Z0 E0",      PRINTER_OK,  375 }, // steps * 10000 * 60 / fetch
+        SpeedTest{ "only_Z",    "G0 F300 X0 Y0 Z600 E0",       PRINTER_OK, 1500 }, 
         SpeedTest{ "only_E",    "G0 F600 X0 Y0 Z0 E600",       PRINTER_OK, 5769 },
         SpeedTest{ "limit_X",   "G0 F7200 X600 Y0 Z0 E0",      PRINTER_OK,  600 }, // number of stepps cannot be less than required distance
         SpeedTest{ "limit_Y",   "G0 F7200 X0 Y600 Z0 E0",      PRINTER_OK,  600 }, // number of stepps cannot be less than required distance
         SpeedTest{ "limit_Z",   "G0 F5800 X0 Y0 Z600 E0",      PRINTER_OK,  600 }, // number of stepps cannot be less than required distance
         SpeedTest{ "limit_E",   "G0 F7200 X0 Y0 Z0 E600",      PRINTER_OK,  600 }, // number of stepps cannot be less than required distance
-        SpeedTest{ "XYgtE",     "G1 F1800 X300 Y400 Z0 E600",  PRINTER_OK, 1923 },
-        SpeedTest{ "XYlsE",     "G1 F1800 X300 Y400 Z0 E300",  PRINTER_OK, 1666 },
-        SpeedTest{ "level_Down","G0 F600 Z4",                  PRINTER_OK,   10 },
-        SpeedTest{ "level_Up",  "G0 F600 Z-4",                 PRINTER_OK,   10 },
+        SpeedTest{ "XYgtE",     "G1 F1800 X300 Y400 Z0 E600",  PRINTER_OK, 2083 },
+        SpeedTest{ "XYlsE",     "G1 F1800 X300 Y400 Z0 E300",  PRINTER_OK, 2083 },
+        SpeedTest{ "level_Down","G0 F300 Z4",                  PRINTER_OK,   10 },
+        SpeedTest{ "level_Up",  "G0 F300 Z-4",                 PRINTER_OK,   10 },
         SpeedTest{ "retract",   "G0 F2400 E-4",                PRINTER_OK,    9 }
     ),
     [](const ::testing::TestParamInfo<GCodeDriverSpeedTest::ParamType>& info)
