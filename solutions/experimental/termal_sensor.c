@@ -309,9 +309,15 @@ bool e_engine(void* metadata)
     return true;
 }
 
-bool toggle_nozzle_cooler(void* metadata)
+bool on_nozzle_cooler(void* metadata)
 {
-    HAL_GPIO_TogglePin(EXTRUDER_COOLER_CONTROL_GPIO_Port, EXTRUDER_COOLER_CONTROL_Pin);
+    HAL_GPIO_WritePin(EXTRUDER_COOLER_CONTROL_GPIO_Port, EXTRUDER_COOLER_CONTROL_Pin, GPIO_PIN_SET);
+    return true;
+}
+
+bool off_nozzle_cooler(void* metadata)
+{
+    HAL_GPIO_WritePin(EXTRUDER_COOLER_CONTROL_GPIO_Port, EXTRUDER_COOLER_CONTROL_Pin, GPIO_PIN_RESET);
     return true;
 }
 
@@ -327,6 +333,8 @@ bool calibrate_engine(void* metadata)
 {
     EngineState* engine = (EngineState*)metadata;
     engine->steps = CALIBRATION_STEPS;
+    engine->speed = 5;
+    engine->status = false;
     engine->running = true;
     return true;
 }
@@ -409,7 +417,7 @@ HEXPERIMENTAL EXPERIMENTAL_Configure(SPI_HandleTypeDef* hspi, SPI_HandleTypeDef*
     exp->y.step_pin  = Y_ENG_STEP_Pin;
     exp->y.dir_port  = Y_ENG_DIR_GPIO_Port;
     exp->y.dir_pin   = Y_ENG_DIR_Pin;
-    exp->y.speed     = 1;
+    exp->y.speed     = 5;
     exp->y.current_speed = 1;
     exp->y.status    = false;
     
@@ -420,7 +428,7 @@ HEXPERIMENTAL EXPERIMENTAL_Configure(SPI_HandleTypeDef* hspi, SPI_HandleTypeDef*
     exp->x.step_pin  = X_ENG_STEP_Pin;
     exp->x.dir_port  = X_ENG_DIR_GPIO_Port;
     exp->x.dir_pin   = X_ENG_DIR_Pin;
-    exp->x.speed     = 1;
+    exp->x.speed     = 5;
     exp->x.current_speed = 1;
     exp->x.status    = false;
     
@@ -431,7 +439,7 @@ HEXPERIMENTAL EXPERIMENTAL_Configure(SPI_HandleTypeDef* hspi, SPI_HandleTypeDef*
     exp->z.step_pin  = Z_ENG_STEP_Pin;
     exp->z.dir_port  = Z_ENG_DIR_GPIO_Port;
     exp->z.dir_pin   = Z_ENG_DIR_Pin;
-    exp->z.speed     = 1;
+    exp->z.speed     = 5;
     exp->z.status    = false;
     
     exp->card           = SDCARD_Configure(exp->main_bus, SDCARD_CS_GPIO_Port, SDCARD_CS_Pin);
@@ -551,7 +559,7 @@ HEXPERIMENTAL EXPERIMENTAL_Configure(SPI_HandleTypeDef* hspi, SPI_HandleTypeDef*
             }
             {
                 Rect frame = {10, 0, 20, 10};
-                UI_CreateButton(exp->ui, window, frame, "X", true, run_engine, &exp->x);
+                UI_CreateButton(exp->ui, window, frame, "X", true, calibrate_engine, &exp->x);
             }
             {
                 Rect frame = {10, 10, 20, 20};
@@ -559,7 +567,7 @@ HEXPERIMENTAL EXPERIMENTAL_Configure(SPI_HandleTypeDef* hspi, SPI_HandleTypeDef*
             }
             {
                 Rect frame = {20, 0, 30, 10};
-                UI_CreateButton(exp->ui, window, frame, "Y", true, run_engine, &exp->y);
+                UI_CreateButton(exp->ui, window, frame, "Y", true, calibrate_engine, &exp->y);
             }
             {
                 Rect frame = {20, 10, 30, 20};
@@ -567,24 +575,24 @@ HEXPERIMENTAL EXPERIMENTAL_Configure(SPI_HandleTypeDef* hspi, SPI_HandleTypeDef*
             }
             {
                 Rect frame = {30, 0, 40, 10};
-                UI_CreateButton(exp->ui, window, frame, "Z", true, run_engine, &exp->z);
+                UI_CreateButton(exp->ui, window, frame, "Z", true, calibrate_engine, &exp->z);
             }
-            {
-                Rect frame = {30, 10, 40, 20};
-                UI_CreateButton(exp->ui, window, frame, "+Z-", true, dir_engine, &exp->z);
-            }
-            //{
-            //    Rect frame = {40, 0, 50, 20};
-            //    UI_CreateButton(exp->ui, window, frame, "CLR", false, toggle_nozzle_cooler, 0);
-            //}
             {
                 Rect frame = {50, 0, 60, 10};
-                UI_CreateButton(exp->ui, window, frame, "SAV", true, savePrinterState, exp);
+                UI_CreateButton(exp->ui, window, frame, "ON", true, on_nozzle_cooler, 0);
             }
             {
                 Rect frame = {50, 10, 60, 20};
-                UI_CreateButton(exp->ui, window, frame, "LAD", true, restorePrinterState, exp);
+                UI_CreateButton(exp->ui, window, frame, "OFF", true, off_nozzle_cooler, 0);
             }
+            //{
+            //    Rect frame = {50, 0, 60, 10};
+            //    UI_CreateButton(exp->ui, window, frame, "SAV", true, savePrinterState, exp);
+            //}
+            //{
+            //    Rect frame = {50, 10, 60, 20};
+            //    UI_CreateButton(exp->ui, window, frame, "LAD", true, restorePrinterState, exp);
+            //}
         }
     }
     
@@ -702,25 +710,25 @@ void EXPERIMENTAL_MainLoop(HEXPERIMENTAL experimental)
         SDCARD_ReadBlocksNumber(exp->ram);
     }
     
-    if (exp->x.status)
-    {
-        resetEngine(exp, &exp->x, 'x');
-    }
-    
-    if (exp->y.status)
-    {
-        resetEngine(exp, &exp->y, 'y');
-    }
-    
-    if (exp->z.status)
-    {
-        resetEngine(exp, &exp->z, 'z');
-    }
-    
-    if (exp->e.status)
-    {
-        resetEngine(exp, &exp->e, 'e');
-    }
+    //if (exp->x.status)
+    //{
+    //    resetEngine(exp, &exp->x, 'x');
+    //}
+    //
+    //if (exp->y.status)
+    //{
+    //    resetEngine(exp, &exp->y, 'y');
+    //}
+    //
+    //if (exp->z.status)
+    //{
+    //    resetEngine(exp, &exp->z, 'z');
+    //}
+    //
+    //if (exp->e.status)
+    //{
+    //    resetEngine(exp, &exp->e, 'e');
+    //}
         
     if (TOUCH_Pressed(exp->touch))
     {
@@ -787,13 +795,9 @@ void EXPERIMENTAL_OnTimer(HEXPERIMENTAL experimental)
         }
     }
     
-    if (exp->x.running && 0 == tick % exp->x.current_speed)
+    if (exp->x.running && 0 == tick % exp->x.speed)
     {
         --exp->x.steps;
-        if (exp->x.steps < 500)
-        {
-            exp->x.current_speed = exp->x.speed + (500 - exp->x.steps)*(10-exp->x.speed)/500;
-        }
         if (!exp->x.steps)
         {
             exp->x.running = false;
@@ -803,14 +807,9 @@ void EXPERIMENTAL_OnTimer(HEXPERIMENTAL experimental)
         HAL_GPIO_WritePin(exp->x.step_port, exp->x.step_pin, GPIO_PIN_RESET);
     }
     
-    if (exp->y.running && 0 == tick % exp->y.current_speed)
+    if (exp->y.running && 0 == tick % exp->y.speed)
     {
         --exp->y.steps;
-        if (exp->y.steps < 500)
-        {
-            exp->y.current_speed = exp->y.speed + (500 - exp->y.steps)*(10-exp->y.speed)/500;
-        }
-        
         if (!exp->y.steps)
         {
             exp->y.running = false;
