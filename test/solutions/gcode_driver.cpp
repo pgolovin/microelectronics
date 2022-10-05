@@ -830,6 +830,28 @@ TEST_F(GCodeDriverCommandsTest, printer_commands_print)
     ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
 }
 
+TEST_F(GCodeDriverCommandsTest, printer_coordinates_mode_absolute)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G90"
+    };
+    StartPrinting(commands, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
+}
+
+TEST_F(GCodeDriverCommandsTest, printer_coordinates_mode_relative)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G91"
+    };
+    StartPrinting(commands, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
+}
+
 class GCodeDriverSubcommandsTest : public ::testing::Test, public PrinterEmulator
 {
 public:
@@ -875,7 +897,7 @@ protected:
     uint16_t table_value = 20;
 };
 
-TEST_F(GCodeDriverSubcommandsTest, printer_coordinates_mode_absolute)
+TEST_F(GCodeDriverSubcommandsTest, printer_extrusion_mode_absolute)
 {
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
@@ -886,7 +908,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_coordinates_mode_absolute)
     ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
 }
 
-TEST_F(GCodeDriverSubcommandsTest, printer_coordinates_mode_relative)
+TEST_F(GCodeDriverSubcommandsTest, printer_extrusion_mode_relative)
 {
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
@@ -1281,11 +1303,66 @@ TEST_F(GCodeDriverSubcommandsTest, printer_cannot_override_cooler_off)
     ASSERT_EQ(0, PrinterGetCoolerSpeed(printer_driver));
 }
 
-TEST_F(GCodeDriverSubcommandsTest, printer_absolute_coordinates)
+TEST_F(GCodeDriverSubcommandsTest, printer_absolute_extrusion)
 {
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
         "M82",
+        "G0 F1800 X0 Y0 Z0 E30",
+        "G0 F1800 X0 Y0 Z0 E50",
+    };
+    StartPrinting(commands, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    GCodeCommandParams path = *PrinterGetCurrentPath(printer_driver);
+    ASSERT_EQ(20, path.e);
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_relative_extrusion)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "M83",
+        "G0 F1800 X0 Y0 Z0 E30",
+        "G0 F1800 X0 Y0 Z0 E50",
+    };
+    StartPrinting(commands, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    GCodeCommandParams path = *PrinterGetCurrentPath(printer_driver);
+    ASSERT_EQ(50, path.e);
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_relative_to_absolute_extrusion)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "M83",
+        "G0 F1800 X0 Y0 Z0 E30",
+        "G0 F1800 X0 Y0 Z0 E50",
+        "M82",
+        "G0 F1800 X0 Y0 Z0 E50",
+    };
+    StartPrinting(commands, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0
+    CompleteCommand(PrinterNextCommand(printer_driver)); // M83
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0 30
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0 80
+    CompleteCommand(PrinterNextCommand(printer_driver)); // M82 
+    PrinterNextCommand(printer_driver); // back from 80 to 50. should be -30
+    GCodeCommandParams path = *PrinterGetCurrentPath(printer_driver);
+    ASSERT_EQ(-30, path.e);
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_absolute_positioning)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G90",
         "G0 F1800 X30 Y0 Z0 E0",
         "G0 F1800 X50 Y0 Z0 E0",
     };
@@ -1298,11 +1375,11 @@ TEST_F(GCodeDriverSubcommandsTest, printer_absolute_coordinates)
     ASSERT_EQ(20, path.x);
 }
 
-TEST_F(GCodeDriverSubcommandsTest, printer_relative_coordinates)
+TEST_F(GCodeDriverSubcommandsTest, printer_relative_positioning)
 {
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
-        "M83",
+        "G91",
         "G0 F1800 X30 Y0 Z0 E0",
         "G0 F1800 X50 Y0 Z0 E0",
     };
@@ -1315,23 +1392,71 @@ TEST_F(GCodeDriverSubcommandsTest, printer_relative_coordinates)
     ASSERT_EQ(50, path.x);
 }
 
-TEST_F(GCodeDriverSubcommandsTest, printer_relative_to_absolute_coordinates)
+TEST_F(GCodeDriverSubcommandsTest, printer_relative_to_absolute_positioning)
 {
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
-        "M83",
+        "G91",
         "G0 F1800 X30 Y0 Z0 E0",
         "G0 F1800 X50 Y0 Z0 E0",
-        "M82",
+        "G90",
         "G0 F1800 X50 Y0 Z0 E0",
     };
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0
-    CompleteCommand(PrinterNextCommand(printer_driver)); // M83
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G91
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0 30
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0 80
-    CompleteCommand(PrinterNextCommand(printer_driver)); // M82 
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G90 
     PrinterNextCommand(printer_driver); // back from 80 to 50. should be -30
     GCodeCommandParams path = *PrinterGetCurrentPath(printer_driver);
     ASSERT_EQ(-30, path.x);
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_positioning_abs_extrusion_rel)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G90",
+        "M83",
+        "G0 F1800 X30 Y0 Z0 E30",
+        "G0 F1800 X50 Y0 Z0 E50",
+        "G90",
+        "G0 F1800 X60 Y0 Z0 E50",
+    };
+    StartPrinting(commands, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G90
+    CompleteCommand(PrinterNextCommand(printer_driver)); // M83
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0 30
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0 80
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G90 
+    PrinterNextCommand(printer_driver); // E back from 80 to 50. should be -30, X from 50 to 60
+    GCodeCommandParams path = *PrinterGetCurrentPath(printer_driver);
+    ASSERT_EQ(-30, path.e);
+    ASSERT_EQ(10, path.x);
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_positioning_rel_extrusion_abs)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G91",
+        "M82",
+        "G0 F1800 X30 Y0 Z0 E30",
+        "G0 F1800 X50 Y0 Z0 E50",
+        "G90",
+        "G0 F1800 X60 Y0 Z0 E60",
+    };
+    StartPrinting(commands, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G91
+    CompleteCommand(PrinterNextCommand(printer_driver)); // M82
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0 30
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0 80
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G90 
+    PrinterNextCommand(printer_driver); // X back from 80 to 50. should be -30, E from 50 to 60
+    GCodeCommandParams path = *PrinterGetCurrentPath(printer_driver);
+    ASSERT_EQ(10, path.e);
+    ASSERT_EQ(-20, path.x);
 }
