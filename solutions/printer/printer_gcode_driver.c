@@ -28,6 +28,7 @@ typedef struct PrinterDriverInternal_type
 
     // General gcode settings, interpreter and code execution
     uint8_t coordinates_mode;
+    uint8_t extrusion_mode;
     GCodeFunctionList  setup_calls;
     GCodeCommandParams current_segment;
     GCodeCommandParams last_position;
@@ -177,11 +178,19 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hprinter)
         printer->current_segment.x = params->x - printer->last_position.x;
         printer->current_segment.y = params->y - printer->last_position.y;
         printer->current_segment.z = params->z - printer->last_position.z;
-        printer->current_segment.e = params->e - printer->last_position.e;
     }
     else
     {
         printer->current_segment = *params;
+    }
+
+    if (GCODE_ABSOLUTE == printer->extrusion_mode)
+    {
+        printer->current_segment.e = params->e - printer->last_position.e;
+    }
+    else
+    {
+        printer->current_segment.e = params->e;
     }
 
     printer->last_position.x += printer->current_segment.x;
@@ -234,10 +243,18 @@ static GCODE_COMMAND_STATE setupSet(GCodeCommandParams* params, void* hprinter)
     return GCODE_OK;
 }
 
-static GCODE_COMMAND_STATE setCoordinatesMode(GCodeSubCommandParams* params, void* hprinter)
+static GCODE_COMMAND_STATE setCoordinatesMode(GCodeCommandParams* params, void* hprinter)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
-    printer->coordinates_mode = params->s;
+    printer->coordinates_mode = params->x;
+    printer->extrusion_mode = params->x;
+    return GCODE_OK;
+}
+
+static GCODE_COMMAND_STATE setExtruderMode(GCodeSubCommandParams* params, void* hprinter)
+{
+    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    printer->extrusion_mode = params->s;
     return GCODE_OK;
 }
 
@@ -314,16 +331,17 @@ HPRINTER PrinterConfigure(PrinterConfig* printer_cfg)
     printer->memory = printer_cfg->memory;
     printer->commands_count = 0;
 
-    printer->setup_calls.commands[GCODE_MOVE] = setupMove;
-    printer->setup_calls.commands[GCODE_HOME] = setupMove; // the same command here
-    printer->setup_calls.commands[GCODE_SET]  = setupSet;
+    printer->setup_calls.commands[GCODE_MOVE]                       = setupMove;
+    printer->setup_calls.commands[GCODE_HOME]                       = setupMove; // the same command here
+    printer->setup_calls.commands[GCODE_SET]                        = setupSet;
+    printer->setup_calls.commands[GCODE_SET_COORDINATES_MODE]       = setCoordinatesMode;
 
     printer->setup_calls.subcommands[GCODE_SET_NOZZLE_TEMPERATURE]  = setNozzleTemperature;
     printer->setup_calls.subcommands[GCODE_WAIT_NOZZLE]             = setNozzleTemperatureBlocking;
     printer->setup_calls.subcommands[GCODE_SET_TABLE_TEMPERATURE]   = setTableTemperature;
     printer->setup_calls.subcommands[GCODE_WAIT_TABLE]              = setTableTemperatureBlocking;
     printer->setup_calls.subcommands[GCODE_SET_COOLER_SPEED]        = setCoolerSpeed;
-    printer->setup_calls.subcommands[GCODE_SET_COORDINATES_MODE]    = setCoordinatesMode;
+    printer->setup_calls.subcommands[GCODE_SET_EXTRUSION_MODE]      = setExtruderMode;
 
     for (uint8_t i = 0; i < MOTOR_COUNT; ++i)
     {
@@ -381,6 +399,7 @@ PRINTER_STATUS PrinterStart(HPRINTER hprinter, MaterialFile* material_override)
     }
 
     printer->coordinates_mode = GCODE_ABSOLUTE;
+    printer->extrusion_mode = GCODE_ABSOLUTE;
 
     printer->mode = MODE_IDLE;
     printer->tick_index = 0;

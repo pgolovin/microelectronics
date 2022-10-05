@@ -545,8 +545,8 @@ INSTANTIATE_TEST_SUITE_P(
         CompilerCommand{ "disable_cooler", "M107", GCODE_SUBCOMMAND, GCODE_SET_COOLER_SPEED },
         CompilerCommand{ "wait_nozzle_to_heat", "M109 S256", GCODE_SUBCOMMAND, GCODE_WAIT_NOZZLE },
         CompilerCommand{ "wait_table_to_heat", "M190 S256", GCODE_SUBCOMMAND, GCODE_WAIT_TABLE },
-        CompilerCommand{ "absolute_printing_mode", "M82", GCODE_SUBCOMMAND, GCODE_SET_COORDINATES_MODE },
-        CompilerCommand{ "relative_printing_mode", "M83", GCODE_SUBCOMMAND, GCODE_SET_COORDINATES_MODE }
+        CompilerCommand{ "absolute_extrusion_mode", "M82", GCODE_SUBCOMMAND, GCODE_SET_EXTRUSION_MODE },
+        CompilerCommand{ "relative_extrusion_mode", "M83", GCODE_SUBCOMMAND, GCODE_SET_EXTRUSION_MODE }
 
     ),
     [](const ::testing::TestParamInfo<GCodeCommandCompilerTest::ParamType>& info)

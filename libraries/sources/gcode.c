@@ -255,6 +255,14 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
         case 28:
             index = GCODE_HOME;
             break;
+        case 90:
+            index = GCODE_SET_COORDINATES_MODE;
+            gcode->command.g.x = GCODE_ABSOLUTE;
+            break;
+        case 91:
+            index = GCODE_SET_COORDINATES_MODE;
+            gcode->command.g.x = GCODE_RELATIVE;
+            break;
         case 92:
             index = GCODE_SET;
             break;
@@ -271,11 +279,11 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
         switch (gcode->command.code & 0x00FF)
         {
         case 82:
-            index = GCODE_SET_COORDINATES_MODE;
+            index = GCODE_SET_EXTRUSION_MODE;
             gcode->command.m.s = GCODE_ABSOLUTE;
             break;
         case 83:
-            index = GCODE_SET_COORDINATES_MODE;
+            index = GCODE_SET_EXTRUSION_MODE;
             gcode->command.m.s = GCODE_RELATIVE;
             break;
         case 104:
