@@ -95,6 +95,11 @@ static uint32_t calculateTime(PrinterDriver* printer, GCodeCommandParams* segmen
     return time;
 }
 
+static inline double dot(const GCodeCommandParams* vector1, const GCodeCommandParams* vector2)
+{
+    return (double)vector1->x * vector2->x + (double)vector1->y * vector2->y + (double)vector1->z * vector2->z;
+}
+
 /// <summary>
 /// Calculate the length of the segment that printer will do with a constant speed
 /// On the beginning and the end of the region head will accelerate to prevent nozzle oscillations
@@ -138,9 +143,10 @@ static void calculateAccelRegion(PrinterDriver* printer, uint32_t initial_region
 
         GCodeCommandParams segment = { parameters->x - last_position.x, parameters->y - last_position.y, parameters->z - last_position.z };
 
-        double scalar_mul  = (double)segment.x * last_segment.x +      (double)segment.y * last_segment.y +      (double)segment.z * last_segment.z;
-        double last_length = (double)last_segment.x * last_segment.x + (double)last_segment.y * last_segment.y + (double)last_segment.z * last_segment.z;
-        double length      = (double)segment.x * segment.x +           (double)segment.y * segment.y +           (double)segment.z * segment.z;
+        double scalar_mul  = dot(&segment, &last_segment);
+        double last_length = dot(&last_segment, &last_segment);
+        double length      = dot(&segment, &segment);
+
         if (0.000001 > length || 0.000001 > last_length)
         {
             // zero division guard
@@ -297,7 +303,6 @@ static GCODE_COMMAND_STATE setCoolerSpeed(GCodeSubCommandParams* params, void* h
 
 HPRINTER PrinterConfigure(PrinterConfig* printer_cfg)
 {
-
 #ifndef PRINTER_FIRMWARE
 
     if (!printer_cfg || !printer_cfg->bytecode_storage || !printer_cfg->memory || !printer_cfg->axis_configuration ||
