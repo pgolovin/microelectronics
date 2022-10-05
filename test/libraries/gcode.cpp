@@ -112,7 +112,7 @@ TEST_F(GCodeParserTest, trailing_comment_nospace)
 
 TEST_F(GCodeParserTest, empty_line)
 {
-    std::string command = ";this is the comment in gcode";
+    std::string command = " ";
     ASSERT_EQ((int)GCODE_OK_NO_COMMAND, (int)GC_ParseCommand(code, const_cast<char*>(command.c_str())));
 }
 
@@ -544,7 +544,9 @@ INSTANTIATE_TEST_SUITE_P(
         CompilerCommand{ "enable_cooler", "M106 S256", GCODE_SUBCOMMAND, GCODE_SET_COOLER_SPEED },
         CompilerCommand{ "disable_cooler", "M107", GCODE_SUBCOMMAND, GCODE_SET_COOLER_SPEED },
         CompilerCommand{ "wait_nozzle_to_heat", "M109 S256", GCODE_SUBCOMMAND, GCODE_WAIT_NOZZLE },
-        CompilerCommand{ "wait_table_to_heat", "M190 S256", GCODE_SUBCOMMAND, GCODE_WAIT_TABLE }
+        CompilerCommand{ "wait_table_to_heat", "M190 S256", GCODE_SUBCOMMAND, GCODE_WAIT_TABLE },
+        CompilerCommand{ "absolute_printing_mode", "M82", GCODE_SUBCOMMAND, GCODE_SET_COORDINATES_MODE },
+        CompilerCommand{ "relative_printing_mode", "M83", GCODE_SUBCOMMAND, GCODE_SET_COORDINATES_MODE }
 
     ),
     [](const ::testing::TestParamInfo<GCodeCommandCompilerTest::ParamType>& info)

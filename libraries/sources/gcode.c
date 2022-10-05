@@ -270,6 +270,14 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
         uint32_t index = GCODE_SET_NOZZLE_TEMPERATURE;
         switch (gcode->command.code & 0x00FF)
         {
+        case 82:
+            index = GCODE_SET_COORDINATES_MODE;
+            gcode->command.m.s = GCODE_ABSOLUTE;
+            break;
+        case 83:
+            index = GCODE_SET_COORDINATES_MODE;
+            gcode->command.m.s = GCODE_RELATIVE;
+            break;
         case 104:
             index = GCODE_SET_NOZZLE_TEMPERATURE;
             break;
