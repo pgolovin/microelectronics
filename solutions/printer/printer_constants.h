@@ -11,9 +11,9 @@ extern "C" {
 
 const GCodeAxisConfig axis_configuration =
 {
-    100,
-    100,
-    400,
+    80,
+    80,
+    800,
     104
 };
 
