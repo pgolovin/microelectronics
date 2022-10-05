@@ -27,6 +27,7 @@ typedef struct PrinterDriverInternal_type
     HMemoryManager memory;
 
     // General gcode settings, interpreter and code execution
+    uint8_t coordinates_mode;
     GCodeFunctionList  setup_calls;
     GCodeCommandParams current_segment;
     GCodeCommandParams last_position;
@@ -171,12 +172,23 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hprinter)
     }
 
     printer->current_segment.fetch_speed = params->fetch_speed;
-    printer->current_segment.x = params->x - printer->last_position.x;
-    printer->current_segment.y = params->y - printer->last_position.y;
-    printer->current_segment.z = params->z - printer->last_position.z;
-    printer->current_segment.e = params->e - printer->last_position.e;
+    if (GCODE_ABSOLUTE == printer->coordinates_mode)
+    {
+        printer->current_segment.x = params->x - printer->last_position.x;
+        printer->current_segment.y = params->y - printer->last_position.y;
+        printer->current_segment.z = params->z - printer->last_position.z;
+        printer->current_segment.e = params->e - printer->last_position.e;
+    }
+    else
+    {
+        printer->current_segment = *params;
+    }
 
-    printer->last_position = *params;
+    printer->last_position.x += printer->current_segment.x;
+    printer->last_position.y += printer->current_segment.y;
+    printer->last_position.z += printer->current_segment.z;
+    printer->last_position.e += printer->current_segment.e;
+    
     printer->last_command_status = GCODE_OK;
 
     // basic fetch speed is calculated as velocity of the head, without velocity of the table, it is calculated independently.
@@ -219,6 +231,13 @@ static GCODE_COMMAND_STATE setupSet(GCodeCommandParams* params, void* hprinter)
     PrinterDriver* printer = (PrinterDriver*)hprinter;
     printer->last_position = *params;
 
+    return GCODE_OK;
+}
+
+static GCODE_COMMAND_STATE setCoordinatesMode(GCodeSubCommandParams* params, void* hprinter)
+{
+    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    printer->coordinates_mode = params->s;
     return GCODE_OK;
 }
 
@@ -297,13 +316,14 @@ HPRINTER PrinterConfigure(PrinterConfig* printer_cfg)
 
     printer->setup_calls.commands[GCODE_MOVE] = setupMove;
     printer->setup_calls.commands[GCODE_HOME] = setupMove; // the same command here
-    printer->setup_calls.commands[GCODE_SET] = setupSet;
+    printer->setup_calls.commands[GCODE_SET]  = setupSet;
 
-    printer->setup_calls.subcommands[GCODE_SET_NOZZLE_TEMPERATURE] = setNozzleTemperature;
-    printer->setup_calls.subcommands[GCODE_WAIT_NOZZLE] = setNozzleTemperatureBlocking;
-    printer->setup_calls.subcommands[GCODE_SET_TABLE_TEMPERATURE] = setTableTemperature;
-    printer->setup_calls.subcommands[GCODE_WAIT_TABLE] = setTableTemperatureBlocking;
-    printer->setup_calls.subcommands[GCODE_SET_COOLER_SPEED] = setCoolerSpeed;
+    printer->setup_calls.subcommands[GCODE_SET_NOZZLE_TEMPERATURE]  = setNozzleTemperature;
+    printer->setup_calls.subcommands[GCODE_WAIT_NOZZLE]             = setNozzleTemperatureBlocking;
+    printer->setup_calls.subcommands[GCODE_SET_TABLE_TEMPERATURE]   = setTableTemperature;
+    printer->setup_calls.subcommands[GCODE_WAIT_TABLE]              = setTableTemperatureBlocking;
+    printer->setup_calls.subcommands[GCODE_SET_COOLER_SPEED]        = setCoolerSpeed;
+    printer->setup_calls.subcommands[GCODE_SET_COORDINATES_MODE]    = setCoordinatesMode;
 
     for (uint8_t i = 0; i < MOTOR_COUNT; ++i)
     {
@@ -359,6 +379,8 @@ PRINTER_STATUS PrinterStart(HPRINTER hprinter, MaterialFile* material_override)
     {
         return PRINTER_ALREADY_STARTED;
     }
+
+    printer->coordinates_mode = GCODE_ABSOLUTE;
 
     printer->mode = MODE_IDLE;
     printer->tick_index = 0;
