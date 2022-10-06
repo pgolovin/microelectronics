@@ -9,9 +9,18 @@
 extern "C" {
 #endif
 
+// control information about cached file/ if any
 #define CONTROL_BLOCK_POSITION 10
 #define CONTROL_BLOCK_SEC_CODE 'prnt'
 
+// here is stored information about last coordinates and temperature
+// this sector can be used to restore printing from pause
+// and to keep all coordinates under control
+#define STATE_BLOCK_POSITION 4
+#define STATE_BLOCK_SEC_CODE 'stat'
+
+// here all materials stored. during printing you can use
+// either stored material or gcode defined
 #define MATERIAL_BLOCK_POSITION 5
 #define MATERIAL_SEC_CODE 'mtrl'
 
