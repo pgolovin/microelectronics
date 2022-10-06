@@ -14,14 +14,19 @@
 extern "C" {
 #endif
 
-
-typedef enum PRINTER_ACCELERATION_Type
+typedef enum
 {
     PRINTER_ACCELERATION_DISABLE = 0,
     PRINTER_ACCELERATION_ENABLE = 1
 } PRINTER_ACCELERATION;
 
-typedef enum MOTOR_TYPES_type
+typedef enum
+{
+    PRINTER_START = 0,
+    PRINTER_RESUME = 1
+} PRINTING_MODE;
+
+typedef enum
 {
     MOTOR_X = 0,
     MOTOR_Y,
@@ -65,7 +70,10 @@ typedef struct PrinterDriver_type
 HPRINTER       PrinterConfigure(PrinterConfig* printer_cfg);
 PRINTER_STATUS PrinterReadControlBlock(HPRINTER hprinter, PrinterControlBlock* control_block);
 
-PRINTER_STATUS PrinterStart(HPRINTER hprinter, MaterialFile* material_override);
+PRINTER_STATUS PrinterSaveState(HPRINTER hprinter);
+PRINTER_STATUS PrinterRestoreState(HPRINTER hprinter);
+
+PRINTER_STATUS PrinterStart(HPRINTER hprinter, MaterialFile* material_override, PRINTING_MODE mode);
 PRINTER_STATUS PrinterNextCommand(HPRINTER hprinter);
 PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter);
 PRINTER_STATUS PrinterGetStatus(HPRINTER hprinter);

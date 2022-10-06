@@ -4,12 +4,12 @@
 
 void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERATION enable_acceleration)
 {
+    m_storage = std::make_unique<SDcardMock>(1024);
+    m_sdcard = std::make_unique<SDcardMock>(1024);
+
     DeviceSettings ds;
     device = std::make_unique<Device>(ds);
     AttachDevice(*device);
-
-    m_storage = std::make_unique<SDcardMock>(1024);
-    m_sdcard = std::make_unique<SDcardMock>(1024);
 
     MotorConfig motor_x = {PULSE_LOWER, &port_x_step, 0, &port_x_dir, 0 };
     MotorConfig motor_y = {PULSE_LOWER, &port_y_step, 0, &port_y_dir, 0 };
@@ -23,6 +23,33 @@ void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERA
     MemoryManagerConfigure(&m_memory);
 
     RegisterSDCard();
+
+    external_config = axis_config;
+    PrinterConfig cfg = { &m_memory, m_storage.get(),
+        {&motor_x, &motor_y, &motor_z, &motor_e}, enable_acceleration,
+        &nozzle, &table,
+        &port_cooler, 0,
+        &external_config };
+
+    printer_driver = PrinterConfigure(&cfg);
+}
+
+void PrinterEmulator::ConfigurePrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERATION enable_acceleration)
+{
+    DeviceSettings ds;
+    device = std::make_unique<Device>(ds);
+    AttachDevice(*device);
+
+    MotorConfig motor_x = { PULSE_LOWER, &port_x_step, 0, &port_x_dir, 0 };
+    MotorConfig motor_y = { PULSE_LOWER, &port_y_step, 0, &port_y_dir, 0 };
+    MotorConfig motor_z = { PULSE_LOWER, &port_z_step, 0, &port_z_dir, 0 };
+    //extruder engine starts extrusion and the start of the segment, to avoid gaps in the printing
+    MotorConfig motor_e = { PULSE_HIGHER, &port_e_step, 0, &port_e_dir, 0 };
+
+    TermalRegulatorConfig nozzle = { &port_nozzle, 0, GPIO_PIN_SET, GPIO_PIN_RESET, 1.f, 0.f };
+    TermalRegulatorConfig table = { &port_table, 0, GPIO_PIN_RESET, GPIO_PIN_SET, 1.f, 0.f };
+
+    MemoryManagerConfigure(&m_memory);
 
     external_config = axis_config;
     PrinterConfig cfg = { &m_memory, m_storage.get(),
@@ -62,7 +89,13 @@ void PrinterEmulator::StartPrinting(const std::vector<std::string>& commands, Ma
 {
     CreateGCodeData(commands);
 
-    PrinterStart(printer_driver, material_override);
+    PrinterStart(printer_driver, material_override, PRINTER_START);
+}
+
+void PrinterEmulator::ShutDown()
+{
+    //write zero to the whole internal structure of printer
+    ZeroMemory(printer_driver, 277);
 }
 
 void PrinterEmulator::MoveToCommand(uint32_t index)

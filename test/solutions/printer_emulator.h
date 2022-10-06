@@ -44,7 +44,11 @@ public:
 
     void SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERATION enable_acceleration);
 
+    void ConfigurePrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERATION enable_acceleration);
+
     void StartPrinting(const std::vector<std::string>& commands, MaterialFile* material_override);
+
+    void ShutDown();
 
     void MoveToCommand(uint32_t index);
     size_t CompleteCommand(PRINTER_STATUS command_status);
