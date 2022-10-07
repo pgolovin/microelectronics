@@ -7,6 +7,13 @@
 
 typedef enum
 {
+    MAIN_COMMANDS_PAGE = 0,
+    LOOKUP_COMMANDS_PAGE,
+    STATE_PAGE,
+} MEMORY_PAGES;
+
+typedef enum
+{
     MODE_IDLE = 0,
     MODE_MOVE = 0x01,
     MODE_WAIT_NOZZLE = 0x02,
@@ -72,16 +79,6 @@ typedef struct
     uint16_t      cooler_pin;
 } PrinterDriver;
 
-static void inc(void* parameter)
-{
-    parameter = parameter;
-}
-
-static void dec(void* parameter)
-{
-    parameter = parameter;
-}
-
 static uint32_t compareTimeWithSpeedLimit(int32_t signed_segment, uint32_t time, uint16_t resolution, PrinterDriver* printer)
 {
     uint32_t segment = signed_segment;
@@ -126,7 +123,7 @@ static void calculateAccelRegion(PrinterDriver* printer, uint32_t initial_region
 
     uint32_t current_caret = printer->state.caret_position + 1;
     GCODE_COMMAND_LIST command_id = GCODE_MOVE;
-    uint8_t* data_block = printer->memory->pages[0];
+    uint8_t* data_block = printer->memory->pages[MAIN_COMMANDS_PAGE];
 
     GCodeCommandParams last_segment = printer->current_segment;
     GCodeCommandParams last_position = printer->state.position;
@@ -138,8 +135,8 @@ static void calculateAccelRegion(PrinterDriver* printer, uint32_t initial_region
     {
         if (current_caret == commands_per_block)
         {
-            SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[1], ++sector);
-            data_block = printer->memory->pages[1];
+            SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[LOOKUP_COMMANDS_PAGE], ++sector);
+            data_block = printer->memory->pages[LOOKUP_COMMANDS_PAGE];
             current_caret = 0;
         }
 
@@ -276,26 +273,17 @@ static GCODE_COMMAND_STATE setExtruderMode(GCodeSubCommandParams* params, void* 
     return GCODE_OK;
 }
 
-static void setTemperature(PrinterDriver* printer, TERMO_REGULTAOR regulator, uint16_t value)
-{
-    if (printer->material_override && value)
-    {
-        value = printer->material_override->temperature[regulator];
-    }
-    printer->state.temperature[regulator] = value;
-    TR_SetTargetTemperature(printer->regulators[regulator], value);
-}
-
 static GCODE_COMMAND_STATE setNozzleTemperature(GCodeSubCommandParams* params, void* hprinter)
 {
-    setTemperature((PrinterDriver*)hprinter, TERMO_NOZZLE, params->s);
+    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    PrinterSetTemperature(hprinter, TERMO_NOZZLE, params->s, printer->material_override);
     return GCODE_OK;
 }
 
 static GCODE_COMMAND_STATE setNozzleTemperatureBlocking(GCodeSubCommandParams* params, void* hprinter)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
-    setTemperature(printer, TERMO_NOZZLE, params->s);
+    PrinterSetTemperature(hprinter, TERMO_NOZZLE, params->s, printer->material_override);
 
     printer->mode = MODE_WAIT_NOZZLE;
 
@@ -304,7 +292,8 @@ static GCODE_COMMAND_STATE setNozzleTemperatureBlocking(GCodeSubCommandParams* p
 
 static GCODE_COMMAND_STATE setTableTemperature(GCodeSubCommandParams* params, void* hprinter)
 {
-    setTemperature((PrinterDriver*)hprinter, TERMO_TABLE, params->s);
+    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    PrinterSetTemperature(hprinter, TERMO_TABLE, params->s, printer->material_override);
 
     return GCODE_OK;
 }
@@ -312,7 +301,7 @@ static GCODE_COMMAND_STATE setTableTemperature(GCodeSubCommandParams* params, vo
 static GCODE_COMMAND_STATE setTableTemperatureBlocking(GCodeSubCommandParams* params, void* hprinter)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
-    setTemperature((PrinterDriver*)hprinter, TERMO_TABLE, params->s);
+    PrinterSetTemperature(hprinter, TERMO_TABLE, params->s, printer->material_override);
     printer->mode = MODE_WAIT_TABLE;
 
     return GCODE_INCOMPLETE;
@@ -402,8 +391,8 @@ PRINTER_STATUS PrinterReadControlBlock(HPRINTER hprinter, PrinterControlBlock* c
 
     PrinterDriver* printer = (PrinterDriver*)hprinter;
 
-    SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[0], CONTROL_BLOCK_POSITION);
-    *control_block = *(PrinterControlBlock*)printer->memory->pages[0];
+    SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[STATE_PAGE], CONTROL_BLOCK_POSITION);
+    *control_block = *(PrinterControlBlock*)printer->memory->pages[STATE_PAGE];
     if (control_block->secure_id != CONTROL_BLOCK_SEC_CODE)
     {
         return PRINTER_INVALID_CONTROL_BLOCK;
@@ -414,18 +403,18 @@ PRINTER_STATUS PrinterReadControlBlock(HPRINTER hprinter, PrinterControlBlock* c
 PRINTER_STATUS PrinterSaveState(HPRINTER hprinter)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
-    *(PrinterState*)printer->memory->pages[0] = printer->state;
-    SDCARD_WriteSingleBlock(printer->storage, printer->memory->pages[0], STATE_BLOCK_POSITION);
+    *(PrinterState*)printer->memory->pages[STATE_PAGE] = printer->state;
+    SDCARD_WriteSingleBlock(printer->storage, printer->memory->pages[STATE_PAGE], STATE_BLOCK_POSITION);
     return PRINTER_OK;
 }
 
 PRINTER_STATUS PrinterRestoreState(HPRINTER hprinter)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
-    SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[0], STATE_BLOCK_POSITION);
-    if (STATE_BLOCK_SEC_CODE == ((PrinterState*)printer->memory->pages[0])->sec_code)
+    SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[MAIN_COMMANDS_PAGE], STATE_BLOCK_POSITION);
+    if (STATE_BLOCK_SEC_CODE == ((PrinterState*)printer->memory->pages[MAIN_COMMANDS_PAGE])->sec_code)
     {
-        printer->state = *(PrinterState*)printer->memory->pages[0];
+        printer->state = *(PrinterState*)printer->memory->pages[MAIN_COMMANDS_PAGE];
     }
     else
     {
@@ -436,23 +425,51 @@ PRINTER_STATUS PrinterRestoreState(HPRINTER hprinter)
     return PRINTER_OK;
 }
 
-PRINTER_STATUS PrinterStart(HPRINTER hprinter, MaterialFile* material_override, PRINTING_MODE mode)
+void PrinterSetTemperature(HPRINTER hprinter, TERMO_REGULATOR regulator, uint16_t value, MaterialFile* material_override)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
+
+    if (material_override && value > 0)
+    {
+        value = material_override->temperature[regulator];
+    }
+    printer->state.temperature[regulator] = value;
+    TR_SetTargetTemperature(printer->regulators[regulator], value);
+}
+
+PRINTER_STATUS PrinterInitialize(HPRINTER hprinter)
+{
+    PrinterDriver* printer = (PrinterDriver*)hprinter;
+
+#ifndef FIRMWARE
+
     if (printer->commands_count - printer->state.current_command > 0)
     {
         return PRINTER_ALREADY_STARTED;
     }
 
+#endif
+
     printer->mode = MODE_IDLE;
     printer->tick_index = 0;
     printer->termo_regulators_state = 0;
-
     printer->last_command_status = GCODE_OK;
 
-    printer->material_override = material_override;
+    return PrinterRestoreState(hprinter);
+}
 
-    PrinterRestoreState(hprinter);
+PRINTER_STATUS PrinterPrintFromCache(HPRINTER hprinter, MaterialFile * material_override, PRINTING_MODE mode)
+{
+    PrinterDriver* printer = (PrinterDriver*)hprinter;
+
+#ifndef FIRMWARE
+
+    if (printer->commands_count > 0 && printer->commands_count - printer->state.current_command > 0)
+    {
+        return PRINTER_ALREADY_STARTED;
+    }
+
+#endif 
 
     PrinterControlBlock control_block;
     PRINTER_STATUS status = PrinterReadControlBlock(hprinter, &control_block);
@@ -461,12 +478,12 @@ PRINTER_STATUS PrinterStart(HPRINTER hprinter, MaterialFile* material_override, 
         return status;
     }
 
+    printer->material_override      = material_override;
     printer->state.position.e      *= mode;
     printer->state.current_command *= mode;
     printer->state.caret_position  *= mode;
-    printer->state.current_sector  = control_block.file_sector + mode * (printer->state.current_sector - control_block.file_sector);
-    printer->commands_count        = control_block.commands_count - printer->state.current_command;
-
+    printer->state.current_sector   = control_block.file_sector + mode * (printer->state.current_sector - control_block.file_sector);
+    printer->commands_count         = control_block.commands_count - printer->state.current_command;
 
     if (mode)
     {
@@ -484,7 +501,7 @@ PRINTER_STATUS PrinterStart(HPRINTER hprinter, MaterialFile* material_override, 
         }
     }
 
-    SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[0], printer->state.current_sector);
+    SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[MAIN_COMMANDS_PAGE], printer->state.current_sector);
 
     PULSE_SetPower(printer->accelerator, STANDARD_ACCELERATION_SEGMENT);
 
@@ -527,10 +544,10 @@ PRINTER_STATUS PrinterNextCommand(HPRINTER hprinter)
     if (printer->commands_count - printer->state.current_command)
     {
         ++printer->state.current_command;
-        printer->last_command_status = GC_ExecuteFromBuffer(&printer->setup_calls, printer, printer->memory->pages[0] + (size_t)(GCODE_CHUNK_SIZE * printer->state.caret_position));
+        printer->last_command_status = GC_ExecuteFromBuffer(&printer->setup_calls, printer, printer->memory->pages[MAIN_COMMANDS_PAGE] + (size_t)(GCODE_CHUNK_SIZE * printer->state.caret_position));
         if (++printer->state.caret_position == SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE)
         {
-            SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[0], ++printer->state.current_sector);
+            SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[MAIN_COMMANDS_PAGE], ++printer->state.current_sector);
             printer->state.caret_position = 0;
         }
     }
@@ -538,19 +555,19 @@ PRINTER_STATUS PrinterNextCommand(HPRINTER hprinter)
     return printer->last_command_status;
 }
 
-void PrinterUpdateVoltageT(HPRINTER hprinter, TERMO_REGULTAOR regulator, uint16_t voltage)
+void PrinterUpdateVoltageT(HPRINTER hprinter, TERMO_REGULATOR regulator, uint16_t voltage)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
     TR_SetADCValue(printer->regulators[regulator], voltage);
 }
 
-uint16_t PrinterGetTargetT(HPRINTER hprinter, TERMO_REGULTAOR regulator)
+uint16_t PrinterGetTargetT(HPRINTER hprinter, TERMO_REGULATOR regulator)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
     return TR_GetTargetTemperature(printer->regulators[regulator]);
 }
 
-uint16_t PrinterGetCurrentT(HPRINTER hprinter, TERMO_REGULTAOR regulator)
+uint16_t PrinterGetCurrentT(HPRINTER hprinter, TERMO_REGULATOR regulator)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
     return TR_GetCurrentTemperature(printer->regulators[regulator]);

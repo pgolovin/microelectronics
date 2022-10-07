@@ -73,10 +73,13 @@ PRINTER_STATUS PrinterReadControlBlock(HPRINTER hprinter, PrinterControlBlock* c
 PRINTER_STATUS PrinterSaveState(HPRINTER hprinter);
 PRINTER_STATUS PrinterRestoreState(HPRINTER hprinter);
 
-PRINTER_STATUS PrinterStart(HPRINTER hprinter, MaterialFile* material_override, PRINTING_MODE mode);
+PRINTER_STATUS PrinterInitialize(HPRINTER hprinter);
+PRINTER_STATUS PrinterPrintFromCache(HPRINTER hprinter, MaterialFile* material_override, PRINTING_MODE mode);
 PRINTER_STATUS PrinterNextCommand(HPRINTER hprinter);
 PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter);
 PRINTER_STATUS PrinterGetStatus(HPRINTER hprinter);
+
+void           PrinterSetTemperature(HPRINTER printer, TERMO_REGULATOR regulator, uint16_t value, MaterialFile* material_override);
 
 uint32_t       PrinterGetRemainingCommandsCount(HPRINTER hprinter);
 uint32_t       PrinterGetAccelerationRegion(HPRINTER hprinter);
@@ -84,9 +87,9 @@ uint32_t       PrinterGetAccelerationRegion(HPRINTER hprinter);
 // equals to relative command parameters
 GCodeCommandParams* PrinterGetCurrentPath(HPRINTER hprinter);
 
-void PrinterUpdateVoltageT(HPRINTER hprinter, TERMO_REGULTAOR regulator, uint16_t voltage);
-uint16_t PrinterGetTargetT(HPRINTER hprinter, TERMO_REGULTAOR regulator);
-uint16_t PrinterGetCurrentT(HPRINTER hprinter, TERMO_REGULTAOR regulator);
+void PrinterUpdateVoltageT(HPRINTER hprinter, TERMO_REGULATOR regulator, uint16_t voltage);
+uint16_t PrinterGetTargetT(HPRINTER hprinter, TERMO_REGULATOR regulator);
+uint16_t PrinterGetCurrentT(HPRINTER hprinter, TERMO_REGULATOR regulator);
 
 uint8_t PrinterGetCoolerSpeed(HPRINTER hprinter);
 #ifdef __cplusplus

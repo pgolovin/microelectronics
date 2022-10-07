@@ -16,7 +16,7 @@ typedef struct GCodeType
     GCodeCommand            command;
 } GCode;
 
-static char* trimSpaces(char* command_line)
+static const char* trimSpaces(const char* command_line)
 {
     while (*command_line == ' ')
     {
@@ -26,7 +26,7 @@ static char* trimSpaces(char* command_line)
 }
 
 //simple atof introduce 5kb of new code, that i cannot afford. lets replace it by home brewed function
-static char* parseValue(char* command_line, parameterType multiplier, parameterType* value)
+static const char* parseValue(const char* command_line, parameterType multiplier, parameterType* value)
 {
     parameterType sign = 1;
     float result = 0;
@@ -66,7 +66,7 @@ static char* parseValue(char* command_line, parameterType multiplier, parameterT
     return trimSpaces(command_line);
 }
 
-static char* parseCommand(GCodeCommand* command, GCODE_COMMAND_TYPE command_type, char* command_line)
+static const char* parseCommand(GCodeCommand* command, GCODE_COMMAND_TYPE command_type, const char* command_line)
 {
     parameterType command_index = 0;
     command_line = parseValue(command_line, 1, &command_index);
@@ -75,7 +75,7 @@ static char* parseCommand(GCodeCommand* command, GCODE_COMMAND_TYPE command_type
     return command_line;
 }
 
-static GCODE_ERROR parseCommandParams(GCodeCommandParams* params, GCodeAxisConfig* cfg, char* command_line)
+static GCODE_ERROR parseCommandParams(GCodeCommandParams* params, GCodeAxisConfig* cfg, const char* command_line)
 {
     uint16_t multiplier = 1;
     parameterType* param = 0;
@@ -115,7 +115,7 @@ static GCODE_ERROR parseCommandParams(GCodeCommandParams* params, GCodeAxisConfi
     return GCODE_OK_COMMAND_CREATED;
 }
 
-static GCODE_ERROR parseSubCommandParams(GCodeSubCommandParams* params, char* command_line)
+static GCODE_ERROR parseSubCommandParams(GCodeSubCommandParams* params, const char* command_line)
 {
     parameterType* param = 0;
     
@@ -162,7 +162,7 @@ HGCODE GC_Configure(const GCodeAxisConfig* config)
     return (HGCODE)gcode;
 }
 
-GCODE_ERROR GC_ParseCommand(HGCODE hcode, char* command_line)
+GCODE_ERROR GC_ParseCommand(HGCODE hcode, const char* command_line)
 {
     GCode* gcode = (GCode*)hcode;
     

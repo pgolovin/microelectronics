@@ -44,12 +44,12 @@ typedef struct PrinterControlBlock_Type
     uint32_t commands_count;
 } PrinterControlBlock;
 
-typedef enum TERMO_REGULTAOR_Type
+typedef enum TERMO_REGULATOR_Type
 {
     TERMO_NOZZLE = 0,
     TERMO_TABLE = 1,
     TERMO_REGULATORS_COUNT
-} TERMO_REGULTAOR;
+} TERMO_REGULATOR;
 
 typedef struct 
 {

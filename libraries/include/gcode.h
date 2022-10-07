@@ -110,7 +110,7 @@ typedef GCode_Type* HGCODE;
 HGCODE                  GC_Configure(const GCodeAxisConfig* config);
 
 //parser
-GCODE_ERROR             GC_ParseCommand(HGCODE hcode, char* command_line);
+GCODE_ERROR             GC_ParseCommand(HGCODE hcode, const char* command_line);
 
 //compressor and validator
 uint32_t                GC_CompressCommand(HGCODE hcode, uint8_t* buffer);
