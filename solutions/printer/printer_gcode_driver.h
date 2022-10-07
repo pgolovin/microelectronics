@@ -74,6 +74,7 @@ PRINTER_STATUS PrinterSaveState(HPRINTER hprinter);
 PRINTER_STATUS PrinterRestoreState(HPRINTER hprinter);
 
 PRINTER_STATUS PrinterInitialize(HPRINTER hprinter);
+PRINTER_STATUS PrinterPrintFromBuffer(HPRINTER hprinter, const uint8_t* command_stream, uint32_t commands_count);
 PRINTER_STATUS PrinterPrintFromCache(HPRINTER hprinter, MaterialFile* material_override, PRINTING_MODE mode);
 PRINTER_STATUS PrinterNextCommand(HPRINTER hprinter);
 PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter);

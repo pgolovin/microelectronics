@@ -255,6 +255,9 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
         case 28:
             index = GCODE_HOME;
             break;
+        case 60:
+            index = GCODE_SAVE_POSITION;
+            break;
         case 90:
             index = GCODE_SET_COORDINATES_MODE;
             gcode->command.g.x = GCODE_ABSOLUTE;
@@ -267,7 +270,7 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
             index = GCODE_SET;
             break;
         default:
-            //G90 and G21 are ignored
+            //the rest of commands is ignored
             return 0;
         }
         *(GCodeCommandParams*)(buffer + sizeof(parameterType)) = gcode->command.g;

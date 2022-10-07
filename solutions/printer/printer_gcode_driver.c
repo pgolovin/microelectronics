@@ -24,6 +24,7 @@ typedef struct
 {
     uint32_t            sec_code;
     GCodeCommandParams  position;
+    GCodeCommandParams  actual_position; // G60 head position may differs from saved position.
 
     // for printing resuming;
     uint8_t             coordinates_mode;
@@ -48,6 +49,7 @@ typedef struct
     // General gcode settings, interpreter and code execution
     GCodeFunctionList  setup_calls;
     GCodeCommandParams current_segment;
+    bool               resume; // marker that before printing we should return to position of pause
     uint32_t           commands_count;
 
     PrinterState state;
@@ -208,6 +210,7 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hprinter)
         printer->current_segment.e = params->e;
     }
 
+    printer->state.position.fetch_speed = printer->current_segment.fetch_speed;
     printer->state.position.x += printer->current_segment.x;
     printer->state.position.y += printer->current_segment.y;
     printer->state.position.z += printer->current_segment.z;
@@ -266,6 +269,22 @@ static GCODE_COMMAND_STATE setCoordinatesMode(GCodeCommandParams* params, void* 
     return GCODE_OK;
 }
 
+static GCODE_COMMAND_STATE saveCoordinates(GCodeCommandParams* params, void* hprinter)
+{
+    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    params = params;
+    PrinterState state = printer->state;
+    PrinterRestoreState(hprinter);
+    printer->state.position.x = state.position.x;
+    printer->state.position.y = state.position.y;
+    printer->state.position.z = state.position.z;
+    *(PrinterState*)printer->memory->pages[STATE_PAGE] = printer->state;
+    SDCARD_WriteSingleBlock(printer->storage, printer->memory->pages[STATE_PAGE], STATE_BLOCK_POSITION);
+    printer->state = state;
+    return GCODE_OK;
+}
+
+// Subcommands list. M-commands
 static GCODE_COMMAND_STATE setExtruderMode(GCodeSubCommandParams* params, void* hprinter)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
@@ -341,6 +360,7 @@ HPRINTER PrinterConfigure(PrinterConfig* printer_cfg)
     printer->setup_calls.commands[GCODE_MOVE]                       = setupMove;
     printer->setup_calls.commands[GCODE_HOME]                       = setupMove; // the same command here
     printer->setup_calls.commands[GCODE_SET]                        = setupSet;
+    printer->setup_calls.commands[GCODE_SAVE_POSITION]              = saveCoordinates;
     printer->setup_calls.commands[GCODE_SET_COORDINATES_MODE]       = setCoordinatesMode;
 
     printer->setup_calls.subcommands[GCODE_SET_NOZZLE_TEMPERATURE]  = setNozzleTemperature;
@@ -403,6 +423,7 @@ PRINTER_STATUS PrinterReadControlBlock(HPRINTER hprinter, PrinterControlBlock* c
 PRINTER_STATUS PrinterSaveState(HPRINTER hprinter)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
+    printer->state.actual_position = printer->state.position;
     *(PrinterState*)printer->memory->pages[STATE_PAGE] = printer->state;
     SDCARD_WriteSingleBlock(printer->storage, printer->memory->pages[STATE_PAGE], STATE_BLOCK_POSITION);
     return PRINTER_OK;
@@ -411,10 +432,10 @@ PRINTER_STATUS PrinterSaveState(HPRINTER hprinter)
 PRINTER_STATUS PrinterRestoreState(HPRINTER hprinter)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
-    SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[MAIN_COMMANDS_PAGE], STATE_BLOCK_POSITION);
-    if (STATE_BLOCK_SEC_CODE == ((PrinterState*)printer->memory->pages[MAIN_COMMANDS_PAGE])->sec_code)
+    SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[STATE_PAGE], STATE_BLOCK_POSITION);
+    if (STATE_BLOCK_SEC_CODE == ((PrinterState*)printer->memory->pages[STATE_PAGE])->sec_code)
     {
-        printer->state = *(PrinterState*)printer->memory->pages[MAIN_COMMANDS_PAGE];
+        printer->state = *(PrinterState*)printer->memory->pages[STATE_PAGE];
     }
     else
     {
@@ -458,6 +479,23 @@ PRINTER_STATUS PrinterInitialize(HPRINTER hprinter)
     return PrinterRestoreState(hprinter);
 }
 
+PRINTER_STATUS PrinterPrintFromBuffer(HPRINTER hprinter, const uint8_t* command_stream, uint32_t commands_count)
+{
+    PrinterDriver* printer = (PrinterDriver*)hprinter;
+#ifndef FIRMWARE
+
+    if (printer->commands_count > 0 && printer->commands_count - printer->state.current_command > 0)
+    {
+        return PRINTER_ALREADY_STARTED;
+    }
+
+#endif 
+
+    command_stream = command_stream;
+    commands_count = commands_count;
+    return PRINTER_OK;
+}
+
 PRINTER_STATUS PrinterPrintFromCache(HPRINTER hprinter, MaterialFile * material_override, PRINTING_MODE mode)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
@@ -478,6 +516,7 @@ PRINTER_STATUS PrinterPrintFromCache(HPRINTER hprinter, MaterialFile * material_
         return status;
     }
 
+    printer->resume                 = (mode == PRINTER_RESUME);
     printer->material_override      = material_override;
     printer->state.position.e      *= mode;
     printer->state.current_command *= mode;
@@ -541,10 +580,28 @@ PRINTER_STATUS PrinterNextCommand(HPRINTER hprinter)
     }
 
     printer->last_command_status = PRINTER_FINISHED;
+
+    if (printer->resume)
+    {
+        // before printing the model return everything to the position where pause was pressed
+        // we should do this in absolute coordinates
+        uint8_t p_mode = printer->state.coordinates_mode;
+        uint8_t e_mode = printer->state.extrusion_mode;
+        printer->state.coordinates_mode = GCODE_ABSOLUTE;
+        printer->state.extrusion_mode = GCODE_ABSOLUTE;
+        printer->last_command_status = setupMove(&printer->state.actual_position, printer);
+        printer->state.coordinates_mode = p_mode;
+        printer->state.extrusion_mode = e_mode;
+        printer->resume = false;
+
+        return printer->last_command_status;
+    } 
+    
     if (printer->commands_count - printer->state.current_command)
     {
         ++printer->state.current_command;
-        printer->last_command_status = GC_ExecuteFromBuffer(&printer->setup_calls, printer, printer->memory->pages[MAIN_COMMANDS_PAGE] + (size_t)(GCODE_CHUNK_SIZE * printer->state.caret_position));
+        printer->last_command_status = GC_ExecuteFromBuffer(&printer->setup_calls, printer, printer->memory->pages[MAIN_COMMANDS_PAGE] 
+                                                            + (size_t)(GCODE_CHUNK_SIZE * printer->state.caret_position));
         if (++printer->state.caret_position == SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE)
         {
             SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[MAIN_COMMANDS_PAGE], ++printer->state.current_sector);
@@ -611,7 +668,7 @@ PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter)
     {
         // Reaching apogee point in a middle of acceleration lead to revert of steps count an acceleration, 
         // This gave symetric picture of acceleration/braking pair. but dufference can be in 1 segment, due to 
-        // Directions of the signals in pulse_engine.
+        // Non symmetrical directions of signals in the pulse_engine.
         if (printer->acceleration_distance - printer->acceleration_subsequent_region_length < 2 && printer->acceleration_distance_increment)
         {
             printer->acceleration_region_increment = -1;

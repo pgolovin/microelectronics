@@ -938,6 +938,54 @@ TEST_F(GCodeDriverCommandsTest, printer_relative_to_absolute_positioning)
     ASSERT_EQ(-30, path.x);
 }
 
+TEST_F(GCodeDriverCommandsTest, printer_save_coordinates)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G0 F1800 X210 Y0 Z330 E10",
+        "G60",
+        "G1 F1800 X110 Y10 Z360 E15",
+    };
+    StartPrinting(commands, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
+}
+
+TEST_F(GCodeDriverCommandsTest, printer_save_coordinates_value)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G0 F1800 X210 Y0 Z330 E10",
+        "G1 F1800 X110 Y10 Z360 E15",
+        "G1 F1800 X160 Y15 Z390 E35",
+        "G60",
+    };
+    StartPrinting(commands, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0
+    PrinterSaveState(printer_driver);
+    // emulate service command
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G1
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G1
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G60: from this point coordinates in saved state had been changed
+    ShutDown();
+
+    ConfigurePrinter(axis_configuration, PRINTER_ACCELERATION_DISABLE);
+    //should set position to the 3rd comand and continue printing from the save point
+    PrinterInitialize(printer_driver);
+    PrinterPrintFromCache(printer_driver, nullptr, PRINTER_RESUME);
+
+    PrinterNextCommand(printer_driver);
+    GCodeCommandParams params = *PrinterGetCurrentPath(printer_driver);
+    // ok, so here we are:       "G1 F1800 X160 Y15 Z390 E35", 
+    // and here we should return "G0 F1800 X210 Y0 Z330 E10"
+    ASSERT_EQ(0, params.e); // e is not affected by G60 command, only XYZ, so 'e' should not be used 
+    ASSERT_EQ(50, params.x);
+    ASSERT_EQ(-15, params.y);
+    ASSERT_EQ(-60, params.z);
+}
+
 class GCodeDriverSubcommandsTest : public ::testing::Test, public PrinterEmulator
 {
 public:
@@ -1592,6 +1640,7 @@ TEST_F(GCodeDriverStateTest, restore_state)
     //should set position to the 3rd comand and continue printing from the save point
     PrinterInitialize(printer_driver);
     PrinterPrintFromCache(printer_driver, nullptr, PRINTER_RESUME);
+    CompleteCommand(PrinterNextCommand(printer_driver)); // resume add restoration command
 
     ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
     GCodeCommandParams* params = PrinterGetCurrentPath(printer_driver);
@@ -1732,6 +1781,7 @@ TEST_F(GCodeDriverStateTest, extrusion_mode)
     //should set position to the 3rd comand and continue printing from the save point
     PrinterInitialize(printer_driver);
     PrinterPrintFromCache(printer_driver, nullptr, PRINTER_RESUME);
+    CompleteCommand(PrinterNextCommand(printer_driver)); // resume add restoration command
     ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
     GCodeCommandParams* params = PrinterGetCurrentPath(printer_driver);
     ASSERT_EQ(0, params->x);
@@ -1759,6 +1809,7 @@ TEST_F(GCodeDriverStateTest, coordinates_mode)
     //should set position to the 3rd comand and continue printing from the save point
     PrinterInitialize(printer_driver);
     PrinterPrintFromCache(printer_driver, nullptr, PRINTER_RESUME);
+    CompleteCommand(PrinterNextCommand(printer_driver)); // resume add restoration command
     ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
     GCodeCommandParams* params = PrinterGetCurrentPath(printer_driver);
     ASSERT_EQ(30, params->x);

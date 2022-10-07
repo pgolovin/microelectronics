@@ -39,6 +39,8 @@ TEST_F(GCodeConfigCommandsTest, can_execute)
 {
     std::vector<std::string> commands = {
         "G0 X0 Y0",
+        "G60",
     };
     compileCommand(commands);
+    ASSERT_EQ(PRINTER_OK, PrinterPrintFromBuffer(printer_driver, m_compiled_commands.data(), commands.size()));
 }
