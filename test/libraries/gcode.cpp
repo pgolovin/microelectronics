@@ -535,18 +535,21 @@ TEST_P(GCodeCommandCompilerTest, command_code)
 INSTANTIATE_TEST_SUITE_P(
     CommandCodeTest, GCodeCommandCompilerTest,
     ::testing::Values(
-        CompilerCommand{ "idling_move", "G0 F6200 X2.45 Y1.00 Z0.1 E1.764", GCODE_COMMAND, GCODE_MOVE },
-        CompilerCommand{ "working_move", "G1 F6200 X2.45 Y1.00 Z0.1 E1.764", GCODE_COMMAND, GCODE_MOVE },
-        CompilerCommand{ "homing_move", "G28 X2.45 Y1.00", GCODE_COMMAND, GCODE_HOME },
-        CompilerCommand{ "set_value", "G92 X0 Y0", GCODE_COMMAND, GCODE_SET },
-        CompilerCommand{ "heat_nozzle", "M104 S256", GCODE_SUBCOMMAND, GCODE_SET_NOZZLE_TEMPERATURE },
-        CompilerCommand{ "heat_table", "M140 S256", GCODE_SUBCOMMAND, GCODE_SET_TABLE_TEMPERATURE },
-        CompilerCommand{ "enable_cooler", "M106 S256", GCODE_SUBCOMMAND, GCODE_SET_COOLER_SPEED },
-        CompilerCommand{ "disable_cooler", "M107", GCODE_SUBCOMMAND, GCODE_SET_COOLER_SPEED },
-        CompilerCommand{ "wait_nozzle_to_heat", "M109 S256", GCODE_SUBCOMMAND, GCODE_WAIT_NOZZLE },
-        CompilerCommand{ "wait_table_to_heat", "M190 S256", GCODE_SUBCOMMAND, GCODE_WAIT_TABLE },
-        CompilerCommand{ "absolute_extrusion_mode", "M82", GCODE_SUBCOMMAND, GCODE_SET_EXTRUSION_MODE },
-        CompilerCommand{ "relative_extrusion_mode", "M83", GCODE_SUBCOMMAND, GCODE_SET_EXTRUSION_MODE }
+        CompilerCommand{ "idling_move",                 "G0 F6200 X2.45 Y1.00 Z0.1 E1.764", GCODE_COMMAND,      GCODE_MOVE },
+        CompilerCommand{ "working_move",                "G1 F6200 X2.45 Y1.00 Z0.1 E1.764", GCODE_COMMAND,      GCODE_MOVE },
+        CompilerCommand{ "homing_move",                 "G28 X2.45 Y1.00",                  GCODE_COMMAND,      GCODE_HOME },
+        CompilerCommand{ "set_value",                   "G92 X0 Y0",                        GCODE_COMMAND,      GCODE_SET },
+        CompilerCommand{ "set_absolute_coordinates",    "G90",                              GCODE_COMMAND,      GCODE_SET_COORDINATES_MODE },
+        CompilerCommand{ "set_relative_coordinates",    "G91",                              GCODE_COMMAND,      GCODE_SET_COORDINATES_MODE },
+        CompilerCommand{ "restart",                     "M24",                              GCODE_SUBCOMMAND,   GCODE_START_RESUME },
+        CompilerCommand{ "heat_nozzle",                 "M104 S256",                        GCODE_SUBCOMMAND,   GCODE_SET_NOZZLE_TEMPERATURE },
+        CompilerCommand{ "heat_table",                  "M140 S256",                        GCODE_SUBCOMMAND,   GCODE_SET_TABLE_TEMPERATURE },
+        CompilerCommand{ "enable_cooler",               "M106 S256",                        GCODE_SUBCOMMAND,   GCODE_SET_COOLER_SPEED },
+        CompilerCommand{ "disable_cooler",              "M107",                             GCODE_SUBCOMMAND,   GCODE_SET_COOLER_SPEED },
+        CompilerCommand{ "wait_nozzle_to_heat",         "M109 S256",                        GCODE_SUBCOMMAND,   GCODE_WAIT_NOZZLE },
+        CompilerCommand{ "wait_table_to_heat",          "M190 S256",                        GCODE_SUBCOMMAND,   GCODE_WAIT_TABLE },
+        CompilerCommand{ "absolute_extrusion_mode",     "M82",                              GCODE_SUBCOMMAND,   GCODE_SET_EXTRUSION_MODE },
+        CompilerCommand{ "relative_extrusion_mode",     "M83",                              GCODE_SUBCOMMAND,   GCODE_SET_EXTRUSION_MODE }
 
     ),
     [](const ::testing::TestParamInfo<GCodeCommandCompilerTest::ParamType>& info)

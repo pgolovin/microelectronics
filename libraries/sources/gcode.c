@@ -281,6 +281,9 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
         uint32_t index = GCODE_SET_NOZZLE_TEMPERATURE;
         switch (gcode->command.code & 0x00FF)
         {
+        case 24:
+            index = GCODE_START_RESUME;
+            break;
         case 82:
             index = GCODE_SET_EXTRUSION_MODE;
             gcode->command.m.s = GCODE_ABSOLUTE;
@@ -334,7 +337,7 @@ GCodeCommandParams* GC_DecompileFromBuffer(uint8_t* buffer, GCODE_COMMAND_LIST* 
     return 0;
 }
 
-GCODE_COMMAND_STATE GC_ExecuteFromBuffer(GCodeFunctionList* functions, void* additional_parameter, uint8_t* buffer)
+GCODE_COMMAND_STATE GC_ExecuteFromBuffer(GCodeFunctionList* functions, void* additional_parameter, const uint8_t* buffer)
 {
     if (!functions)
     {

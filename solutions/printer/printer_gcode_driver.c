@@ -50,10 +50,10 @@ typedef struct
     GCodeFunctionList  setup_calls;
     GCodeCommandParams current_segment;
     bool               resume; // marker that before printing we should return to position of pause
+    const uint8_t*     data_pointer;
     uint32_t           commands_count;
 
     PrinterState state;
-
     PRINTER_STATUS last_command_status;
 
     // Motors configuration and acceleration settings
@@ -285,6 +285,13 @@ static GCODE_COMMAND_STATE saveCoordinates(GCodeCommandParams* params, void* hpr
 }
 
 // Subcommands list. M-commands
+static GCODE_COMMAND_STATE resumePrint(GCodeSubCommandParams* params, void* hprinter)
+{
+    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    printer = printer;
+    return GCODE_OK;
+}
+
 static GCODE_COMMAND_STATE setExtruderMode(GCodeSubCommandParams* params, void* hprinter)
 {
     PrinterDriver* printer = (PrinterDriver*)hprinter;
@@ -369,6 +376,7 @@ HPRINTER PrinterConfigure(PrinterConfig* printer_cfg)
     printer->setup_calls.subcommands[GCODE_WAIT_TABLE]              = setTableTemperatureBlocking;
     printer->setup_calls.subcommands[GCODE_SET_COOLER_SPEED]        = setCoolerSpeed;
     printer->setup_calls.subcommands[GCODE_SET_EXTRUSION_MODE]      = setExtruderMode;
+    printer->setup_calls.subcommands[GCODE_START_RESUME]            = resumePrint;
 
     for (uint8_t i = 0; i < MOTOR_COUNT; ++i)
     {
@@ -484,15 +492,22 @@ PRINTER_STATUS PrinterPrintFromBuffer(HPRINTER hprinter, const uint8_t* command_
     PrinterDriver* printer = (PrinterDriver*)hprinter;
 #ifndef FIRMWARE
 
-    if (printer->commands_count > 0 && printer->commands_count - printer->state.current_command > 0)
+    if (!command_stream || !commands_count)
     {
-        return PRINTER_ALREADY_STARTED;
+        return PRINTER_INVALID_PARAMETER;
     }
 
 #endif 
+    printer->resume = false;
+    printer->material_override = 0;
+    printer->state.position.e = 0;
+    printer->state.current_command = 0;
+    printer->state.caret_position = 0;
+    printer->commands_count = commands_count;
+    printer->data_pointer = command_stream;
 
-    command_stream = command_stream;
-    commands_count = commands_count;
+    PULSE_SetPower(printer->accelerator, STANDARD_ACCELERATION_SEGMENT);
+
     return PRINTER_OK;
 }
 
@@ -541,6 +556,7 @@ PRINTER_STATUS PrinterPrintFromCache(HPRINTER hprinter, MaterialFile * material_
     }
 
     SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[MAIN_COMMANDS_PAGE], printer->state.current_sector);
+    printer->data_pointer = printer->memory->pages[MAIN_COMMANDS_PAGE];
 
     PULSE_SetPower(printer->accelerator, STANDARD_ACCELERATION_SEGMENT);
 
@@ -600,8 +616,7 @@ PRINTER_STATUS PrinterNextCommand(HPRINTER hprinter)
     if (printer->commands_count - printer->state.current_command)
     {
         ++printer->state.current_command;
-        printer->last_command_status = GC_ExecuteFromBuffer(&printer->setup_calls, printer, printer->memory->pages[MAIN_COMMANDS_PAGE] 
-                                                            + (size_t)(GCODE_CHUNK_SIZE * printer->state.caret_position));
+        printer->last_command_status = GC_ExecuteFromBuffer(&printer->setup_calls, printer, printer->data_pointer + (size_t)(GCODE_CHUNK_SIZE * printer->state.caret_position));
         if (++printer->state.caret_position == SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE)
         {
             SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[MAIN_COMMANDS_PAGE], ++printer->state.current_sector);

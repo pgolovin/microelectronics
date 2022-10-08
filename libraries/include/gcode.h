@@ -38,7 +38,7 @@ typedef enum
     GCODE_WAIT_TABLE,
     GCODE_SET_COOLER_SPEED,
     GCODE_SET_EXTRUSION_MODE,
-//    GCODE_DISABLE_COOLER, // Deprected
+    GCODE_START_RESUME,
     GCODE_SUBCOMMAND_COUNT,
 } GCODE_SUBCOMMAND_LIST;
 
@@ -116,7 +116,7 @@ GCODE_ERROR             GC_ParseCommand(HGCODE hcode, const char* command_line);
 //compressor and validator
 uint32_t                GC_CompressCommand(HGCODE hcode, uint8_t* buffer);
 GCodeCommandParams*     GC_DecompileFromBuffer(uint8_t* buffer, GCODE_COMMAND_LIST* out_command_id); // Unsafe
-GCODE_COMMAND_STATE     GC_ExecuteFromBuffer(GCodeFunctionList* functions, void* additional_parameter, uint8_t* buffer);
+GCODE_COMMAND_STATE     GC_ExecuteFromBuffer(GCodeFunctionList* functions, void* additional_parameter, const uint8_t* buffer);
 
 //diagnostics
 parameterType           GC_GetCurrentCommandCode(HGCODE hcode);

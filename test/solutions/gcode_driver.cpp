@@ -1540,6 +1540,19 @@ TEST_F(GCodeDriverSubcommandsTest, printer_positioning_rel_extrusion_abs)
     ASSERT_EQ(-20, path.x);
 }
 
+
+TEST_F(GCodeDriverSubcommandsTest, printer_restart)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "M24",
+    };
+    StartPrinting(commands, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0
+    ASSERT_EQ(PRINTER_OK, PrinterNextCommand(printer_driver)); 
+}
+
+
 class GCodeDriverStateTest : public ::testing::Test, public PrinterEmulator
 {
 public:
