@@ -957,6 +957,7 @@ TEST_F(GCodeDriverCommandsTest, printer_save_coordinates_value)
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
         "G0 F1800 X210 Y0 Z330 E10",
+        "G99",
         "G1 F1800 X110 Y10 Z360 E15",
         "G1 F1800 X160 Y15 Z390 E35",
         "G60",
@@ -964,7 +965,7 @@ TEST_F(GCodeDriverCommandsTest, printer_save_coordinates_value)
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0
-    PrinterSaveState(printer_driver);
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G99
     // emulate service command
     CompleteCommand(PrinterNextCommand(printer_driver)); // G1
     CompleteCommand(PrinterNextCommand(printer_driver)); // G1
@@ -1597,30 +1598,21 @@ protected:
     uint16_t nozzle_value = 20;
     uint16_t table_value = 20;
 };
-
-TEST_F(GCodeDriverStateTest, can_read_invalid_state)
-{
-    ASSERT_EQ(PRINTER_OK, PrinterRestoreState(printer_driver));
-}
-
-TEST_F(GCodeDriverStateTest, can_save_state)
-{
-    ASSERT_EQ(PRINTER_OK, PrinterSaveState(printer_driver));
-}
-
 TEST_F(GCodeDriverStateTest, save_state)
 {
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
         "G0 F1800 X30 Y0 Z0 E30",
+        "G99",
     };
+
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
-    ASSERT_EQ(PRINTER_OK, PrinterSaveState(printer_driver));
+    ASSERT_EQ(PRINTER_OK, PrinterNextCommand(printer_driver));
 }
 
-TEST_F(GCodeDriverStateTest, fallback_unsaved_state)
+TEST_F(GCodeDriverStateTest, default_state_is_zero)
 {
     std::vector<std::string> commands = {
         "G0 F1800 X10 Y0 Z0 E10",
@@ -1638,6 +1630,7 @@ TEST_F(GCodeDriverStateTest, restore_state)
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
         "G0 F1800 X30 Y0 Z0 E30",
+        "G99",
         "G0 F1800 X50 Y0 Z0 E50",
     };
     StartPrinting(commands, nullptr);
@@ -1645,7 +1638,7 @@ TEST_F(GCodeDriverStateTest, restore_state)
     CompleteCommand(PrinterNextCommand(printer_driver));
     
     //make a simulation of the pause
-    PrinterSaveState(printer_driver);
+    CompleteCommand(PrinterNextCommand(printer_driver));
     ShutDown();
 
     ConfigurePrinter(axis_configuration, PRINTER_ACCELERATION_DISABLE);
@@ -1654,6 +1647,7 @@ TEST_F(GCodeDriverStateTest, restore_state)
     PrinterInitialize(printer_driver);
     PrinterPrintFromCache(printer_driver, nullptr, PRINTER_RESUME);
     CompleteCommand(PrinterNextCommand(printer_driver)); // resume add restoration command
+    PrinterNextCommand(printer_driver); // save command will be repeated
 
     ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
     GCodeCommandParams* params = PrinterGetCurrentPath(printer_driver);
@@ -1666,6 +1660,7 @@ TEST_F(GCodeDriverStateTest, reset_state_after_shutdown)
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
         "G0 F1800 X30 Y0 Z0 E30",
+        "G99",
         "G0 F1800 X50 Y0 Z0 E50",
     };
     StartPrinting(commands, nullptr);
@@ -1673,7 +1668,7 @@ TEST_F(GCodeDriverStateTest, reset_state_after_shutdown)
     CompleteCommand(PrinterNextCommand(printer_driver));
 
     //make a simulation of the pause
-    PrinterSaveState(printer_driver);
+    CompleteCommand(PrinterNextCommand(printer_driver));
     ShutDown();
 
     ConfigurePrinter(axis_configuration, PRINTER_ACCELERATION_DISABLE);
@@ -1694,14 +1689,16 @@ TEST_F(GCodeDriverStateTest, consequent_prints)
         "G0 F1800 X0 Y0 Z0 E0",
         "G0 F1800 X30 Y0 Z0 E30",
         "G0 F1800 X50 Y0 Z0 E50",
+        "G99",
     };
     StartPrinting(commands, nullptr);
-    CompleteCommand(PrinterNextCommand(printer_driver));
-    CompleteCommand(PrinterNextCommand(printer_driver));
-    CompleteCommand(PrinterNextCommand(printer_driver));
-    PrinterSaveState(printer_driver);
+    for (const auto& cmd : commands)
+    {
+        CompleteCommand(PrinterNextCommand(printer_driver));
+    }
     ASSERT_EQ(PRINTER_FINISHED, PrinterNextCommand(printer_driver));
-    //make a simulation of the pause
+
+    //start new printing
     StartPrinting(commands, nullptr);
     ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
     GCodeCommandParams* params = PrinterGetCurrentPath(printer_driver);
@@ -1714,6 +1711,7 @@ TEST_F(GCodeDriverStateTest, nozzle_temperature)
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
         "M109 S210",
+        "G99",
         "G0 F1800 X30 Y0 Z0 E30",
     };
     StartPrinting(commands, nullptr);
@@ -1730,7 +1728,7 @@ TEST_F(GCodeDriverStateTest, nozzle_temperature)
         ++tick_index;
         status = PrinterExecuteCommand(printer_driver);
     }
-    PrinterSaveState(printer_driver);
+    CompleteCommand(PrinterNextCommand(printer_driver));
 
     ShutDown();
     ConfigurePrinter(axis_configuration, PRINTER_ACCELERATION_DISABLE);
@@ -1746,6 +1744,7 @@ TEST_F(GCodeDriverStateTest, table_temperature)
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
         "M190 S210",
+        "G99",
         "G0 F1800 X30 Y0 Z0 E30",
     };
     StartPrinting(commands, nullptr);
@@ -1762,7 +1761,7 @@ TEST_F(GCodeDriverStateTest, table_temperature)
         ++tick_index;
         status = PrinterExecuteCommand(printer_driver);
     }
-    PrinterSaveState(printer_driver);
+    CompleteCommand(PrinterNextCommand(printer_driver));
 
     ShutDown();
     ConfigurePrinter(axis_configuration, PRINTER_ACCELERATION_DISABLE);
@@ -1780,6 +1779,7 @@ TEST_F(GCodeDriverStateTest, extrusion_mode)
         "G0 F1800 X30 Y0 Z0 E30",
         "M83",
         "G0 F1800 X30 Y0 Z0 E30",
+        "G99",
         "G0 F1800 X30 Y0 Z0 E30",
     };
     StartPrinting(commands, nullptr);
@@ -1787,7 +1787,7 @@ TEST_F(GCodeDriverStateTest, extrusion_mode)
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
-    PrinterSaveState(printer_driver);
+    CompleteCommand(PrinterNextCommand(printer_driver)); // save
 
     ShutDown();
     ConfigurePrinter(axis_configuration, PRINTER_ACCELERATION_DISABLE);
@@ -1795,6 +1795,8 @@ TEST_F(GCodeDriverStateTest, extrusion_mode)
     PrinterInitialize(printer_driver);
     PrinterPrintFromCache(printer_driver, nullptr, PRINTER_RESUME);
     CompleteCommand(PrinterNextCommand(printer_driver)); // resume add restoration command
+    PrinterNextCommand(printer_driver); // save command will be repeated
+
     ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
     GCodeCommandParams* params = PrinterGetCurrentPath(printer_driver);
     ASSERT_EQ(0, params->x);
@@ -1808,6 +1810,7 @@ TEST_F(GCodeDriverStateTest, coordinates_mode)
         "G0 F1800 X30 Y0 Z0 E30",
         "G91",
         "G0 F1800 X30 Y0 Z0 E30",
+        "G99",
         "G0 F1800 X30 Y0 Z0 E30",
     };
     StartPrinting(commands, nullptr);
@@ -1815,7 +1818,7 @@ TEST_F(GCodeDriverStateTest, coordinates_mode)
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
-    PrinterSaveState(printer_driver);
+    CompleteCommand(PrinterNextCommand(printer_driver));
 
     ShutDown();
     ConfigurePrinter(axis_configuration, PRINTER_ACCELERATION_DISABLE);
@@ -1823,6 +1826,8 @@ TEST_F(GCodeDriverStateTest, coordinates_mode)
     PrinterInitialize(printer_driver);
     PrinterPrintFromCache(printer_driver, nullptr, PRINTER_RESUME);
     CompleteCommand(PrinterNextCommand(printer_driver)); // resume add restoration command
+    PrinterNextCommand(printer_driver); // save command will be repeated
+
     ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
     GCodeCommandParams* params = PrinterGetCurrentPath(printer_driver);
     ASSERT_EQ(30, params->x);

@@ -70,9 +70,6 @@ typedef struct PrinterDriver_type
 HPRINTER       PrinterConfigure(PrinterConfig* printer_cfg);
 PRINTER_STATUS PrinterReadControlBlock(HPRINTER hprinter, PrinterControlBlock* control_block);
 
-PRINTER_STATUS PrinterSaveState(HPRINTER hprinter);
-PRINTER_STATUS PrinterRestoreState(HPRINTER hprinter);
-
 PRINTER_STATUS PrinterInitialize(HPRINTER hprinter);
 PRINTER_STATUS PrinterPrintFromBuffer(HPRINTER hprinter, const uint8_t* command_stream, uint32_t commands_count);
 PRINTER_STATUS PrinterPrintFromCache(HPRINTER hprinter, MaterialFile* material_override, PRINTING_MODE mode);

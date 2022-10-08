@@ -3,14 +3,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct GCodeCommand_type
+typedef struct
 {
     parameterType           code;
     GCodeCommandParams      g;
     GCodeSubCommandParams   m;
 } GCodeCommand;
 
-typedef struct GCodeType
+typedef struct
 {
     GCodeAxisConfig         cfg;
     GCodeCommand            command;
@@ -269,6 +269,9 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
         case 92:
             index = GCODE_SET;
             break;
+        case 99:
+            index = GCODE_SAVE_STATE;
+            break;
         default:
             //the rest of commands is ignored
             return 0;
@@ -311,7 +314,6 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
         case 190:
             index = GCODE_WAIT_TABLE;
             break;
-        
         default:
             //others are just ignored
             return 0;
