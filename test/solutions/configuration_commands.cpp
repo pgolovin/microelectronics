@@ -396,3 +396,66 @@ TEST_F(GCodeConfigCommandsTest, service_table_temperature)
     ASSERT_EQ(255, PrinterGetTargetT(printer_driver, TERMO_TABLE));
 }
 
+class GCodeServiceCommandsTest : public ::testing::Test, public PrinterEmulator
+{
+public:
+    GCodeServiceCommandsTest()
+        : PrinterEmulator(10000)
+    {}
+protected:
+
+    virtual void SetUp()
+    {
+        SetupPrinter(axis_configuration, PRINTER_ACCELERATION_DISABLE);
+        PrinterInitialize(printer_driver);
+    }
+};
+/*
+TEST_F(GCodeConfigCommandsTest, service_home)
+{
+    std::vector<std::string> printing = {
+        "G0 F1800 X0 Y0",
+        "G1 F1800 X10 Y10 Z30 E4",
+    };
+    StartPrinting(printing, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver)); // temperature settled
+
+    PrinterPrintFromBuffer(printer_driver, service_home, sizeof(service_home)/GCODE_CHUNK_SIZE);
+    
+    ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
+    GCodeCommandParams params = *PrinterGetCurrentPath(printer_driver);
+    ASSERT_EQ(-10, params.x);
+    ASSERT_EQ(-10, params.y);
+    ASSERT_EQ(-30, params.z);
+}
+
+TEST_F(GCodeConfigCommandsTest, service_home_state)
+{
+    std::vector<std::string> printing = {
+        "G0 F1800 X0 Y0",
+        "G1 F1800 X10 Y10 Z30 E4",
+        "G1 F1800 X20 Y20 Z30 E8",
+    };
+    StartPrinting(printing, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver));
+
+    PrinterPrintFromBuffer(printer_driver, service_home, sizeof(service_home) / GCODE_CHUNK_SIZE);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    ShutDown();
+
+    ConfigurePrinter(axis_configuration, PRINTER_ACCELERATION_DISABLE);
+    //should set position to the 3rd comand and continue printing from the save point
+    PrinterInitialize(printer_driver);
+    PrinterPrintFromCache(printer_driver, nullptr, PRINTER_RESUME);
+    // restore block
+    CompleteCommand(PrinterNextCommand(printer_driver)); // Move
+    GCodeCommandParams params = *PrinterGetCurrentPath(printer_driver);
+    ASSERT_EQ(10, params.x);
+    ASSERT_EQ(10, params.y);
+    ASSERT_EQ(30, params.z);
+}
+*/
+
