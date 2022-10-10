@@ -8,7 +8,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
+/*
 const char cmd_home[] = {
     "G90\0"
     "G0 F1800 X0 Y0 Z0\0"
@@ -40,7 +40,7 @@ const char service_insert_e[] = {
     "M109 S0\0" // to work with the template, command parameter should be replaced by actual value
     "G1 F1800 E100"
 };
-
+*/
 const GCodeAxisConfig axis_configuration =
 {
     80,
