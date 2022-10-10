@@ -14,7 +14,7 @@ int main(int argc, char** argv)
 
     bool valid = true;
 
-    std::cout << "Enter meterial parameters.\n";
+    std::cout << "Enter material parameters.\n";
     do 
     {
         valid = true;

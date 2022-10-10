@@ -3,20 +3,20 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct GCodeCommand_type
+typedef struct
 {
     parameterType           code;
     GCodeCommandParams      g;
     GCodeSubCommandParams   m;
 } GCodeCommand;
 
-typedef struct GCodeType
+typedef struct
 {
     GCodeAxisConfig         cfg;
     GCodeCommand            command;
 } GCode;
 
-static char* trimSpaces(char* command_line)
+static const char* trimSpaces(const char* command_line)
 {
     while (*command_line == ' ')
     {
@@ -26,7 +26,7 @@ static char* trimSpaces(char* command_line)
 }
 
 //simple atof introduce 5kb of new code, that i cannot afford. lets replace it by home brewed function
-static char* parseValue(char* command_line, parameterType multiplier, parameterType* value)
+static const char* parseValue(const char* command_line, parameterType multiplier, parameterType* value)
 {
     parameterType sign = 1;
     float result = 0;
@@ -66,7 +66,7 @@ static char* parseValue(char* command_line, parameterType multiplier, parameterT
     return trimSpaces(command_line);
 }
 
-static char* parseCommand(GCodeCommand* command, GCODE_COMMAND_TYPE command_type, char* command_line)
+static const char* parseCommand(GCodeCommand* command, GCODE_COMMAND_TYPE command_type, const char* command_line)
 {
     parameterType command_index = 0;
     command_line = parseValue(command_line, 1, &command_index);
@@ -75,7 +75,7 @@ static char* parseCommand(GCodeCommand* command, GCODE_COMMAND_TYPE command_type
     return command_line;
 }
 
-static GCODE_ERROR parseCommandParams(GCodeCommandParams* params, GCodeAxisConfig* cfg, char* command_line)
+static GCODE_ERROR parseCommandParams(GCodeCommandParams* params, GCodeAxisConfig* cfg, const char* command_line)
 {
     uint16_t multiplier = 1;
     parameterType* param = 0;
@@ -115,7 +115,7 @@ static GCODE_ERROR parseCommandParams(GCodeCommandParams* params, GCodeAxisConfi
     return GCODE_OK_COMMAND_CREATED;
 }
 
-static GCODE_ERROR parseSubCommandParams(GCodeSubCommandParams* params, char* command_line)
+static GCODE_ERROR parseSubCommandParams(GCodeSubCommandParams* params, const char* command_line)
 {
     parameterType* param = 0;
     
@@ -162,7 +162,7 @@ HGCODE GC_Configure(const GCodeAxisConfig* config)
     return (HGCODE)gcode;
 }
 
-GCODE_ERROR GC_ParseCommand(HGCODE hcode, char* command_line)
+GCODE_ERROR GC_ParseCommand(HGCODE hcode, const char* command_line)
 {
     GCode* gcode = (GCode*)hcode;
     
@@ -255,6 +255,9 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
         case 28:
             index = GCODE_HOME;
             break;
+        case 60:
+            index = GCODE_SAVE_POSITION;
+            break;
         case 90:
             index = GCODE_SET_COORDINATES_MODE;
             gcode->command.g.x = GCODE_ABSOLUTE;
@@ -266,8 +269,11 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
         case 92:
             index = GCODE_SET;
             break;
+        case 99:
+            index = GCODE_SAVE_STATE;
+            break;
         default:
-            //G90 and G21 are ignored
+            //the rest of commands is ignored
             return 0;
         }
         *(GCodeCommandParams*)(buffer + sizeof(parameterType)) = gcode->command.g;
@@ -278,6 +284,9 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
         uint32_t index = GCODE_SET_NOZZLE_TEMPERATURE;
         switch (gcode->command.code & 0x00FF)
         {
+        case 24:
+            index = GCODE_START_RESUME;
+            break;
         case 82:
             index = GCODE_SET_EXTRUSION_MODE;
             gcode->command.m.s = GCODE_ABSOLUTE;
@@ -305,7 +314,6 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
         case 190:
             index = GCODE_WAIT_TABLE;
             break;
-        
         default:
             //others are just ignored
             return 0;
@@ -331,7 +339,7 @@ GCodeCommandParams* GC_DecompileFromBuffer(uint8_t* buffer, GCODE_COMMAND_LIST* 
     return 0;
 }
 
-GCODE_COMMAND_STATE GC_ExecuteFromBuffer(GCodeFunctionList* functions, void* additional_parameter, uint8_t* buffer)
+GCODE_COMMAND_STATE GC_ExecuteFromBuffer(GCodeFunctionList* functions, void* additional_parameter, const uint8_t* buffer)
 {
     if (!functions)
     {

@@ -88,8 +88,8 @@ void PrinterEmulator::RegisterSDCard()
 void PrinterEmulator::StartPrinting(const std::vector<std::string>& commands, MaterialFile* material_override)
 {
     CreateGCodeData(commands);
-
-    PrinterStart(printer_driver, material_override, PRINTER_START);
+    PrinterInitialize(printer_driver);
+    PrinterPrintFromCache(printer_driver, material_override, PRINTER_START);
 }
 
 void PrinterEmulator::ShutDown()

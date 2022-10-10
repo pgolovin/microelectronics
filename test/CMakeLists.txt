@@ -17,6 +17,7 @@ set(SOURCES
     "solutions/printer_memory_manager.cpp"
     "solutions/gcode_driver.cpp"
     "solutions/gcode_driver_acceleration.cpp"
+    "solutions/configuration_commands.cpp"
     "solutions/printer_file_manager.cpp"
     "solutions/printer_emulator.h"
     "solutions/printer_emulator.cpp")
