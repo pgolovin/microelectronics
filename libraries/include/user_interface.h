@@ -4,11 +4,10 @@
 #ifndef __SIMPLE_UI__
 #define __SIMPLE_UI__
 
-struct UI_type
+typedef struct UI_type
 {
     uint32_t id;
-};
-typedef struct UI_type * UI;
+} *UI;
 
 struct Frame_type
 {
