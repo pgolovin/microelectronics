@@ -9,7 +9,6 @@
 #define LABEL_LENGTH    16
 #define CHILDREN_COUNT  10
 
-#define LETTER_HEIGHT   16
 #define LETTER_WIDTH    8
 
 #pragma pack(push, 1)
@@ -18,6 +17,7 @@ enum UIItemTypes
     UIFrame,
     UIButton,
     UIIndicator,
+    UILabel,
 };
 
 typedef struct
@@ -29,6 +29,7 @@ typedef struct
 typedef struct
 {
     Rect    frame;
+    uint8_t font_height;
     char    label[LABEL_LENGTH];
     uint16_t color;
     bool    state;
@@ -37,6 +38,14 @@ typedef struct
 typedef struct
 {
     Rect    frame;
+    uint8_t font_height;
+    char    label[LABEL_LENGTH];
+} Label;
+
+typedef struct
+{
+    Rect    frame;
+    uint8_t font_height;
     char    label[LABEL_LENGTH];
     bool    enabled;
     void*   metadata;
@@ -49,7 +58,9 @@ typedef struct Internal_Frame_type
     
     Rect        frame;
     bool        visible;
+    bool        enabled;
     const char* text;
+    uint8_t     font_height;
     // yeah, artifitial limit, but lets try not to make uber interfaces
     UIItem      children[CHILDREN_COUNT];
     uint8_t     count;
@@ -67,7 +78,7 @@ typedef struct
 
 #pragma pack(pop)
 
-static void DrawRect(UI_CORE* ui, const Rect* frame, const char* label, bool state, bool enabled, bool focused, const int* texture, uint16_t text_color)
+static void DrawRect(UI_CORE* ui, const Rect* frame, const char* label, bool state, bool enabled, bool focused, const int* texture, uint16_t text_color, uint8_t font_height)
 {
     //TODO collapse the function
     DISPLAY_BeginDraw(ui->context, *frame);
@@ -107,7 +118,7 @@ static void DrawRect(UI_CORE* ui, const Rect* frame, const char* label, bool sta
         label_length = line;
     }
     
-    int label_position_y = (raws - LETTER_HEIGHT) / 2;
+    int label_position_y = (raws - font_height) / 2;
     
     // scale texture to actual button size, keeping only border size intact
     // other sizes should be proportionally scaled
@@ -143,7 +154,7 @@ static void DrawRect(UI_CORE* ui, const Rect* frame, const char* label, bool sta
         DISPLAY_WritePixels(ui->context, scan_line, line);
     }  
     // Draw label
-    for (uint16_t y = 0; y < LETTER_HEIGHT; ++y)
+    for (uint16_t y = 0; y < font_height; ++y)
     {
         // draw texture line by line
         texture_raw = 0;
@@ -163,7 +174,7 @@ static void DrawRect(UI_CORE* ui, const Rect* frame, const char* label, bool sta
             scan_line[label_position_x + x] = color_schema[(texture[texture_line] >> (32 - ((texture_raw + 1)*2))) & 0x3];
             
             char c = label[x / LETTER_WIDTH];
-            if ((s_font_8x8[c - 32][y * 8 / LETTER_HEIGHT] >> (x % 8)) & 0x1)
+            if ((s_font_8x8[c - 32][y * 8 / font_height] >> (x % 8)) & 0x1)
             {
                 scan_line[label_position_x + x] = text_color;
             }
@@ -194,7 +205,7 @@ static void DrawRect(UI_CORE* ui, const Rect* frame, const char* label, bool sta
         DISPLAY_WritePixels(ui->context, scan_line, line);
     } 
     
-    for (uint16_t y = label_position_y + LETTER_HEIGHT; y < raws; ++y)
+    for (uint16_t y = label_position_y + font_height; y < raws; ++y)
     {
         // draw texture line by line
         texture_raw = 0;
@@ -222,33 +233,46 @@ static void DrawRect(UI_CORE* ui, const Rect* frame, const char* label, bool sta
 
 static void DrawButton(UI_CORE* ui, Button* frame)
 {
-    DrawRect(ui, &frame->frame, frame->label, true, frame->enabled, frame == ui->focused_item, ui_item_frame, ui->color_schema[ColorMain]);
+    DrawRect(ui, &frame->frame, frame->label, true, frame->enabled, frame == ui->focused_item, ui_item_frame, ui->color_schema[ColorMain], frame->font_height);
 }
 
 static void DrawIndicator(UI_CORE* ui, Indicator* indicator)
 {
-    DrawRect(ui, &indicator->frame, indicator->label, indicator->state, true, false, ui_item_indicator, indicator->color);
+    DrawRect(ui, &indicator->frame, indicator->label, indicator->state, true, false, ui_item_indicator, indicator->color, indicator->font_height);
+}
+
+static void DrawLabel(UI_CORE* ui, Label* label)
+{
+    DrawRect(ui, &label->frame, label->label, true, true, false, ui_item_label, ui->color_schema[ColorMain], label->font_height);
 }
 
 static void DrawFrame(UI_CORE* ui, Frame* frame)
 {
+    if (!frame->enabled)
+    {
+        return;
+    }
+
     if (frame->visible)
     {
-        DrawRect(ui, &frame->frame, "", false, true, false, ui_item_frame, ui->color_schema[ColorMain]);
+        DrawRect(ui, &frame->frame, "", false, true, false, ui_item_frame, ui->color_schema[ColorMain], frame->font_height);
     }
     for (int child = 0; child < frame->count; ++child)
     {
-        if (UIIndicator == frame->children[child].type)
+        switch (frame->children[child].type)
         {
+        case UIIndicator:
             DrawIndicator(ui, frame->children[child].handle);
-        }
-        else if (UIButton == frame->children[child].type)
-        {
+            break;
+        case UIButton:
             DrawButton(ui, frame->children[child].handle);
-        }
-        else
-        {
+            break;
+        case UILabel:
+            DrawLabel(ui, frame->children[child].handle);
+            break;
+        default:
             DrawFrame(ui, frame->children[child].handle);
+            break;
         }
     }
 }
@@ -273,7 +297,7 @@ static bool TrackTouch(UI_CORE* ui, UIItem* item, uint16_t x, uint16_t y)
     {
         Frame* frame = (Frame*)(item->handle);
         hit = InRect(&frame->frame, x, y);
-        if (hit)
+        if (frame->enabled && hit)
         {
             for (int c = 0; c < frame->count; ++c)
             {
@@ -318,6 +342,7 @@ UI UI_Configure(HDISPLAY context, Rect viewport, uint8_t module_size, uint8_t gu
     ui->root.count = 0;
     ui->root.frame = viewport;
     ui->root.visible = root_visible;
+    ui->root.enabled = true;
     ui->module = module_size;
     ui->guide = module_size/guides_per_module;
     
@@ -373,6 +398,8 @@ HFrame UI_CreateFrame(UI ui_handle, HFrame parent, Rect frame, bool visible)
     new_frame->visible = visible;    
     new_frame->parent = parent_frame;
     new_frame->count = 0;
+    new_frame->font_height = 0;
+    new_frame->enabled = true;
 
     CalculateFrame(&new_frame->frame, &frame, &parent_frame->frame, ui->guide); 
     
@@ -382,7 +409,39 @@ HFrame UI_CreateFrame(UI ui_handle, HFrame parent, Rect frame, bool visible)
     return (HFrame)new_frame;
 }
 
-HButton UI_CreateButton(UI ui_handle, HFrame parent, Rect button_rect, const char* label, bool enabled, Action action, void* metadata)
+HLabel UI_CreateLabel(UI ui_handle, HFrame parent, Rect frame, const char* label, uint8_t font_height)
+{
+    UI_CORE* ui = (UI_CORE*)ui_handle;
+    if (!parent)
+    {
+        parent = (HFrame)&ui->root;
+    }
+
+    Frame* parent_frame = (Frame*)parent;
+    if (CHILDREN_COUNT == parent_frame->count)
+    {
+        return 0;
+    }
+
+    Label* ui_label = DeviceAlloc(sizeof(Label));
+    size_t len = strlen(label);
+    if (len > LABEL_LENGTH)
+    {
+        len = LABEL_LENGTH;
+    }
+
+    strcpy(ui_label->label, label);
+    ui_label->font_height = font_height;
+
+    CalculateFrame(&ui_label->frame, &frame, &parent_frame->frame, ui->guide);
+
+    parent_frame->children[parent_frame->count].handle = ui_label;
+    parent_frame->children[parent_frame->count++].type = UILabel;
+
+    return (HLabel)ui_label;
+}
+
+HButton UI_CreateButton(UI ui_handle, HFrame parent, Rect button_rect, const char* label, uint8_t font_height, bool enabled, Action action, void* metadata)
 {
     UI_CORE* ui = (UI_CORE*)ui_handle;
     if (!parent)
@@ -407,6 +466,7 @@ HButton UI_CreateButton(UI ui_handle, HFrame parent, Rect button_rect, const cha
     button->enabled = enabled;
     button->action = action;
     button->metadata = metadata;
+    button->font_height = font_height;
 
     CalculateFrame(&button->frame, &button_rect, &parent_frame->frame, ui->guide); 
     
@@ -416,7 +476,7 @@ HButton UI_CreateButton(UI ui_handle, HFrame parent, Rect button_rect, const cha
     return (HButton)button;
 }
     
-HIndicator UI_CreateIndicator(UI ui_handle, HFrame parent, Rect indicator_rect, const char* label, uint16_t custom_color, bool default_state)
+HIndicator UI_CreateIndicator(UI ui_handle, HFrame parent, Rect indicator_rect, const char* label, uint8_t font_height, uint16_t custom_color, bool default_state)
 {
     UI_CORE* ui = (UI_CORE*)ui_handle;
     if (!parent)
@@ -440,6 +500,7 @@ HIndicator UI_CreateIndicator(UI ui_handle, HFrame parent, Rect indicator_rect, 
     strcpy(indicator->label, label);
     indicator->state = default_state;
     indicator->color = custom_color == 0 ? ui->color_schema[ColorIndicator] : ((custom_color >> 8) & 0xFF) | ((custom_color & 0xFF) << 8);
+    indicator->font_height = font_height;
 
     CalculateFrame(&indicator->frame, &indicator_rect, &parent_frame->frame, ui->guide); 
     
@@ -462,6 +523,21 @@ Rect UI_GetFrameUserArea(UI ui_handle, HFrame frame)
     };
     
     return rt;
+}
+
+void UI_EnableFrame(UI ui_handle, HFrame frame, bool enabled)
+{
+    UI_CORE* ui = (UI_CORE*)ui_handle;
+    Frame* frm = (Frame*)frame;
+    frm->enabled = enabled;
+    if (frm->enabled)
+    {
+        DrawFrame(ui, frm);
+    }
+    else
+    {
+        UI_Refresh(ui_handle);
+    }
 }
 
 void UI_EnableButton(UI ui_handle, HButton button, bool enabled)

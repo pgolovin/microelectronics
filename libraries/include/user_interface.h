@@ -14,6 +14,9 @@ extern "C"
 #ifndef __SIMPLE_UI__
 #define __SIMPLE_UI__
 
+#define NORMAL_FONT 8
+#define LARGE_FONT 16
+
 typedef struct UI_type
 {
     uint32_t id;
@@ -24,6 +27,11 @@ struct Frame_type
     uint32_t id;
 };
 typedef struct Frame_type * HFrame;
+
+typedef struct
+{
+    uint32_t id;
+}* HLabel;
 
 struct Indicator_type
 {
@@ -78,12 +86,14 @@ HFrame     UI_GetRootFrame(UI ui_handle);
 
 // All UI elements can be created only on the frame. if frame is not defined, UI item will not be created
 HFrame     UI_CreateFrame(UI ui_handle, HFrame parent, Rect frame, bool visible);
-HButton    UI_CreateButton(UI ui_handle, HFrame parent, Rect button_rect, const char* label, bool enabled, Action action, void* metadata);
-HIndicator UI_CreateIndicator(UI ui_handle, HFrame parent, Rect indicator_rect, const char* label, uint16_t custom_color, bool default_state);
+HLabel     UI_CreateLabel(UI ui_handle, HFrame parent, Rect frame, const char* label, uint8_t font_height);
+HButton    UI_CreateButton(UI ui_handle, HFrame parent, Rect button_rect, const char* label, uint8_t font_height, bool enabled, Action action, void* metadata);
+HIndicator UI_CreateIndicator(UI ui_handle, HFrame parent, Rect indicator_rect, const char* label, uint8_t font_height, uint16_t custom_color, bool default_state);
 
 Rect       UI_GetFrameUserArea(UI ui_handle, HFrame frame);
 void       UI_EnableButton(UI ui_handle, HButton button, bool enabled);
 void       UI_SetButtonLabel(UI ui_handle, HButton button, const char* label);
+void       UI_EnableFrame(UI ui_handle, HFrame frame, bool enabled);
 
 // UI items mahagement
 void UI_SetIndicatorValue(UI ui_handle, HIndicator indicator, bool state);

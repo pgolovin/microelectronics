@@ -34,6 +34,19 @@ int ui_item_indicator[] =
     0x00000000, 
     0x00000000,
 };
+
+int ui_item_label[] =
+{
+    0x05AAAA50,
+    0x06AAAA90,
+    0x06AAAA90,
+    0x06AAAA90,
+    0x06AAAA90,
+    0x06AAAA90,
+    0x06AAAA90,
+    0x06AAAA90,
+    0x05AAAA50,
+};
 // indicator 16x9
 
 #endif //__UI_ITEMS__
