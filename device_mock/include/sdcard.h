@@ -1,6 +1,7 @@
 #pragma once
 
 //SDCARD MOC FILE
+// it is being duplicated to avoid clashes with original implementation
 #include <main.h>
 
 #ifdef __cplusplus

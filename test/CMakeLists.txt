@@ -14,6 +14,8 @@ set(SOURCES
     "device/sdcard.cpp"
     "device/file_system.cpp"
     "libraries/gcode.cpp"
+    "libraries/user_interface.cpp"
+    "solutions/printer.cpp"
     "solutions/printer_memory_manager.cpp"
     "solutions/gcode_driver.cpp"
     "solutions/gcode_driver_acceleration.cpp"

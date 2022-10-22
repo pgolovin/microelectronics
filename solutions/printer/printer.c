@@ -38,7 +38,7 @@ typedef struct
 HCORE Configure(const PrinterConfiguration* cfg)
 {
     PrinterCore* core = (PrinterCore*)DeviceAlloc(sizeof(PrinterCore));
-    return core;
+    return (HCORE)core;
 }
 
 void MainLoop(HCORE hprinter)

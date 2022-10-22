@@ -1,5 +1,4 @@
 #include "main.h"
-#include "spibus.h"
 
 #ifndef __ILI9341__
 #define __ILI9341__
@@ -18,28 +17,7 @@ extern "C"
   BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
   CRCPolynomial = 10;
 */
-
-struct DISPLAY_type
-{
-    uint32_t id;
-};
-typedef struct DISPLAY_type * HDISPLAY;
-
-typedef struct 
-{
-    // spi bus handle the display is connected to
-    HSPIBUS hspi;
-    // SPI 4 data/commands select protocol pin
-    GPIO_TypeDef* ds_port_array;
-    uint16_t ds_port;
-    // SPI 3 chip selector protocol pin
-    GPIO_TypeDef* cs_port_array;
-    uint16_t cs_port;
-    // ILI9341 HW reset pin
-    GPIO_TypeDef* reset_port_array;
-    uint16_t reset_port;
-    
-} DisplayConfig;
+typedef void* HDISPLAY;
 
 typedef struct 
 {
@@ -48,8 +26,6 @@ typedef struct
     uint16_t x1;
     uint16_t y1;
 } Rect;
-
-HDISPLAY DISPLAY_Configure(const DisplayConfig* config);
 
 typedef enum DISPLAY_Status_type
 {

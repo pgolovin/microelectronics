@@ -1,5 +1,15 @@
 #include "main.h"
+
+#ifndef _WIN32
 #include "include/display.h"
+#else
+#include "display.h"
+#endif
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 
 #ifndef __SIMPLE_UI__
 #define __SIMPLE_UI__
@@ -86,3 +96,7 @@ void UI_TrackTouchAction(UI ui_handle, uint16_t x, uint16_t y, bool touch);
 
 
 #endif //__SIMPLE_UI__
+
+#ifdef __cplusplus
+}
+#endif

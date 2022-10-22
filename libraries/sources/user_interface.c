@@ -98,10 +98,8 @@ static void DrawRect(UI_CORE* ui, const Rect* frame, const char* label, bool sta
     
     uint16_t line = (frame->x1 - frame->x0);
     uint16_t raws = (frame->y1 - frame->y0);
-    uint8_t texture_line = 0;
-    uint8_t texture_raw = 0;
     
-    uint16_t label_length = strlen(label)*LETTER_WIDTH;
+    uint16_t label_length = strlen(label) * LETTER_WIDTH;
     int label_position_x = (line - label_length) / 2;
     if (label_position_x < 0)
     {
@@ -118,6 +116,9 @@ static void DrawRect(UI_CORE* ui, const Rect* frame, const char* label, bool sta
     // the same is applicable for bits from 10-22, they are hase the same values
     // cos they are represent the vertical middle line and should be repeated
     
+    uint8_t texture_line = 0;
+    uint8_t texture_raw = 0;
+
     // draw texture before label
     for (uint16_t y = 0; y < label_position_y; ++y)
     {
@@ -260,16 +261,18 @@ static void CalculateFrame(Rect* result_frame, const Rect* local_frame, const Re
     result_frame->y1 = result_frame->y0 + (local_frame->y1 - local_frame->y0) * guide_size;
 }
 
+static inline bool InRect(const Rect* frame, uint16_t x, uint16_t y)
+{
+    return x >= frame->x0 && x < frame->x1 && y >= frame->y0 && y < frame->y1;
+}
+
 static bool TrackTouch(UI_CORE* ui, UIItem* item, uint16_t x, uint16_t y)
 {
     bool hit = false;
     if (item->type == UIFrame)
     {
         Frame* frame = (Frame*)(item->handle);
-        hit =  x >= frame->frame.x0 
-            && x <  frame->frame.x1 
-            && y >= frame->frame.y0 
-            && y <  frame->frame.y1;
+        hit = InRect(&frame->frame, x, y);
         if (hit)
         {
             for (int c = 0; c < frame->count; ++c)
@@ -288,11 +291,8 @@ static bool TrackTouch(UI_CORE* ui, UIItem* item, uint16_t x, uint16_t y)
         {
             return false;
         }
-        
-        hit =  x >= btn->frame.x0 
-            && x <  btn->frame.x1 
-            && y >= btn->frame.y0 
-            && y <  btn->frame.y1;
+
+        hit = InRect(&btn->frame, x, y);
         if (hit && ui->focused_item != btn)
         {
             if (ui->focused_item)
@@ -312,7 +312,7 @@ static bool TrackTouch(UI_CORE* ui, UIItem* item, uint16_t x, uint16_t y)
 // public functionality
 UI UI_Configure(HDISPLAY context, Rect viewport, uint8_t module_size, uint8_t guides_per_module, bool root_visible)
 {
-    UI_CORE* ui = malloc(sizeof(UI_CORE));
+    UI_CORE* ui = DeviceAlloc(sizeof(UI_CORE));
     ui->context = context;
     ui->root.parent = 0; // root, no more parents
     ui->root.count = 0;
@@ -349,13 +349,13 @@ void UI_SetUIColors(UI ui_handle, uint16_t colors[ColorsCount])
     DrawFrame(ui, &ui->root);
 }
 
-HFrame     UI_GetRootFrame(UI ui_handle)
+HFrame UI_GetRootFrame(UI ui_handle)
 {
     UI_CORE* ui = (UI_CORE*)ui_handle;
     return (HFrame)&ui->root;
 }
 // UI construction.
-HFrame     UI_CreateFrame(UI ui_handle, HFrame parent, Rect frame, bool visible)
+HFrame UI_CreateFrame(UI ui_handle, HFrame parent, Rect frame, bool visible)
 {
     UI_CORE* ui = (UI_CORE*)ui_handle;
     if (!parent)
@@ -369,7 +369,7 @@ HFrame     UI_CreateFrame(UI ui_handle, HFrame parent, Rect frame, bool visible)
         return 0;
     }
 
-    Frame* new_frame = malloc(sizeof(Frame));
+    Frame* new_frame = DeviceAlloc(sizeof(Frame));
     new_frame->visible = visible;    
     new_frame->parent = parent_frame;
     new_frame->count = 0;
@@ -382,7 +382,7 @@ HFrame     UI_CreateFrame(UI ui_handle, HFrame parent, Rect frame, bool visible)
     return (HFrame)new_frame;
 }
 
-HButton    UI_CreateButton(UI ui_handle, HFrame parent, Rect button_rect, const char* label, bool enabled, Action action, void* metadata)
+HButton UI_CreateButton(UI ui_handle, HFrame parent, Rect button_rect, const char* label, bool enabled, Action action, void* metadata)
 {
     UI_CORE* ui = (UI_CORE*)ui_handle;
     if (!parent)
@@ -396,14 +396,14 @@ HButton    UI_CreateButton(UI ui_handle, HFrame parent, Rect button_rect, const 
         return 0;
     }
 
-    Button* button = malloc(sizeof(Button));
+    Button* button = DeviceAlloc(sizeof(Button));
     size_t len = strlen(label);
     if (len > LABEL_LENGTH)
     {
         len = LABEL_LENGTH;
     }
     
-    memcpy(button->label, label, len);
+    strcpy(button->label, label);
     button->enabled = enabled;
     button->action = action;
     button->metadata = metadata;
@@ -430,14 +430,14 @@ HIndicator UI_CreateIndicator(UI ui_handle, HFrame parent, Rect indicator_rect, 
         return 0;
     }
 
-    Indicator* indicator = malloc(sizeof(Indicator));
+    Indicator* indicator = DeviceAlloc(sizeof(Indicator));
     size_t len = strlen(label);
     if (len > LABEL_LENGTH)
     {
         len = LABEL_LENGTH;
     }
     
-    memcpy(indicator->label, label, len);
+    strcpy(indicator->label, label);
     indicator->state = default_state;
     indicator->color = custom_color == 0 ? ui->color_schema[ColorIndicator] : ((custom_color >> 8) & 0xFF) | ((custom_color & 0xFF) << 8);
 
@@ -475,7 +475,7 @@ void UI_EnableButton(UI ui_handle, HButton button, bool enabled)
     }
 }
 
-void       UI_SetButtonLabel(UI ui_handle, HButton button, const char* label)
+void UI_SetButtonLabel(UI ui_handle, HButton button, const char* label)
 {
     UI_CORE* ui = (UI_CORE*)ui_handle;
     Button* btn = (Button*)button;
@@ -485,12 +485,12 @@ void       UI_SetButtonLabel(UI ui_handle, HButton button, const char* label)
         len = LABEL_LENGTH-1;
     }
     
-    memcpy(btn->label, label, len);
+    strcpy(btn->label, label);
     btn->label[len] = 0;
     DrawButton(ui, btn);
 }
 
-void       UI_SetIndicatorLabel(UI ui_handle, HIndicator indicator, const char* label)
+void UI_SetIndicatorLabel(UI ui_handle, HIndicator indicator, const char* label)
 {
     UI_CORE* ui = (UI_CORE*)ui_handle;
     Indicator* ind = (Indicator*)indicator;
@@ -500,7 +500,7 @@ void       UI_SetIndicatorLabel(UI ui_handle, HIndicator indicator, const char* 
         len = LABEL_LENGTH-1;
     }
     
-    memcpy(ind->label, label, len);
+    strcpy(ind->label, label);
     ind->label[len] = 0;
     DrawIndicator(ui, ind);
 }
