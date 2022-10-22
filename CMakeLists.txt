@@ -7,7 +7,9 @@ list(APPEND CMAKE_PREFIX_PATH ${CMAKE_BINARY_DIR})
 
 include(${PROJECT_SOURCE_DIR}/3rd_party/conan/conan.cmake)
 
-conan_cmake_configure(REQUIRES gtest/1.11.0 
+conan_cmake_configure(REQUIRES 
+                        nlohmann_json/3.11.2                      
+                        gtest/1.12.1 
                       GENERATORS cmake_find_package)
 
 conan_cmake_autodetect(CONAN_SETTINGS)
