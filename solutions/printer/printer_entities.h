@@ -34,6 +34,27 @@ extern "C" {
 
 #define FILE_NAME_LEN 32
 
+typedef enum
+{
+    PRINTER_ACCELERATION_DISABLE = 0,
+    PRINTER_ACCELERATION_ENABLE = 1
+} PRINTER_ACCELERATION;
+
+typedef enum
+{
+    PRINTER_START = 0,
+    PRINTER_RESUME = 1
+} PRINTING_MODE;
+
+typedef enum
+{
+    MOTOR_X = 0,
+    MOTOR_Y,
+    MOTOR_Z,
+    MOTOR_E,
+    MOTOR_COUNT,
+} MOTOR_TYPES;
+
 typedef struct PrinterControlBlock_Type
 {
     //id, to identify that card is correct;

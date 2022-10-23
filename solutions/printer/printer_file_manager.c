@@ -12,7 +12,7 @@ typedef struct
 
 typedef struct
 {
-    HMemoryManager memory;
+    MemoryManager* memory;
 
     HSDCARD sdcard;
     HSDCARD ram;
@@ -32,7 +32,7 @@ typedef struct
     
 } FileManager;
 
-HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, HMemoryManager memory, const GCodeAxisConfig* config, FIL* file_handle)
+HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, MemoryManager* memory, const GCodeAxisConfig* config, FIL* file_handle)
 {
 
 #ifndef PRINTER_FIRMWARE

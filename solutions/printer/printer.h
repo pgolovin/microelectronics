@@ -1,9 +1,14 @@
 #include "main.h"
 #include "stm32f7xx_hal_spi.h"
 #include "sdcard.h"
+
+#include "display.h"
+
 #include "include/user_interface.h"
+#include "include/termal_regulator.h"
 #include "printer/printer_entities.h"
 #include "printer/printer_memory_manager.h"
+#include "include/motor.h"
 #include "ff.h"
 
 #ifndef __PRINTER__
@@ -16,25 +21,30 @@ extern "C" {
 typedef struct
 {
     uint32_t id;
-} *HCORE;
+} *HPRINTER;
 
 typedef struct
 {
-    HSDCARD sdcard;
-    FIL* file_handle;
-    DIR* directory_handle;
+    HSDCARD                 hsdcard;
+    FIL*                    file_handle;
+    DIR*                    directory_handle;
 
-    HSDCARD ram;
-    HMemoryManager memory_manager;
+    HSDCARD                 hram;
+    MemoryManager*          memory_manager;
 
-    UI ui_context;
+    HMOTOR*                 motors;
+    HTERMALREGULATOR*       termal_regulators;
 
+    GPIO_TypeDef*           cooler_port;
+    uint16_t                cooler_pin;
+
+    HDISPLAY                hdisplay;
 } PrinterConfiguration;
 
-HCORE    Configure(const PrinterConfiguration* cfg);
-void     MainLoop(HCORE hprinter);
-void     OnTimer(HCORE hprinter);
-void     ReadADCValue(HCORE hprinter, TERMO_REGULATOR regulator, uint16_t value);
+HPRINTER  Configure(const PrinterConfiguration* cfg);
+void      MainLoop(HPRINTER hprinter);
+void      OnTimer(HPRINTER hprinter);
+void      ReadADCValue(HPRINTER hprinter, TERMO_REGULATOR regulator, uint16_t value);
 
 #ifdef __cplusplus
 }

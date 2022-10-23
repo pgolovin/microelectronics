@@ -1,6 +1,6 @@
 #include "printer/printer_memory_manager.h"
 
-void MemoryManagerConfigure(HMemoryManager manager)
+void MemoryManagerConfigure(MemoryManager* manager)
 {
     manager->memory_pool = DeviceAlloc(MEMORY_PAGES_COUNT * SDCARD_BLOCK_SIZE);
 

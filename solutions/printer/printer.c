@@ -2,7 +2,6 @@
 #include "printer/printer_gcode_driver.h"
 #include "printer/printer_file_manager.h"
 
-
 typedef enum // sdcards type
 {
     STORAGE_EXTERNAL = 0,
@@ -10,7 +9,7 @@ typedef enum // sdcards type
     STORAGE_COUNT
 } STORAGE_TYPE;
 
-typedef enum // sdcards type
+typedef enum
 {
     CONFIGURATION = 0,
     FILE_SELECTION,
@@ -23,7 +22,7 @@ typedef struct
 {
     MODE current_mode;
 
-    HMemoryManager memory_manager;
+    MemoryManager* memory_manager;
 
     HFILEMANAGER file_manager;
     FIL* file;
@@ -31,30 +30,30 @@ typedef struct
 
     HSDCARD storage[STORAGE_COUNT];
 
-    HPRINTER driver;
+    HDRIVER driver;
 
-} PrinterCore;
+} Printer;
 
-HCORE Configure(const PrinterConfiguration* cfg)
+HPRINTER Configure(const PrinterConfiguration* cfg)
 {
-    PrinterCore* core = (PrinterCore*)DeviceAlloc(sizeof(PrinterCore));
-    return (HCORE)core;
+    Printer* printer = (Printer*)DeviceAlloc(sizeof(Printer));
+    return (HPRINTER)printer;
 }
 
-void MainLoop(HCORE hprinter)
+void MainLoop(HPRINTER hprinter)
 {
-    PrinterCore* printer = (PrinterCore*)hprinter;
+    Printer* printer = (Printer*)hprinter;
     PrinterNextCommand(printer->driver);
 }
 
-void OnTimer(HCORE hprinter)
+void OnTimer(HPRINTER hprinter)
 {
-    PrinterCore* printer = (PrinterCore*)hprinter;
+    Printer* printer = (Printer*)hprinter;
     PrinterExecuteCommand(printer->driver);
 }
 
-void ReadADCValue(HCORE hprinter, TERMO_REGULATOR regulator, uint16_t value)
+void ReadADCValue(HPRINTER hprinter, TERMO_REGULATOR regulator, uint16_t value)
 {
-    PrinterCore* printer = (PrinterCore*)hprinter;
+    Printer* printer = (Printer*)hprinter;
     PrinterUpdateVoltageT(printer->driver, regulator, value);
 }

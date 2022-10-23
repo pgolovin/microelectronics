@@ -16,10 +16,10 @@ typedef struct
 {
     char* memory_pool;
     char* pages[MEMORY_PAGES_COUNT];
-} MemoryManager, *HMemoryManager;
+} MemoryManager;
 
 
-void MemoryManagerConfigure(HMemoryManager memory_manager);
+void MemoryManagerConfigure(MemoryManager* memory_manager);
 
 #ifdef __cplusplus
 }

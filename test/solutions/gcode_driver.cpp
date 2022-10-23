@@ -1,9 +1,14 @@
 #include "printer/printer_constants.h"
 #include "printer/printer_gcode_driver.h"
-#include "include/gcode.h"
 #include "solutions/printer_emulator.h"
+#include "include/gcode.h"
+
+#include "sdcard.h"
+#include "sdcard_mock.h"
+
 #include <gtest/gtest.h>
 #include <sstream>
+#include <memory>
 
 TEST(GCodeDriverBasicTest, printer_cannot_create_without_config)
 {
@@ -19,105 +24,85 @@ TEST(GCodeDriverBasicTest, printer_cannot_create_without_storage)
     DeviceSettings ds;
     Device device(ds);
     AttachDevice(device);
-    PrinterConfig cfg = { 0 };
+    DriverConfig cfg = { 0 };
 
     ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
 }
 
-
-TEST(GCodeDriverBasicTest, printer_cannot_create_without_memory)
+class GCodeDriverCreationTest : public ::testing::Test
 {
-    DeviceSettings ds;
-    Device device(ds);
-    AttachDevice(device);
+public:
+    GPIO_TypeDef m_port = 0;
+    MemoryManager m_mem;
+    GCodeAxisConfig m_axis_cfg = { 1,1,1,1 };
 
-    GPIO_TypeDef port = 0;
-    TermalRegulatorConfig ts = { &port, 0, GPIO_PIN_SET, GPIO_PIN_RESET };
-    MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
-    SDcardMock storage(1024);
-    PrinterConfig cfg = { 0, &storage, &motor, &motor, &motor, &motor, PRINTER_ACCELERATION_DISABLE, &ts, &ts, &port, 0, 0 };
+    std::unique_ptr<SDcardMock> m_storage;
+    std::unique_ptr<Device> m_device;
+    std::vector<HMOTOR> m_motors;
+    std::vector<HTERMALREGULATOR> m_trs;
+
+    virtual void SetUp()
+    {
+        DeviceSettings ds;
+        m_device = std::make_unique<Device>(ds);
+        AttachDevice(*m_device);
+
+        m_storage = std::make_unique<SDcardMock>(1024);
+
+        TermalRegulatorConfig ts = { &m_port, 0, GPIO_PIN_SET, GPIO_PIN_RESET, 1, 0 };
+        MotorConfig motor = { PULSE_LOWER, &m_port, 0, &m_port, 0 };
+        HMOTOR hmotor = MOTOR_Configure(&motor);
+        HTERMALREGULATOR htr = TR_Configure(&ts);
+        m_motors = { hmotor, hmotor, hmotor, hmotor };
+        m_trs = { htr, htr };
+    }
+
+
+    virtual void TearDown()
+    {
+        DetachDevice();
+        m_device = nullptr;
+    }
+};
+
+TEST_F(GCodeDriverCreationTest, printer_cannot_create_without_memory)
+{
+    DriverConfig cfg = { 0, m_storage.get(), m_motors.data(), m_trs.data(), &m_port, 0, 0, PRINTER_ACCELERATION_DISABLE };
 
     ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
 }
 
-TEST(GCodeDriverBasicTest, printer_cannot_create_without_area_settings)
+TEST_F(GCodeDriverCreationTest, printer_cannot_create_without_area_settings)
 {
-    DeviceSettings ds;
-    Device device(ds);
-    AttachDevice(device);
-
-    GPIO_TypeDef port = 0;
-    TermalRegulatorConfig ts = { &port, 0, GPIO_PIN_SET, GPIO_PIN_RESET };
-    MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
-    SDcardMock storage(1024);
-    MemoryManager mem;
-    PrinterConfig cfg = { &mem, &storage, &motor, &motor, &motor, &motor, PRINTER_ACCELERATION_DISABLE, &ts, &ts, &port, 0, 0 };
+    DriverConfig cfg = { &m_mem, m_storage.get(), m_motors.data(), m_trs.data(), &m_port, 0, 0, PRINTER_ACCELERATION_DISABLE };
 
     ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
 }
 
-TEST(GCodeDriverBasicTest, printer_cannot_create_without_motor)
+TEST_F(GCodeDriverCreationTest, printer_cannot_create_without_motor)
 {
-    DeviceSettings ds;
-    Device device(ds);
-    AttachDevice(device);
-
-    GPIO_TypeDef port = 0;
-    TermalRegulatorConfig ts = { &port, 0, GPIO_PIN_SET, GPIO_PIN_RESET };
-    MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
-    SDcardMock storage(1024);
-    GCodeAxisConfig axis_cfg = { 1,1,1,1 };
-    MemoryManager mem;
-    PrinterConfig cfg = { &mem, &storage, 0, 0, 0, 0, PRINTER_ACCELERATION_DISABLE, &ts, &ts, &port, 0, &axis_cfg };
+    DriverConfig cfg = { &m_mem, m_storage.get(), 0, m_trs.data(), &m_port, 0, &m_axis_cfg, PRINTER_ACCELERATION_DISABLE };
 
     ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
 }
 
-TEST(GCodeDriverBasicTest, printer_cannot_create_without_sensor)
+TEST_F(GCodeDriverCreationTest, printer_cannot_create_without_sensor)
 {
-    DeviceSettings ds;
-    Device device(ds);
-    AttachDevice(device);
-
-    GPIO_TypeDef port = 0;
-    MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
-    SDcardMock storage(1024);
-    GCodeAxisConfig axis_cfg = { 1,1,1,1 };
-    MemoryManager mem;
-    PrinterConfig cfg = { &mem, &storage, &motor, &motor, &motor, &motor, PRINTER_ACCELERATION_DISABLE, 0, 0, &port, 0, &axis_cfg };
+    DriverConfig cfg = { &m_mem,  m_storage.get(), m_motors.data(), 0, &m_port, 0, &m_axis_cfg, PRINTER_ACCELERATION_DISABLE };
 
     ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
 }
 
-TEST(GCodeDriverBasicTest, printer_cannot_create_without_cooler)
+TEST_F(GCodeDriverCreationTest, printer_cannot_create_without_cooler)
 {
-    DeviceSettings ds;
-    Device device(ds);
-    AttachDevice(device);
-
-    GPIO_TypeDef port = 0;
-    MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
-    SDcardMock storage(1024);
-    GCodeAxisConfig axis_cfg = { 1,1,1,1 };
-    MemoryManager mem;
-    PrinterConfig cfg = { &mem, &storage, &motor, &motor, &motor, &motor, PRINTER_ACCELERATION_DISABLE, 0, 0, 0, 0, &axis_cfg };
+     DriverConfig cfg = { &m_mem,  m_storage.get(), m_motors.data(), m_trs.data(), 0, 0, &m_axis_cfg, PRINTER_ACCELERATION_DISABLE };
 
     ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
 }
 
-TEST(GCodeDriverBasicTest, printer_can_create_with_storage)
+TEST_F(GCodeDriverCreationTest, printer_can_create_with_storage)
 {
-    DeviceSettings ds;
-    Device device(ds);
-    AttachDevice(device);
-
-    GPIO_TypeDef port = 0;
-    TermalRegulatorConfig ts = { &port, 0, GPIO_PIN_SET, GPIO_PIN_RESET, 1.f, 0.f };
-    MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0,};
-    SDcardMock storage(1024);
-    GCodeAxisConfig axis_cfg = { 1,1,1,1 };
-    MemoryManager mem;
-    PrinterConfig cfg = { &mem, &storage, &motor, &motor, &motor, &motor, PRINTER_ACCELERATION_DISABLE, &ts, &ts, &port, 0, &axis_cfg};
+    DriverConfig cfg = { &m_mem,  m_storage.get(), m_motors.data(), m_trs.data(), &m_port, 0, &m_axis_cfg, PRINTER_ACCELERATION_DISABLE };
 
     ASSERT_TRUE(nullptr != PrinterConfigure(&cfg));
 }
@@ -132,6 +117,8 @@ public:
 protected:
     GPIO_TypeDef port = 0;
     GCodeAxisConfig axis_cfg = { 1,1,1,1 };
+    std::vector<HMOTOR> m_motors;
+    std::vector<HTERMALREGULATOR> m_regulators;
 
     virtual void SetUp()
     {
@@ -142,10 +129,16 @@ protected:
         m_storage = std::make_unique<SDcardMock>(1024);
         m_sdcard = std::make_unique<SDcardMock>(1024);
         MemoryManagerConfigure(&m_memory);
+
+        MotorConfig motor_cfg = { PULSE_LOWER, &port, 0, &port, 0 };
+        HMOTOR motor = MOTOR_Configure(&motor_cfg);
         
+        m_motors = { motor, motor, motor, motor };
+
         TermalRegulatorConfig ts = { &port, 0, GPIO_PIN_SET, GPIO_PIN_RESET, 1.f, 0.f };
-        MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
-        PrinterConfig cfg = { &m_memory, m_storage.get(), &motor, &motor, &motor, &motor, PRINTER_ACCELERATION_DISABLE, &ts, &ts, &port, 0, &axis_cfg };
+        HTERMALREGULATOR regulator = TR_Configure(&ts);
+        m_regulators = { regulator, regulator };
+        DriverConfig cfg = { &m_memory, m_storage.get(), m_motors.data(), m_regulators.data(), &port, 0, &axis_cfg, PRINTER_ACCELERATION_DISABLE };
 
         printer_driver = PrinterConfigure(&cfg);
         RegisterSDCard();
