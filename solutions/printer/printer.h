@@ -1,8 +1,15 @@
 #include "main.h"
 #include "stm32f7xx_hal_spi.h"
-#include "sdcard.h"
 
+#ifndef _WIN32
+#include "include/sdcard.h"
+#include "include/display.h"
+#else
+#include "sdcard.h"
 #include "display.h"
+#endif
+
+#include "include/touch.h"
 
 #include "include/user_interface.h"
 #include "include/termal_regulator.h"
@@ -25,25 +32,26 @@ typedef struct
 
 typedef struct
 {
-    HSDCARD                 hsdcard;
-    FIL*                    file_handle;
-    DIR*                    directory_handle;
+    MemoryManager           memory_manager;
 
-    HSDCARD                 hram;
-    MemoryManager*          memory_manager;
+    HSDCARD                 storages[STORAGE_COUNT];
+    FIL                     file_handle;
+    DIR                     directory_handle;
 
-    HMOTOR*                 motors;
-    HTERMALREGULATOR*       termal_regulators;
+    HMOTOR                  motors[MOTOR_COUNT];
+    HTERMALREGULATOR        termal_regulators[TERMO_REGULATOR_COUNT];
 
     GPIO_TypeDef*           cooler_port;
     uint16_t                cooler_pin;
 
     HDISPLAY                hdisplay;
+    HTOUCH                  htouch;
 } PrinterConfiguration;
 
-HPRINTER  Configure(const PrinterConfiguration* cfg);
+HPRINTER  Configure(PrinterConfiguration* cfg);
 void      MainLoop(HPRINTER hprinter);
 void      OnTimer(HPRINTER hprinter);
+void      TrackAction(HPRINTER hprinter, uint16_t x, uint16_t y, bool pressed);
 void      ReadADCValue(HPRINTER hprinter, TERMO_REGULATOR regulator, uint16_t value);
 
 #ifdef __cplusplus

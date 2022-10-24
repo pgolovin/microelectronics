@@ -1,5 +1,11 @@
 #include "main.h"
+
+#ifndef _WIN32
+#include "include/sdcard.h"
+#else
 #include "sdcard.h"
+#endif
+
 #include "printer/printer_entities.h"
 #include "printer/printer_memory_manager.h"
 #include "ff.h"

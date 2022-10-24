@@ -25,11 +25,11 @@ TEST(PrinterBasicTest, can_create)
     UI hUi = nullptr;
 
     PrinterConfiguration cfg = {
-        &sdcard,
-        &f,
-        &d,
-        &ram,
-        &mem,
+        mem,
+        {&sdcard, &ram},
+        f,
+        d,
+        
     };
 
     ASSERT_TRUE(nullptr != Configure(&cfg));

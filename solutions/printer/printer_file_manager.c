@@ -1,4 +1,3 @@
-#include "printer_constants.h"
 #include "printer/printer_file_manager.h"
 #include "ff.h"
 

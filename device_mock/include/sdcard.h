@@ -31,6 +31,7 @@ typedef enum SDCARD_Status_type
 
 } SDCARD_Status;
 
+SDCARD_Status SDCARD_Init(HSDCARD hsdcard);
 SDCARD_Status SDCARD_IsInitialized(HSDCARD hsdcard);
 
 // Service commands

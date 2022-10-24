@@ -42,7 +42,7 @@ void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERA
         {PULSE_HIGHER, &port_e_step, 0, &port_e_dir, 0 },
     };
 
-    TermalRegulatorConfig regulators[TERMO_REGULATORS_COUNT] = 
+    TermalRegulatorConfig regulators[TERMO_REGULATOR_COUNT] = 
     {
         { &port_nozzle, 0, GPIO_PIN_SET, GPIO_PIN_RESET, 1.f, 0.f },
         { &port_table, 0, GPIO_PIN_RESET, GPIO_PIN_SET, 1.f, 0.f }
@@ -52,7 +52,7 @@ void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERA
     {
         m_motors[i] = MOTOR_Configure(&motor[i]);
     }
-    for (size_t i = 0; i < TERMO_REGULATORS_COUNT; ++i)
+    for (size_t i = 0; i < TERMO_REGULATOR_COUNT; ++i)
     {
         m_regulators[i] = TR_Configure(&regulators[i]);
     }
@@ -85,7 +85,7 @@ void PrinterEmulator::ConfigurePrinter(GCodeAxisConfig axis_config, PRINTER_ACCE
         {PULSE_HIGHER, &port_e_step, 0, &port_e_dir, 0 },
     };
 
-    TermalRegulatorConfig regulators[TERMO_REGULATORS_COUNT] =
+    TermalRegulatorConfig regulators[TERMO_REGULATOR_COUNT] =
     {
         { &port_nozzle, 0, GPIO_PIN_SET, GPIO_PIN_RESET, 1.f, 0.f },
         { &port_table, 0, GPIO_PIN_RESET, GPIO_PIN_SET, 1.f, 0.f }
@@ -95,7 +95,7 @@ void PrinterEmulator::ConfigurePrinter(GCodeAxisConfig axis_config, PRINTER_ACCE
     {
         m_motors[i] = MOTOR_Configure(&motor[i]);
     }
-    for (size_t i = 0; i < TERMO_REGULATORS_COUNT; ++i)
+    for (size_t i = 0; i < TERMO_REGULATOR_COUNT; ++i)
     {
         m_regulators[i] = TR_Configure(&regulators[i]);
     }

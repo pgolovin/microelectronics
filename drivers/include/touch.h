@@ -12,11 +12,10 @@
   CRCPolynomial = 10;
 */
 
-typedef struct TOUCH_T
+typedef struct
 {
     uint32_t id;
-} TOUCH_type;
-typedef struct TOUCH_type * HTOUCH;
+} *HTOUCH;
 
 typedef struct 
 {

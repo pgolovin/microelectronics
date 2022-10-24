@@ -1,6 +1,12 @@
 #include "main.h"
 #include "stm32f7xx_hal_spi.h"
+
+#ifndef _WIN32
+#include "include/sdcard.h"
+#else
 #include "sdcard.h"
+#endif
+
 #include "include/gcode.h"
 #include "include/motor.h"
 #include "include/termal_regulator.h"
@@ -27,7 +33,7 @@ typedef struct
     HMOTOR* motors;
 
     // Termal sensors configuration
-    // size == TERMO_REGULATORS_COUNT
+    // size == TERMO_REGULATOR_COUNT
     HTERMALREGULATOR* termo_regulators;
 
     // Cooler connection
@@ -36,7 +42,7 @@ typedef struct
 
     // Working area settings
     // contains information about amount of steps per cantimeter
-    GCodeAxisConfig* axis_configuration;
+    const GCodeAxisConfig* axis_configuration;
 
     // Flag to enable acceleration control or not.
     PRINTER_ACCELERATION acceleration_enabled;

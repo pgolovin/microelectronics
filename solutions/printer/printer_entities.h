@@ -34,6 +34,13 @@ extern "C" {
 
 #define FILE_NAME_LEN 32
 
+typedef enum // sdcards type
+{
+    STORAGE_EXTERNAL = 0,
+    STORAGE_INTERNAL,
+    STORAGE_COUNT
+} STORAGE_TYPE;
+
 typedef enum
 {
     PRINTER_ACCELERATION_DISABLE = 0,
@@ -55,6 +62,13 @@ typedef enum
     MOTOR_COUNT,
 } MOTOR_TYPES;
 
+typedef enum
+{
+    TERMO_NOZZLE = 0,
+    TERMO_TABLE = 1,
+    TERMO_REGULATOR_COUNT
+} TERMO_REGULATOR;
+
 typedef struct PrinterControlBlock_Type
 {
     //id, to identify that card is correct;
@@ -65,18 +79,11 @@ typedef struct PrinterControlBlock_Type
     uint32_t commands_count;
 } PrinterControlBlock;
 
-typedef enum TERMO_REGULATOR_Type
-{
-    TERMO_NOZZLE = 0,
-    TERMO_TABLE = 1,
-    TERMO_REGULATORS_COUNT
-} TERMO_REGULATOR;
-
 typedef struct 
 {
     uint32_t security_code;
     char name[9];
-    uint16_t temperature[TERMO_REGULATORS_COUNT];
+    uint16_t temperature[TERMO_REGULATOR_COUNT];
     uint16_t e_flow_percent;
     uint16_t cooler_power;
 } MaterialFile;

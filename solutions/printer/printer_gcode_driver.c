@@ -29,7 +29,7 @@ typedef struct
     // for printing resuming;
     uint8_t             coordinates_mode;
     uint8_t             extrusion_mode;
-    uint16_t            temperature[TERMO_REGULATORS_COUNT];
+    uint16_t            temperature[TERMO_REGULATOR_COUNT];
     uint32_t            current_command;
     uint32_t            current_sector;
     uint8_t             caret_position;
@@ -66,7 +66,7 @@ typedef struct
 
     // Motors configuration and acceleration settings
     HMOTOR *motors;
-    GCodeAxisConfig* axis_cfg;
+    const GCodeAxisConfig* axis_cfg;
 
     PRINTER_ACCELERATION acceleration_enabled; // TO BE CONSTANT
     HPULSE   accelerator;
