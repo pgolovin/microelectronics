@@ -1699,6 +1699,30 @@ TEST_F(GCodeDriverStateTest, consequent_prints)
     ASSERT_EQ(0, params->e);
 }
 
+TEST_F(GCodeDriverStateTest, manual_save_state)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G0 F1800 X30 Y0 Z0 E30",
+        "G0 F1800 X50 Y0 Z0 E50",
+    };
+    StartPrinting(commands, nullptr);
+    for (const auto& cmd : commands)
+    {
+        CompleteCommand(PrinterNextCommand(printer_driver));
+    }
+    ASSERT_EQ(PRINTER_FINISHED, PrinterNextCommand(printer_driver));
+
+    ASSERT_EQ(PRINTER_OK, PrinterSaveState(printer_driver));
+
+    //start new printing
+    StartPrinting(commands, nullptr);
+    ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
+    GCodeCommandParams* params = PrinterGetCurrentPath(printer_driver);
+    ASSERT_EQ(-50, params->x);
+    ASSERT_EQ(0, params->e);
+}
+
 TEST_F(GCodeDriverStateTest, nozzle_temperature)
 {
     std::vector<std::string> commands = {

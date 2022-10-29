@@ -93,6 +93,7 @@ HIndicator UI_CreateIndicator(UI ui_handle, HFrame parent, Rect indicator_rect, 
 Rect       UI_GetFrameUserArea(UI ui_handle, HFrame frame);
 void       UI_EnableButton(UI ui_handle, HButton button, bool enabled);
 void       UI_SetButtonLabel(UI ui_handle, HButton button, const char* label);
+void       UI_SetLabel(UI ui_handle, HLabel hlabel, const char* label);
 void       UI_EnableFrame(UI ui_handle, HFrame frame, bool enabled);
 
 // UI items mahagement

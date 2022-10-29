@@ -8,7 +8,8 @@
 
 struct DeviceSettings
 {
-    size_t available_heap       = 0xfff;
+    //WARNING: this ammount of memory should be checked on device
+    size_t available_heap       = 0x1fff;
     size_t ports_count          = 0x10;
     bool   throw_out_of_memory  = false;
 };

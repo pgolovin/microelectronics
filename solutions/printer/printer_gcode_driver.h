@@ -63,6 +63,7 @@ PRINTER_STATUS PrinterPrintFromCache(HDRIVER hdriver, MaterialFile* material_ove
 PRINTER_STATUS PrinterNextCommand(HDRIVER hdriver);
 PRINTER_STATUS PrinterExecuteCommand(HDRIVER hdriver);
 PRINTER_STATUS PrinterGetStatus(HDRIVER hdriver);
+PRINTER_STATUS PrinterSaveState(HDRIVER hdriver);
 
 void           PrinterSetTemperature(HDRIVER printer, TERMO_REGULATOR regulator, uint16_t value, MaterialFile* material_override);
 

@@ -5,6 +5,7 @@
 #include "display.h"
 #include <array>
 #include <string>
+#include <functional>
 
 typedef struct
 {
@@ -38,6 +39,10 @@ public:
     void Print(const std::string& str);
 
     void Blit(const Point& location);
+    void Draw(void* context, const Point& location);// TODO: Add any drawing code that uses hdc here...
+
+    void RegisterRefreshCallback(std::function<void(void)> callback);
+
 
 private:
     void setAddressWindow(const Rect& window);
@@ -46,6 +51,8 @@ private:
     void drawString(Point& placement, const Rect& rect, const std::string& str);
 
 private:
+
+    std::function<void(void)> m_update_handler = nullptr;
     size_t m_caret = 0;
     Rect m_write_region = { 0 };
     Rect m_text_area = { 0 };

@@ -40,7 +40,7 @@ static const char* parseValue(const char* command_line, parameterType multiplier
         ++command_line;
     }
     
-    for (; (*command_line && *command_line != ' '); ++command_line)
+    for (; (*command_line && *command_line != ' ' && *command_line != '\r'); ++command_line)
     {
         if (*command_line == '.')
         {
@@ -51,7 +51,7 @@ static const char* parseValue(const char* command_line, parameterType multiplier
     }
 
     float divider = 10.f;
-    for (; (*command_line && *command_line != ' '); ++command_line)
+    for (; (*command_line && *command_line != ' ' && *command_line != '\r'); ++command_line)
     {
         result = result + (*command_line - '0') / divider;
         divider *= 10;
@@ -341,6 +341,7 @@ GCodeCommandParams* GC_DecompileFromBuffer(uint8_t* buffer, GCODE_COMMAND_LIST* 
 
 GCODE_COMMAND_STATE GC_ExecuteFromBuffer(GCodeFunctionList* functions, void* additional_parameter, const uint8_t* buffer)
 {
+#ifndef FIRMAWARE
     if (!functions)
     {
         return GCODE_FATAL_ERROR_NO_COMMAND;
@@ -349,6 +350,7 @@ GCODE_COMMAND_STATE GC_ExecuteFromBuffer(GCodeFunctionList* functions, void* add
     {
         return GCODE_FATAL_ERROR_NO_DATA;
     }
+#endif
     parameterType code = *(parameterType*)buffer;
     if (code & GCODE_COMMAND)
     {

@@ -18,7 +18,7 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_ram)
     MemoryManager mem;
     FIL f;
 
-    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), 0, &mem, &axis_configuration, &f));
+    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), 0, &mem, &axis_configuration, &f, nullptr));
 }
 
 TEST(GCodeFileConverterBasicTest, cannot_create_without_card)
@@ -30,7 +30,7 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_card)
     MemoryManager mem;
     FIL f;
 
-    ASSERT_TRUE(nullptr == FileManagerConfigure(0, (HSDCARD)(&card), &mem, &axis_configuration, &f));
+    ASSERT_TRUE(nullptr == FileManagerConfigure(0, (HSDCARD)(&card), &mem, &axis_configuration, &f, nullptr));
 }
 
 TEST(GCodeFileConverterBasicTest, cannot_create_without_memory)
@@ -41,7 +41,7 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_memory)
     SDcardMock card(1024);
     FIL f;
 
-    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), 0, &axis_configuration, &f));
+    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), 0, &axis_configuration, &f, nullptr));
 }
 
 TEST(GCodeFileConverterBasicTest, can_create)
@@ -53,7 +53,7 @@ TEST(GCodeFileConverterBasicTest, can_create)
     MemoryManager mem;
     FIL f;
 
-    ASSERT_TRUE(nullptr != FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), &mem, &axis_configuration, &f));
+    ASSERT_TRUE(nullptr != FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), &mem, &axis_configuration, &f, nullptr));
 }
 
 class GCodeFileConverterTest : public ::testing::Test
@@ -68,7 +68,7 @@ protected:
         registerFileSystem();
         MemoryManagerConfigure(&m_memory_manager);
 
-        m_file_manager = FileManagerConfigure((HSDCARD)m_sdcard.get(), (HSDCARD)m_ram.get(), &m_memory_manager, &axis_configuration, m_f.get());
+        m_file_manager = FileManagerConfigure((HSDCARD)m_sdcard.get(), (HSDCARD)m_ram.get(), &m_memory_manager, &axis_configuration, m_f.get(), nullptr);
     }
 
     virtual void TearDown()

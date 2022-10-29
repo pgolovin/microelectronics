@@ -1,4 +1,5 @@
 #include "printer/printer_file_manager.h"
+#include "printer/printer.h"
 #include "ff.h"
 
 #define DEFAULT_DRIVE_ID 0
@@ -12,6 +13,7 @@ typedef struct
 typedef struct
 {
     MemoryManager* memory;
+    void* logger;
 
     HSDCARD sdcard;
     HSDCARD ram;
@@ -31,7 +33,7 @@ typedef struct
     
 } FileManager;
 
-HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, MemoryManager* memory, const GCodeAxisConfig* config, FIL* file_handle)
+HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, MemoryManager* memory, const GCodeAxisConfig* config, FIL* file_handle, void* logger)
 {
 
 #ifndef PRINTER_FIRMWARE
@@ -51,6 +53,7 @@ HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, MemoryManager* me
     fm->memory = memory;
     fm->mtl_caret = 0;
     fm->file = file_handle;
+    fm->logger = logger;
 
     SDCARD_FAT_Register(sdcard, DEFAULT_DRIVE_ID);
     f_mount(&fm->file_system, "", 0);
@@ -160,6 +163,13 @@ PRINTER_STATUS FileManagerReadGCodeBlock(HFILEMANAGER hfile)
 PRINTER_STATUS FileManagerCloseGCode(HFILEMANAGER hfile)
 {
     FileManager* fm = (FileManager*)hfile;
+    if (fm->buffer_size)
+    {
+        if (SDCARD_OK != SDCARD_WriteSingleBlock(fm->ram, fm->memory->pages[1], fm->current_block++))
+        {
+            return PRINTER_RAM_FAILURE;
+        }
+    }
     if (FR_OK != f_close(fm->file))
     {
         return PRINTER_FILE_NOT_GCODE;

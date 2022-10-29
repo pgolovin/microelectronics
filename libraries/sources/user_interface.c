@@ -7,6 +7,7 @@
 
 #define BORDER_OFFSET   4
 #define LABEL_LENGTH    16
+#define STRING_LENGTH   32
 #define CHILDREN_COUNT  10
 
 #define LETTER_WIDTH    8
@@ -39,7 +40,7 @@ typedef struct
 {
     Rect    frame;
     uint8_t font_height;
-    char    label[LABEL_LENGTH];
+    char    label[STRING_LENGTH];
 } Label;
 
 typedef struct
@@ -425,9 +426,9 @@ HLabel UI_CreateLabel(UI ui_handle, HFrame parent, Rect frame, const char* label
 
     Label* ui_label = DeviceAlloc(sizeof(Label));
     size_t len = strlen(label);
-    if (len > LABEL_LENGTH)
+    if (len > STRING_LENGTH)
     {
-        len = LABEL_LENGTH;
+        len = STRING_LENGTH;
     }
 
     strcpy(ui_label->label, label);
@@ -564,6 +565,21 @@ void UI_SetButtonLabel(UI ui_handle, HButton button, const char* label)
     strcpy(btn->label, label);
     btn->label[len] = 0;
     DrawButton(ui, btn);
+}
+
+void UI_SetLabel(UI ui_handle, HLabel hlabel, const char* label)
+{
+    UI_CORE* ui = (UI_CORE*)ui_handle;
+    Label* lbl = (Label*)hlabel;
+    size_t len = strlen(label);
+    if (len > STRING_LENGTH - 1)
+    {
+        len = STRING_LENGTH - 1;
+    }
+
+    strcpy(lbl->label, label);
+    lbl->label[len] = 0;
+    DrawLabel(ui, lbl);
 }
 
 void UI_SetIndicatorLabel(UI ui_handle, HIndicator indicator, const char* label)

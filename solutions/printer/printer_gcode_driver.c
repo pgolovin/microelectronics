@@ -69,14 +69,14 @@ typedef struct
     const GCodeAxisConfig* axis_cfg;
 
     PRINTER_ACCELERATION acceleration_enabled; // TO BE CONSTANT
-    HPULSE   accelerator;
-    uint8_t  acceleration_tick;
-    uint8_t  acceleration_region;
-    uint8_t  acceleration_segments; // not sure that it is possible to have more than 256 acceleration segments
-    int8_t   acceleration_region_increment;
-    uint16_t acceleration_distance;
-    uint8_t  acceleration_distance_increment;
-    uint32_t acceleration_subsequent_region_length;
+    HPULSE    accelerator;
+    uint8_t   acceleration_tick;
+    uint8_t   acceleration_region;
+    uint32_t  acceleration_segments; // not sure that it is possible to have more than 256 acceleration segments
+    int8_t    acceleration_region_increment;
+    uint16_t  acceleration_distance;
+    uint8_t   acceleration_distance_increment;
+    uint32_t  acceleration_subsequent_region_length;
 
     MaterialFile *material_override;
     // Heaters: nozzle and table
@@ -591,6 +591,11 @@ PRINTER_STATUS PrinterPrintFromCache(HDRIVER hdriver, MaterialFile * material_ov
     PULSE_SetPower(driver->accelerator, STANDARD_ACCELERATION_SEGMENT);
 
     return status;
+}
+
+PRINTER_STATUS PrinterSaveState(HDRIVER hdriver)
+{
+    return saveState(0, hdriver);
 }
 
 uint32_t PrinterGetRemainingCommandsCount(HDRIVER hdriver)

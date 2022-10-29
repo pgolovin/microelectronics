@@ -22,7 +22,7 @@ typedef struct FILE_MANAGER
     uint32_t id;
 } *HFILEMANAGER;
 
-HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, MemoryManager* memory, const GCodeAxisConfig* config, FIL* file_handle);
+HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, MemoryManager* memory, const GCodeAxisConfig* config, FIL* file_handle, void* logger);
 
 // The following operation is split on 3 steps: [start -> work -> complete] to avoid blocking UI
 

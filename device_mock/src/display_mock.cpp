@@ -90,7 +90,10 @@ void DisplayMock::drawString(Point& placement, const Rect& rect, const std::stri
         }
     
         drawSymbol(rect.x0 + (placement.c_x++)*8, rect.y0 + placement.c_y*8, c, text_color, background_color);
-            
+    }
+    if (m_update_handler)
+    {
+        m_update_handler();
     }
 }
 
@@ -98,7 +101,6 @@ void DisplayMock::Blit(const Point& location)
 {
     HWND console = GetConsoleWindow();
     HDC hdc = GetDC(console);
-
     RECT client_rect;
     GetClientRect(console, &client_rect);
 
@@ -109,6 +111,12 @@ void DisplayMock::Blit(const Point& location)
         (client_rect.bottom + s_display_height) / 2,
     };
 
+    Draw(hdc, { (uint16_t)(window_rect.left + location.c_x), (uint16_t)(window_rect.top + location.c_y) });
+    ReleaseDC(console, hdc);
+}
+
+void DisplayMock::Draw(void* context, const Point& location)
+{
     for (size_t y = 0; y < s_display_height; ++y)
     {
         for (size_t x = 0; x < s_display_width; ++x)
@@ -119,14 +127,13 @@ void DisplayMock::Blit(const Point& location)
             rgb565 = component1 | component2;
 
             uint8_t r = (((rgb565 >> 11) & 0x1F) * 255 + 15) / 31;
-            uint8_t g = (((rgb565 >> 5 ) & 0x3F) * 255 + 31) / 63;
+            uint8_t g = (((rgb565 >> 5) & 0x3F) * 255 + 31) / 63;
             uint8_t b = ((rgb565 & 0x1F) * 255 + 15) / 31;
 
             COLORREF color = RGB(r, g, b);
-            SetPixel(hdc, window_rect.left + x + location.c_x, window_rect.top + y + location.c_y, color);
+            SetPixel((HDC)context, x + location.c_x, y + location.c_y, color);
         }
     }
-    ReleaseDC(console, hdc);
 }
 
 void DisplayMock::BeginDraw(Rect rectangle)
@@ -135,6 +142,14 @@ void DisplayMock::BeginDraw(Rect rectangle)
     rectangle.y1 -= 1;
 
     setAddressWindow(rectangle);
+}
+
+void DisplayMock::EndDraw()
+{
+    if (m_update_handler)
+    {
+        m_update_handler();
+    }
 }
 
 void DisplayMock::WritePixels(const uint16_t* pixels, size_t count)
@@ -163,6 +178,10 @@ void DisplayMock::FillRect(Rect rectangle, uint16_t color)
     for (uint32_t j = 0; j < lines_count; ++j)
     {
         writeData((uint8_t*)&display_line, 2 * line_width);
+    }
+    if (m_update_handler)
+    {
+        m_update_handler();
     }
 }
 
@@ -198,6 +217,11 @@ void DisplayMock::DrawString(const Rect* text_area, const std::string& str)
     Point placement = { 0 };
     drawString(placement, *text_area, str);
 }
+
+void DisplayMock::RegisterRefreshCallback(std::function<void(void)> callback)
+{
+    m_update_handler = callback;
+}
 ////////////////////////////////////////////////////////////////////////////////////////////////
 // public functionality
 
@@ -215,6 +239,7 @@ DISPLAY_Status DISPLAY_WritePixels(HDISPLAY hdisplay, const uint16_t* pixels, si
 
 DISPLAY_Status DISPLAY_EndDraw(HDISPLAY hdisplay)
 {
+    ((DisplayMock*)hdisplay)->EndDraw();
     return DISPLAY_OK;
 }
 

@@ -54,6 +54,8 @@ void      OnTimer(HPRINTER hprinter);
 void      TrackAction(HPRINTER hprinter, uint16_t x, uint16_t y, bool pressed);
 void      ReadADCValue(HPRINTER hprinter, TERMO_REGULATOR regulator, uint16_t value);
 
+void      Log(HPRINTER hprinter, const char* string);
+
 #ifdef __cplusplus
 }
 #endif

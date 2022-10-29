@@ -49,6 +49,14 @@ const GCodeAxisConfig axis_configuration =
     104
 };
 
+const GCodeAxisConfig axis_configuration_1 =
+{
+    1,
+    1,
+    1,
+    1
+};
+
 #ifdef __cplusplus
 }
 #endif

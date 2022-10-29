@@ -14,23 +14,5 @@
 
 TEST(PrinterBasicTest, can_create)
 {
-    DeviceSettings ds;
-    Device device(ds);
-    AttachDevice(device);
-    SDcardMock ram(1024);
-    SDcardMock sdcard(1024);
-    MemoryManager mem;
-    FIL f;
-    DIR d;
-    UI hUi = nullptr;
-
-    PrinterConfiguration cfg = {
-        mem,
-        {&sdcard, &ram},
-        f,
-        d,
-        
-    };
-
-    ASSERT_TRUE(nullptr != Configure(&cfg));
+   
 }

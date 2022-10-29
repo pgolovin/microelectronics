@@ -114,7 +114,7 @@ void PrinterEmulator::RegisterSDCard()
 {
     InsertSDCARD(m_sdcard.get());
 
-    m_file_manager = FileManagerConfigure(m_sdcard.get(), m_storage.get(), &m_memory, &axis, &m_f);
+    m_file_manager = FileManagerConfigure(m_sdcard.get(), m_storage.get(), &m_memory, &axis, &m_f, 0);
 }
 
 void PrinterEmulator::StartPrinting(const std::vector<std::string>& commands, MaterialFile* material_override)

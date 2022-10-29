@@ -26,6 +26,7 @@ set(SOURCES
 # add sub-project
 add_executable(driver_tests ${SOURCES})
 
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/resources/model.gcode" "${CMAKE_BINARY_DIR}/bin/model.gcode" COPYONLY)
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/resources/wanhao.gcode" "${CMAKE_BINARY_DIR}/bin/wanhao.gcode" COPYONLY)
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/resources/pla.mtl" "${CMAKE_BINARY_DIR}/bin/pla.mtl" COPYONLY)
 
