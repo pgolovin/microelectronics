@@ -150,6 +150,11 @@ size_t PrinterEmulator::CompleteCommand(PRINTER_STATUS command_status)
     {
         ++i;
         command_status = PrinterExecuteCommand(printer_driver);
+        if (PRINTER_PRELOAD_REQUIRED == command_status)
+        {
+            throw std::exception("Preload is required");
+            break;
+        }
     }
     return i;
 }

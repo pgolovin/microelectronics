@@ -259,11 +259,10 @@ protected:
     const size_t steps_per_block = 100; // 1 mm per region
     const size_t fetch_speed = 1800; // 1 mm per region
     size_t commands_count = 0;
+    std::vector<std::string> commands;
     virtual void SetUp()
     {
         SetupPrinter(axis_configuration, PRINTER_ACCELERATION_ENABLE);
-
-        std::vector<std::string> commands;
 
         for (size_t i = 0; i < 60 * 3 * fetch_speed / 1800; ++i)
         {
@@ -334,6 +333,7 @@ TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_end)
 
     while (steps < 5000 * fetch_speed / 1800)
     {
+        PrinterLoadData(printer_driver);
         steps += CompleteCommand(PrinterNextCommand(printer_driver));
         ASSERT_NE(commands_count - 1, cmd_index) << "Commands count exceeded";
     }
@@ -341,6 +341,7 @@ TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_end)
     
     while (region_length > (braking_distance - CalculateStepsCount(fetch_speed, steps_per_block, 100)))
     {
+        PrinterLoadData(printer_driver);
         steps += CompleteCommand(PrinterNextCommand(printer_driver));
         region_length = PrinterGetAccelerationRegion(printer_driver);
         ++cmd_index;
@@ -359,15 +360,18 @@ TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_braking)
    
     while (PrinterGetRemainingCommandsCount(printer_driver) > 3)
     {
+        PrinterLoadData(printer_driver);
         CompleteCommand(PrinterNextCommand(printer_driver));
     }
     // getting to the braking zone
     size_t steps = CalculateStepsCount(fetch_speed, steps_per_block, 100);
-    size_t local_steps = CalculateStepsCount(fetch_speed, steps_per_block, 100);
+    size_t local_steps = 0;
     while (PrinterGetRemainingCommandsCount(printer_driver))
     {
         local_steps = CompleteCommand(PrinterNextCommand(printer_driver));
-        ASSERT_GT(local_steps, steps) << "command: " << PrinterGetRemainingCommandsCount(printer_driver);
+        PrinterLoadData(printer_driver);
+        uint32_t count = PrinterGetRemainingCommandsCount(printer_driver);
+        ASSERT_GT(local_steps, steps) << "command: " << count;
         steps = local_steps;
     }
 }
@@ -377,6 +381,7 @@ TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_can_be_printed)
     uint32_t printer_commands_count = PrinterGetRemainingCommandsCount(printer_driver);
     for (size_t i = 0; i < printer_commands_count; ++i)
     {
+        PrinterLoadData(printer_driver);
         PRINTER_STATUS status = PrinterNextCommand(printer_driver);
         ASSERT_NE(PRINTER_FINISHED, status);
         CompleteCommand(status);

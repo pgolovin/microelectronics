@@ -5,6 +5,25 @@
 
 #include <stdio.h>
 
+const uint8_t set_zero[64] =
+{ 
+    //G92 X0 Y0 Z0
+    0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    // G99
+    0x05, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+
+const uint8_t elevate_10[64] = { 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x1f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2c, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x1f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2c, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+
+const uint8_t elevate_1[64] = { 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+
+const uint8_t elevate_01[64] = { 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2c, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2c, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+
 typedef enum
 {
     CONFIGURATION = 0,
@@ -33,44 +52,55 @@ typedef struct
     HTOUCH htouch;
     UI ui_handle;
     HIndicator hprogress;
-    HIndicator htouch_indicator;
     HButton    transfer_button;
     HButton    start_button;
-    HLabel     herror_string;
+    Rect       status_bar;
 
     uint32_t   total_commands_count;
-
 } Printer;
 
 // on file select
-static bool startTransfer(void* metadata)
+static bool startTransfer(ActionParameter* param)
 {
-    Printer* printer = (Printer*)metadata;
+    Printer* printer = (Printer*)param->metadata;
     printer->gcode_blocks_count = FileManagerOpenGCode(printer->file_manager, "model.gcode");
     if (0 != printer->gcode_blocks_count)
     {
-        UI_SetLabel(printer->ui_handle, printer->herror_string, "File accepted");
+        UI_Print(printer->ui_handle, &printer->status_bar, "File accepted");
         printer->current_mode = FILE_TRANSFERING;
     }
     else
     {
-        UI_SetLabel(printer->ui_handle, printer->herror_string, "File open failed");
+        UI_Print(printer->ui_handle, &printer->status_bar, "File open failed");
     }
     return true;
 }
 
-static bool startPrinting(void* metadata)
+static bool startPrinting(ActionParameter* param)
 {
-    Printer* printer = (Printer*)metadata;
-    UI_EnableButton(printer->ui_handle, printer->start_button, false);
-    UI_EnableButton(printer->ui_handle, printer->transfer_button, false);
+    Printer* printer = (Printer*)param->metadata;
+    UI_EnableButton(printer->start_button, false);
+    UI_EnableButton(printer->transfer_button, false);
 
     PrinterInitialize(printer->driver);
     PrinterPrintFromCache(printer->driver, 0, PRINTER_START);
 
     printer->total_commands_count = PrinterGetRemainingCommandsCount(printer->driver);
+    UI_Print(printer->ui_handle, &printer->status_bar, "Printing Started");
 
     printer->current_mode = PRINTING;
+    return true;
+}
+
+static bool run_command(ActionParameter* param)
+{
+    param = param;
+    //CommandContext* context = (CommandContext*)metadata;
+    //
+    //PrinterInitialize(context->printer->driver);
+    //PrinterPrintFromBuffer(context->printer->driver, context->commands, context->command_count);
+    //
+    //context->printer->current_mode = PRINTING;
     return true;
 }
 
@@ -111,23 +141,25 @@ HPRINTER Configure(PrinterConfiguration* cfg)
     Rect indicator = { 100, 0, 220, 50 };
     printer->hprogress = UI_CreateIndicator(printer->ui_handle, 0, indicator, "0000", LARGE_FONT, 0, true);
 
-    Rect touch_indicator = { 220, 0, 320, 50 };
-    printer->htouch_indicator = UI_CreateIndicator(printer->ui_handle, 0, touch_indicator, "TOUCH", LARGE_FONT, 0, false);
-
     Rect frame = { 0, 50, 320, 200 };
     HFrame fr = UI_CreateFrame(printer->ui_handle, 0, frame, true);
 
     Rect button = { 100, 10, 200, 50 };
-    printer->transfer_button = UI_CreateButton(printer->ui_handle, fr, button, "Transfer", LARGE_FONT, true, startTransfer, printer);
+    printer->transfer_button = UI_CreateButton(printer->ui_handle, fr, button, "Transfer", LARGE_FONT, 
+        (SDCARD_OK == SDCARD_IsInitialized(printer->storages[STORAGE_EXTERNAL])), startTransfer, printer, 0);
+
     Rect button_start = { 100, 50, 200, 90 };
 
     PrinterControlBlock cbl;
     PrinterReadControlBlock(printer->driver, &cbl);
     printer->start_button = UI_CreateButton(printer->ui_handle, fr, button_start, "Start", LARGE_FONT, 
-        (CONTROL_BLOCK_SEC_CODE == cbl.secure_id && cbl.commands_count), startPrinting, printer);
+        (CONTROL_BLOCK_SEC_CODE == cbl.secure_id && cbl.commands_count), startPrinting, printer, 0);
 
     Rect status_bar = { 0, 200, 320, 240 };
-    printer->herror_string = UI_CreateLabel(printer->ui_handle, 0, status_bar, "status", NORMAL_FONT);
+    printer->status_bar = status_bar;
+    UI_CreateFrame(printer->ui_handle, 0, status_bar, true);
+    printer->status_bar.x0 = 10;
+    printer->status_bar.y0 = 210;
 
     UI_Refresh(printer->ui_handle);
     return (HPRINTER)printer;
@@ -140,17 +172,17 @@ void MainLoop(HPRINTER hprinter)
     {
         printer->current_mode = CONFIGURATION;
         PrinterSaveState(printer->driver);
-        UI_EnableButton(printer->ui_handle, printer->transfer_button, true);
+        UI_EnableButton(printer->transfer_button, (SDCARD_OK == SDCARD_IsInitialized(printer->storages[STORAGE_EXTERNAL])));
 
         PrinterControlBlock cbl;
         PrinterReadControlBlock(printer->driver, &cbl);
-        UI_EnableButton(printer->ui_handle, printer->start_button, (CONTROL_BLOCK_SEC_CODE == cbl.secure_id && cbl.commands_count));
-        UI_SetLabel(printer->ui_handle, printer->herror_string, "Printing Finished");
+        UI_EnableButton(printer->start_button, (CONTROL_BLOCK_SEC_CODE == cbl.secure_id && cbl.commands_count));
+        UI_Print(printer->ui_handle, &printer->status_bar, "Printing Finished");
     }
 
     if (PRINTING == printer->current_mode)
     {
-        UI_SetLabel(printer->ui_handle, printer->herror_string, "Printing In Progress");
+        PrinterLoadData(printer->driver);
     }
 
     if (SDCARD_OK != SDCARD_IsInitialized(printer->storages[STORAGE_INTERNAL]))
@@ -167,6 +199,7 @@ void MainLoop(HPRINTER hprinter)
             SDCARD_Init(printer->storages[STORAGE_EXTERNAL]);
             SDCARD_ReadBlocksNumber(printer->storages[STORAGE_EXTERNAL]);
         }
+        UI_EnableButton(printer->transfer_button, (SDCARD_OK == SDCARD_IsInitialized(printer->storages[STORAGE_EXTERNAL])));
         return;
     }
     if (FILE_TRANSFERING == printer->current_mode)
@@ -181,8 +214,9 @@ void MainLoop(HPRINTER hprinter)
         {
             FileManagerCloseGCode(printer->file_manager);
             
-            UI_EnableButton(printer->ui_handle, printer->transfer_button, false);
-            UI_EnableButton(printer->ui_handle, printer->start_button, true);
+            UI_EnableButton(printer->transfer_button, true);
+            UI_EnableButton(printer->start_button, true);
+            printer->current_mode = CONFIGURATION;
             return;
         }
         if (PRINTER_OK != FileManagerReadGCodeBlock(printer->file_manager))
@@ -225,5 +259,5 @@ void ReadADCValue(HPRINTER hprinter, TERMO_REGULATOR regulator, uint16_t value)
 void Log(HPRINTER hprinter, const char* string)
 {
     Printer* printer = (Printer*)hprinter;
-    UI_SetLabel(printer->ui_handle, printer->herror_string, string);
+    UI_Print(printer->ui_handle, &printer->status_bar, string);
 }

@@ -8,8 +8,10 @@
 typedef enum
 {
     MAIN_COMMANDS_PAGE = 0,
+    PRELOAD_COMMANDS_PAGE,
     LOOKUP_COMMANDS_PAGE,
     STATE_PAGE,
+    
 } MEMORY_PAGES;
 
 typedef enum
@@ -53,6 +55,13 @@ typedef struct
     GCodeFunctionList  setup_calls;
     GCodeCommandParams current_segment;
     bool               resume; // marker that before printing we should return to position of pause
+    
+    // to create seamless data loading for the printer, loading will be made in 2 steps: load actual data and preload the next chunk,
+    // preloading and loading will be performed in a different threads to avoid glitches during printing
+    bool               pre_load_required;
+    MEMORY_PAGES       main_load_page;
+    MEMORY_PAGES       secondary_load_page;
+
     const uint8_t*     data_pointer;
     uint32_t           commands_count;
 
@@ -147,7 +156,7 @@ static void calculateAccelRegion(Driver* driver, uint32_t initial_region)
 
     uint32_t current_caret = driver->active_state->caret_position + 1;
     GCODE_COMMAND_LIST command_id = GCODE_MOVE;
-    uint8_t* data_block = driver->memory->pages[MAIN_COMMANDS_PAGE];
+    uint8_t* data_block = driver->memory->pages[driver->main_load_page];
 
     GCodeCommandParams last_segment = driver->current_segment;
     GCodeCommandParams last_position = driver->active_state->position;
@@ -457,6 +466,7 @@ HDRIVER PrinterConfigure(DriverConfig* printer_cfg)
     driver->cooler_pin = printer_cfg->cooler_pin;
 
     driver->active_state = &driver->state;
+    driver->pre_load_required = false;
 
     PULSE_SetPeriod(driver->accelerator, STANDARD_ACCELERATION_SEGMENT);
     PULSE_SetPeriod(driver->cooler, COOLER_MAX_POWER);
@@ -515,6 +525,7 @@ PRINTER_STATUS PrinterInitialize(HDRIVER hdriver)
     driver->tick_index = 0;
     driver->termo_regulators_state = 0;
     driver->last_command_status = GCODE_OK;
+    driver->pre_load_required = false;
 
     return restoreState(driver);
 }
@@ -585,12 +596,26 @@ PRINTER_STATUS PrinterPrintFromCache(HDRIVER hdriver, MaterialFile * material_ov
         driver->last_command_status = setTableTemperatureBlocking(&temperature, hdriver);
     }
 
-    SDCARD_ReadSingleBlock(driver->storage, driver->memory->pages[MAIN_COMMANDS_PAGE], driver->active_state->current_sector);
-    driver->data_pointer = driver->memory->pages[MAIN_COMMANDS_PAGE];
+    driver->main_load_page = MAIN_COMMANDS_PAGE;
+    driver->secondary_load_page = PRELOAD_COMMANDS_PAGE;
 
+    SDCARD_ReadSingleBlock(driver->storage, driver->memory->pages[driver->main_load_page], driver->active_state->current_sector);
+    driver->data_pointer = driver->memory->pages[driver->main_load_page];
+    driver->pre_load_required = true;
     PULSE_SetPower(driver->accelerator, STANDARD_ACCELERATION_SEGMENT);
 
     return status;
+}
+
+PRINTER_STATUS PrinterLoadData(HDRIVER hdriver)
+{
+    Driver* driver = (Driver*)hdriver;
+    if (driver->pre_load_required)
+    {
+        SDCARD_ReadSingleBlock(driver->storage, driver->memory->pages[driver->secondary_load_page], driver->active_state->current_sector + 1);
+        driver->pre_load_required = false;
+    }
+    return PRINTER_OK;
 }
 
 PRINTER_STATUS PrinterSaveState(HDRIVER hdriver)
@@ -652,12 +677,24 @@ PRINTER_STATUS PrinterNextCommand(HDRIVER hdriver)
     
     if (driver->commands_count - driver->active_state->current_command)
     {
+        // dont advance in commands execution if next data block is not ready
+        if (driver->pre_load_required && driver->active_state->caret_position + 1 == SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE)
+        {
+            driver->last_command_status = GCODE_OK;
+            return PRINTER_PRELOAD_REQUIRED;
+        };
+
         ++driver->active_state->current_command;
         driver->last_command_status = GC_ExecuteFromBuffer(&driver->setup_calls, driver, driver->data_pointer + (size_t)(GCODE_CHUNK_SIZE * driver->active_state->caret_position));
         if (++driver->active_state->caret_position == SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE)
         {
-            SDCARD_ReadSingleBlock(driver->storage, driver->memory->pages[MAIN_COMMANDS_PAGE], ++driver->active_state->current_sector);
+            MEMORY_PAGES tmp = driver->main_load_page;
+            driver->main_load_page = driver->secondary_load_page;
+            driver->secondary_load_page = tmp;
+            driver->data_pointer = driver->memory->pages[driver->main_load_page];
             driver->active_state->caret_position = 0;
+            ++driver->active_state->current_sector;
+            driver->pre_load_required = true;
         }
     }
 
@@ -694,11 +731,13 @@ PRINTER_STATUS PrinterExecuteCommand(HDRIVER hdriver)
     
     if (0 == driver->tick_index % (MAIN_TIMER_FREQUENCY / TERMO_REQUEST_PER_SECOND))
     {
-        TR_HandleTick(driver->regulators[TERMO_NOZZLE]);
-        driver->termo_regulators_state = (driver->mode & MODE_WAIT_NOZZLE) && !TR_IsHeaterStabilized(driver->regulators[TERMO_NOZZLE]) ? MODE_WAIT_NOZZLE : 0;
-
-        TR_HandleTick(driver->regulators[TERMO_TABLE]);
-        driver->termo_regulators_state |= (driver->mode & MODE_WAIT_TABLE) && !TR_IsHeaterStabilized(driver->regulators[TERMO_TABLE]) ? MODE_WAIT_TABLE : 0;
+        const PRINTER_COMMAD_MODE modes[TERMO_REGULATOR_COUNT] = { MODE_WAIT_NOZZLE, MODE_WAIT_TABLE};
+        driver->termo_regulators_state = 0;
+        for (uint32_t i = 0; i < TERMO_REGULATOR_COUNT; ++i)
+        {
+            TR_HandleTick(driver->regulators[i]);
+            driver->termo_regulators_state |= (driver->mode & modes[i]) && !TR_IsHeaterStabilized(driver->regulators[i]) ? modes[i] : 0;
+        }
     }
 
     if (0 == driver->tick_index % (MAIN_TIMER_FREQUENCY / COOLER_RESOLUTION_PER_SECOND))

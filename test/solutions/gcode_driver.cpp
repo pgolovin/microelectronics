@@ -699,6 +699,7 @@ TEST_F(GCodeDriverMemoryTest, printer_command_list_no_errors)
     size_t i = 0;
     for (; i < commands_count; ++i)
     {
+        PrinterLoadData(printer_driver);
         PRINTER_STATUS status = PrinterNextCommand(printer_driver);
         ASSERT_TRUE(GCODE_OK == status || GCODE_INCOMPLETE == status) << "current status: " << status << " on iteration: " << i;
         CompleteCommand(status);
@@ -710,6 +711,7 @@ TEST_F(GCodeDriverMemoryTest, printer_command_list_finished)
     size_t i = 0;
     for (; i < commands_count + 1; ++i)
     {
+        PrinterLoadData(printer_driver);
         PRINTER_STATUS status = PrinterNextCommand(printer_driver);
         if (PRINTER_FINISHED == status)
         {
@@ -725,6 +727,7 @@ TEST_F(GCodeDriverMemoryTest, printer_command_list_commands_count)
     size_t i = 0;
     for (; i < commands_count + 1; ++i)
     {
+        PrinterLoadData(printer_driver);
         PRINTER_STATUS status = PrinterNextCommand(printer_driver);
         if (PRINTER_FINISHED == status)
         {
@@ -1849,4 +1852,101 @@ TEST_F(GCodeDriverStateTest, coordinates_mode)
     GCodeCommandParams* params = PrinterGetCurrentPath(printer_driver);
     ASSERT_EQ(30, params->x);
     ASSERT_EQ(30, params->e);
+}
+
+class GCodeDriverDistributedLoadingTest : public ::testing::Test, public PrinterEmulator
+{
+public:
+
+    // use real frequency this time
+    GCodeDriverDistributedLoadingTest()
+        : PrinterEmulator(10000)
+    {}
+protected:
+    const size_t steps_per_block = 100; // 1 mm per region
+    const size_t fetch_speed = 1800; // 1 mm per region
+
+    size_t commands_count = 0;
+    std::vector<std::string> commands;
+    virtual void SetUp()
+    {
+        SetupPrinter(axis_configuration, PRINTER_ACCELERATION_DISABLE);
+
+        for (size_t i = 0; i < SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE * 3; ++i)
+        {
+            std::ostringstream command;
+            command << "G0 F" << fetch_speed << " X" << i * steps_per_block << " Y0";
+            commands.push_back(command.str());
+        }
+        commands_count = commands.size();
+
+        StartPrinting(commands, nullptr);
+    }
+};
+
+TEST_F(GCodeDriverDistributedLoadingTest, printer_can_preload)
+{
+    ASSERT_EQ(PRINTER_OK, PrinterLoadData(printer_driver));
+}
+
+TEST_F(GCodeDriverDistributedLoadingTest, printer_preload_required)
+{
+    for (size_t i = 0; i < SDCARD_BLOCK_SIZE/GCODE_CHUNK_SIZE; ++i)
+    { 
+        CompleteCommand(PrinterNextCommand(printer_driver));
+    }
+    ASSERT_EQ(PRINTER_PRELOAD_REQUIRED, PrinterNextCommand(printer_driver));
+}
+
+TEST_F(GCodeDriverDistributedLoadingTest, printer_preload_resumes_execution)
+{
+    for (size_t i = 0; i < SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE; ++i)
+    {
+        CompleteCommand(PrinterNextCommand(printer_driver));
+    }
+    PrinterLoadData(printer_driver);
+    ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
+}
+
+TEST_F(GCodeDriverDistributedLoadingTest, printer_no_advance_without_data)
+{
+    for (size_t i = 0; i < SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE; ++i)
+    {
+        CompleteCommand(PrinterNextCommand(printer_driver));
+    }
+    uint32_t count = PrinterGetRemainingCommandsCount(printer_driver);
+    PrinterNextCommand(printer_driver);
+
+    ASSERT_EQ(count, PrinterGetRemainingCommandsCount(printer_driver));
+}
+
+TEST_F(GCodeDriverDistributedLoadingTest, printer_no_command_completion_without_data)
+{
+    for (size_t i = 0; i < SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE; ++i)
+    {
+        CompleteCommand(PrinterNextCommand(printer_driver));
+    }
+    
+    PrinterNextCommand(printer_driver);
+    ASSERT_EQ(PRINTER_OK, PrinterExecuteCommand(printer_driver));
+}
+
+TEST_F(GCodeDriverDistributedLoadingTest, printer_data_loading_advances_commands)
+{
+    for (size_t i = 0; i < SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE; ++i)
+    {
+        CompleteCommand(PrinterNextCommand(printer_driver));
+    }
+
+    uint32_t count = PrinterGetRemainingCommandsCount(printer_driver);
+    for (size_t i = 0; i < 100; ++i)
+    {
+        PrinterNextCommand(printer_driver);
+    }
+    ASSERT_EQ(count, PrinterGetRemainingCommandsCount(printer_driver));
+
+    PrinterLoadData(printer_driver);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+
+    ASSERT_EQ(count - 1, PrinterGetRemainingCommandsCount(printer_driver));
 }

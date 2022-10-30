@@ -216,7 +216,8 @@ TEST_F(GCodeFileConverterTest, read_ram_failure)
     createFile("file.gcode", command.c_str(), command.size());
     FileManagerOpenGCode(m_file_manager, "file.gcode");
     m_ram->SetCardStatus(SDCARD_NOT_READY);
-    ASSERT_EQ(PRINTER_RAM_FAILURE, FileManagerReadGCodeBlock(m_file_manager));
+    FileManagerReadGCodeBlock(m_file_manager);
+    ASSERT_EQ(PRINTER_RAM_FAILURE, FileManagerCloseGCode(m_file_manager));
 }
 
 TEST_F(GCodeFileConverterTest, read_unopened)

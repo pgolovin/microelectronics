@@ -146,7 +146,7 @@ PRINTER_STATUS FileManagerReadGCodeBlock(HFILEMANAGER hfile)
         fm->buffer_size += GC_CompressCommand(fm->gcode_interpreter, fm->memory->pages[1] + fm->buffer_size);
         ++cb->commands_count;
         fm->caret = 0;
-        if (SDCARD_BLOCK_SIZE == fm->buffer_size || eof)
+        if (SDCARD_BLOCK_SIZE == fm->buffer_size)
         {
             fm->buffer_size = 0;
             if (SDCARD_OK != SDCARD_WriteSingleBlock(fm->ram, fm->memory->pages[1], fm->current_block++))
@@ -165,7 +165,8 @@ PRINTER_STATUS FileManagerCloseGCode(HFILEMANAGER hfile)
     FileManager* fm = (FileManager*)hfile;
     if (fm->buffer_size)
     {
-        if (SDCARD_OK != SDCARD_WriteSingleBlock(fm->ram, fm->memory->pages[1], fm->current_block++))
+        fm->buffer_size = 0;
+        if (SDCARD_OK != SDCARD_WriteSingleBlock(fm->ram, fm->memory->pages[1], fm->current_block))
         {
             return PRINTER_RAM_FAILURE;
         }

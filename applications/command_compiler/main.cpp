@@ -67,7 +67,7 @@ int main(int argc, char** argv)
         caret += GC_CompressCommand(code, caret);
     }
 
-    std::cout << "Enter data aray name: ";
+    std::cout << "Enter data array name: ";
     std::cin >> command;
 
     std::cout << "const uint8_t " << command << "[" << buffer.size() << "] = {";

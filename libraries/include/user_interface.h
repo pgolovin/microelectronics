@@ -45,7 +45,13 @@ struct Button_type
 };
 typedef struct Button_type * HButton;
 
-typedef bool(*Action)(void* metadata);
+typedef struct
+{
+    void* metadata;
+    void* subparameter;
+} ActionParameter;
+
+typedef bool(*Action)(ActionParameter* action_data);
 
 // Configure UI 
 // setup the display, screen area and main size unit of the interface "module"
@@ -87,18 +93,19 @@ HFrame     UI_GetRootFrame(UI ui_handle);
 // All UI elements can be created only on the frame. if frame is not defined, UI item will not be created
 HFrame     UI_CreateFrame(UI ui_handle, HFrame parent, Rect frame, bool visible);
 HLabel     UI_CreateLabel(UI ui_handle, HFrame parent, Rect frame, const char* label, uint8_t font_height);
-HButton    UI_CreateButton(UI ui_handle, HFrame parent, Rect button_rect, const char* label, uint8_t font_height, bool enabled, Action action, void* metadata);
+HButton    UI_CreateButton(UI ui_handle, HFrame parent, Rect button_rect, const char* label, uint8_t font_height, bool enabled, Action action, void* metadata, void* subparameter);
 HIndicator UI_CreateIndicator(UI ui_handle, HFrame parent, Rect indicator_rect, const char* label, uint8_t font_height, uint16_t custom_color, bool default_state);
 
 Rect       UI_GetFrameUserArea(UI ui_handle, HFrame frame);
-void       UI_EnableButton(UI ui_handle, HButton button, bool enabled);
-void       UI_SetButtonLabel(UI ui_handle, HButton button, const char* label);
-void       UI_SetLabel(UI ui_handle, HLabel hlabel, const char* label);
-void       UI_EnableFrame(UI ui_handle, HFrame frame, bool enabled);
+void       UI_EnableButton(HButton hbutton, bool enabled);
+void       UI_SetButtonLabel(HButton hbutton, const char* label);
+void       UI_SetLabel(HLabel hlabel, const char* label);
+void       UI_EnableFrame(HFrame hframe, bool enabled);
+void       UI_Print(UI ui_handle, const Rect* area, const char* label);
 
 // UI items mahagement
-void UI_SetIndicatorValue(UI ui_handle, HIndicator indicator, bool state);
-void UI_SetIndicatorLabel(UI ui_handle, HIndicator indicator, const char* label);
+void UI_SetIndicatorValue(HIndicator indicator, bool state);
+void UI_SetIndicatorLabel(HIndicator indicator, const char* label);
 
 void UI_Refresh(UI ui_handle);
 

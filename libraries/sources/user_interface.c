@@ -1,4 +1,5 @@
 #include "main.h"
+#include "main.h"
 #include "include/user_interface.h"
 #include "misc/interface_items.h"
 #include "misc/font8x8.h"
@@ -29,6 +30,7 @@ typedef struct
 
 typedef struct
 {
+    UI      context;
     Rect    frame;
     uint8_t font_height;
     char    label[LABEL_LENGTH];
@@ -38,25 +40,28 @@ typedef struct
 
 typedef struct
 {
+    UI      context;
     Rect    frame;
     uint8_t font_height;
-    char    label[STRING_LENGTH];
+    char    label[LABEL_LENGTH];
 } Label;
 
 typedef struct
 {
+    UI      context;
     Rect    frame;
     uint8_t font_height;
     char    label[LABEL_LENGTH];
     bool    enabled;
     void*   metadata;
+    void*   sub_parameter;
     Action  action;
 } Button;
 
 typedef struct Internal_Frame_type
 {
     struct Internal_Frame_type* parent;
-    
+    UI          context;
     Rect        frame;
     bool        visible;
     bool        enabled;
@@ -396,6 +401,7 @@ HFrame UI_CreateFrame(UI ui_handle, HFrame parent, Rect frame, bool visible)
     }
 
     Frame* new_frame = DeviceAlloc(sizeof(Frame));
+    new_frame->context = ui_handle;
     new_frame->visible = visible;    
     new_frame->parent = parent_frame;
     new_frame->count = 0;
@@ -432,6 +438,7 @@ HLabel UI_CreateLabel(UI ui_handle, HFrame parent, Rect frame, const char* label
     }
 
     strcpy(ui_label->label, label);
+    ui_label->context = ui_handle;
     ui_label->font_height = font_height;
 
     CalculateFrame(&ui_label->frame, &frame, &parent_frame->frame, ui->guide);
@@ -442,7 +449,7 @@ HLabel UI_CreateLabel(UI ui_handle, HFrame parent, Rect frame, const char* label
     return (HLabel)ui_label;
 }
 
-HButton UI_CreateButton(UI ui_handle, HFrame parent, Rect button_rect, const char* label, uint8_t font_height, bool enabled, Action action, void* metadata)
+HButton UI_CreateButton(UI ui_handle, HFrame parent, Rect button_rect, const char* label, uint8_t font_height, bool enabled, Action action, void* metadata, void* sub_parameter)
 {
     UI_CORE* ui = (UI_CORE*)ui_handle;
     if (!parent)
@@ -464,10 +471,12 @@ HButton UI_CreateButton(UI ui_handle, HFrame parent, Rect button_rect, const cha
     }
     
     strcpy(button->label, label);
+    button->context = ui_handle;
+    button->font_height = font_height;
     button->enabled = enabled;
     button->action = action;
     button->metadata = metadata;
-    button->font_height = font_height;
+    button->sub_parameter = sub_parameter;
 
     CalculateFrame(&button->frame, &button_rect, &parent_frame->frame, ui->guide); 
     
@@ -499,6 +508,7 @@ HIndicator UI_CreateIndicator(UI ui_handle, HFrame parent, Rect indicator_rect, 
     }
     
     strcpy(indicator->label, label);
+    indicator->context = ui_handle;
     indicator->state = default_state;
     indicator->color = custom_color == 0 ? ui->color_schema[ColorIndicator] : ((custom_color >> 8) & 0xFF) | ((custom_color & 0xFF) << 8);
     indicator->font_height = font_height;
@@ -526,10 +536,10 @@ Rect UI_GetFrameUserArea(UI ui_handle, HFrame frame)
     return rt;
 }
 
-void UI_EnableFrame(UI ui_handle, HFrame frame, bool enabled)
+void UI_EnableFrame(HFrame frame, bool enabled)
 {
-    UI_CORE* ui = (UI_CORE*)ui_handle;
     Frame* frm = (Frame*)frame;
+    UI_CORE* ui = (UI_CORE*)frm->context;
     frm->enabled = enabled;
     if (frm->enabled)
     {
@@ -537,14 +547,14 @@ void UI_EnableFrame(UI ui_handle, HFrame frame, bool enabled)
     }
     else
     {
-        UI_Refresh(ui_handle);
+        UI_Refresh(frm->context);
     }
 }
 
-void UI_EnableButton(UI ui_handle, HButton button, bool enabled)
+void UI_EnableButton(HButton button, bool enabled)
 {
-    UI_CORE* ui = (UI_CORE*)ui_handle;
     Button* btn = (Button*)button;
+    UI_CORE* ui = (UI_CORE*)btn->context;
     if (btn->enabled != enabled)
     {
         btn->enabled = enabled;
@@ -552,10 +562,10 @@ void UI_EnableButton(UI ui_handle, HButton button, bool enabled)
     }
 }
 
-void UI_SetButtonLabel(UI ui_handle, HButton button, const char* label)
+void UI_SetButtonLabel(HButton button, const char* label)
 {
-    UI_CORE* ui = (UI_CORE*)ui_handle;
     Button* btn = (Button*)button;
+    UI_CORE* ui = (UI_CORE*)btn->context;
     size_t len = strlen(label);
     if (len > LABEL_LENGTH-1)
     {
@@ -567,10 +577,10 @@ void UI_SetButtonLabel(UI ui_handle, HButton button, const char* label)
     DrawButton(ui, btn);
 }
 
-void UI_SetLabel(UI ui_handle, HLabel hlabel, const char* label)
+void UI_SetLabel(HLabel hlabel, const char* label)
 {
-    UI_CORE* ui = (UI_CORE*)ui_handle;
     Label* lbl = (Label*)hlabel;
+    UI_CORE* ui = (UI_CORE*)lbl->context;
     size_t len = strlen(label);
     if (len > STRING_LENGTH - 1)
     {
@@ -582,10 +592,10 @@ void UI_SetLabel(UI ui_handle, HLabel hlabel, const char* label)
     DrawLabel(ui, lbl);
 }
 
-void UI_SetIndicatorLabel(UI ui_handle, HIndicator indicator, const char* label)
+void UI_SetIndicatorLabel(HIndicator indicator, const char* label)
 {
-    UI_CORE* ui = (UI_CORE*)ui_handle;
     Indicator* ind = (Indicator*)indicator;
+    UI_CORE* ui = (UI_CORE*)ind->context;
     size_t len = strlen(label);
     if (len > LABEL_LENGTH-1)
     {
@@ -598,15 +608,22 @@ void UI_SetIndicatorLabel(UI ui_handle, HIndicator indicator, const char* label)
 }
 
 // UI items mahagement
-void UI_SetIndicatorValue(UI ui_handle, HIndicator indicator, bool state)
+void UI_SetIndicatorValue(HIndicator indicator, bool state)
 {
-    UI_CORE* ui = (UI_CORE*)ui_handle;
     Indicator* ind = (Indicator*)indicator;
+    UI_CORE* ui = (UI_CORE*)ind->context;
     if (ind->state != state)
     {
         ind->state = state;
         DrawIndicator(ui, ind);
     }
+}
+
+void UI_Print(UI ui_handle, const Rect* area, const char* label)
+{
+    UI_CORE* ui = (UI_CORE*)ui_handle;
+    DISPLAY_SetFontColor(ui->context, ui->color_schema[ColorMain]);
+    DISPLAY_DrawString(ui->context, area, label);
 }
 
 void UI_Refresh(UI ui_handle)
@@ -629,7 +646,12 @@ void UI_TrackTouchAction(UI ui_handle, uint16_t x, uint16_t y, bool touch)
         Button* btn = ((Button*)ui->focused_item);
         if (btn->action && btn->enabled)
         {
-            btn->action(btn->metadata);
+            ActionParameter param =
+            {
+                btn->metadata,
+                btn->sub_parameter
+            };
+            btn->action(&param);
         }
         
         ui->focused_item = 0;

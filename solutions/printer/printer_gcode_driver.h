@@ -56,6 +56,7 @@ typedef struct
 
 HDRIVER        PrinterConfigure(DriverConfig* printer_cfg);
 PRINTER_STATUS PrinterReadControlBlock(HDRIVER hdriver, PrinterControlBlock* control_block);
+PRINTER_STATUS PrinterLoadData(HDRIVER hdriver);
 
 PRINTER_STATUS PrinterInitialize(HDRIVER hdriver);
 PRINTER_STATUS PrinterPrintFromBuffer(HDRIVER hdriver, const uint8_t* command_stream, uint32_t commands_count);

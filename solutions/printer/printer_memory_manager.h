@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define MEMORY_PAGES_COUNT 4
+#define MEMORY_PAGES_COUNT 6
 
 typedef struct
 {
