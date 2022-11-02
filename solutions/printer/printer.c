@@ -2,27 +2,7 @@
 #include "printer/printer_gcode_driver.h"
 #include "printer/printer_file_manager.h"
 #include "printer/printer_constants.h"
-
-#include <stdio.h>
-
-const uint8_t set_zero[64] =
-{ 
-    //G92 X0 Y0 Z0
-    0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    // G99
-    0x05, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-
-const uint8_t elevate_10[64] = { 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x1f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2c, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x1f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2c, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-
-const uint8_t elevate_1[64] = { 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-
-const uint8_t elevate_01[64] = { 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2c, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2c, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+#include "stdio.h"
 
 typedef enum
 {
@@ -51,13 +31,27 @@ typedef struct
     HDRIVER driver;
     HTOUCH htouch;
     UI ui_handle;
-    HIndicator hprogress;
+    HIndicator temperature[TERMO_REGULATOR_COUNT];
     HButton    transfer_button;
     HButton    start_button;
     Rect       status_bar;
 
     uint32_t   total_commands_count;
 } Printer;
+
+static uint8_t to_string(uint16_t number, char* string)
+{
+    uint8_t bytes = 0;
+    do
+    {
+        uint8_t digit = number % 10;
+        string[bytes] = '0' + digit;
+        number /= 10;
+        bytes++;
+
+    } while (number);
+    return bytes;
+}
 
 // on file select
 static bool startTransfer(ActionParameter* param)
@@ -66,12 +60,12 @@ static bool startTransfer(ActionParameter* param)
     printer->gcode_blocks_count = FileManagerOpenGCode(printer->file_manager, "model.gcode");
     if (0 != printer->gcode_blocks_count)
     {
-        UI_Print(printer->ui_handle, &printer->status_bar, "File accepted");
+ //       UI_Print(printer->ui_handle, &printer->status_bar, "File accepted");
         printer->current_mode = FILE_TRANSFERING;
     }
     else
     {
-        UI_Print(printer->ui_handle, &printer->status_bar, "File open failed");
+ //       UI_Print(printer->ui_handle, &printer->status_bar, "File open failed");
     }
     return true;
 }
@@ -86,7 +80,7 @@ static bool startPrinting(ActionParameter* param)
     PrinterPrintFromCache(printer->driver, 0, PRINTER_START);
 
     printer->total_commands_count = PrinterGetRemainingCommandsCount(printer->driver);
-    UI_Print(printer->ui_handle, &printer->status_bar, "Printing Started");
+ //   UI_Print(printer->ui_handle, &printer->status_bar, "Printing Started");
 
     printer->current_mode = PRINTING;
     return true;
@@ -135,11 +129,16 @@ HPRINTER Configure(PrinterConfiguration* cfg)
 
     printer->driver = PrinterConfigure(&drv_cfg);
 
-    Rect stub = { 0, 0, 100, 50 };
-    UI_CreateIndicator(printer->ui_handle, 0, stub, "", LARGE_FONT, 0, true);
+    for (uint8_t i = 0; i < TERMO_REGULATOR_COUNT; ++i)
+    {
+        PrinterSetTemperature(printer->driver, i, 25, 0);
+    }
 
-    Rect indicator = { 100, 0, 220, 50 };
-    printer->hprogress = UI_CreateIndicator(printer->ui_handle, 0, indicator, "0000", LARGE_FONT, 0, true);
+    Rect stub = { 0, 0, 160, 50 };
+    printer->temperature[TERMO_NOZZLE] = UI_CreateIndicator(printer->ui_handle, 0, stub, "0000", LARGE_FONT, 0, true);
+
+    Rect indicator = { 160, 0, 320, 50 };
+    printer->temperature[TERMO_TABLE] = UI_CreateIndicator(printer->ui_handle, 0, indicator, "0000", LARGE_FONT, 0, true);
 
     Rect frame = { 0, 50, 320, 200 };
     HFrame fr = UI_CreateFrame(printer->ui_handle, 0, frame, true);
@@ -177,7 +176,7 @@ void MainLoop(HPRINTER hprinter)
         PrinterControlBlock cbl;
         PrinterReadControlBlock(printer->driver, &cbl);
         UI_EnableButton(printer->start_button, (CONTROL_BLOCK_SEC_CODE == cbl.secure_id && cbl.commands_count));
-        UI_Print(printer->ui_handle, &printer->status_bar, "Printing Finished");
+ //       UI_Print(printer->ui_handle, &printer->status_bar, "Printing Finished");
     }
 
     if (PRINTING == printer->current_mode)
@@ -254,10 +253,18 @@ void ReadADCValue(HPRINTER hprinter, TERMO_REGULATOR regulator, uint16_t value)
 {
     Printer* printer = (Printer*)hprinter;
     PrinterUpdateVoltageT(printer->driver, regulator, value);
+
+    char name[16];
+    sprintf(name, "%d:%d", PrinterGetCurrentT(printer->driver, regulator), PrinterGetTargetT(printer->driver, regulator));
+    //name[bytes++] = ';';
+    //bytes += to_string(PrinterGetTargetT(printer->driver, regulator), name + bytes);
+    //name[bytes] = 0;
+
+    UI_SetIndicatorLabel(printer->temperature[regulator], name);
 }
 
 void Log(HPRINTER hprinter, const char* string)
 {
     Printer* printer = (Printer*)hprinter;
-    UI_Print(printer->ui_handle, &printer->status_bar, string);
+  //  UI_Print(printer->ui_handle, &printer->status_bar, string);
 }

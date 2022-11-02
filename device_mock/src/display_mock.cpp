@@ -12,6 +12,7 @@ void DisplayMock::setAddressWindow(const Rect& window)
     // define X area of the screen
     m_caret = 0;
     m_write_region = window;
+    m_update_regions.push(m_write_region);
 }
 
 void DisplayMock::writeData(uint8_t* data, size_t size)
@@ -117,9 +118,18 @@ void DisplayMock::Blit(const Point& location)
 
 void DisplayMock::Draw(void* context, const Point& location)
 {
-    for (size_t y = 0; y < s_display_height; ++y)
+    while (m_update_regions.size())
     {
-        for (size_t x = 0; x < s_display_width; ++x)
+        drawRect(context, m_update_regions.top());
+        m_update_regions.pop();
+    }    
+}
+
+void DisplayMock::drawRect(void* context, const Rect& area)
+{
+    for (size_t y = area.y0; y < area.y1 + 1; ++y)
+    {
+        for (size_t x = area.x0; x < area.x1 + 1; ++x)
         {
             uint16_t rgb565 = m_device_memory[x + y * s_display_width];
             uint16_t component1 = (rgb565 & 0x00FF) << 8;
@@ -131,7 +141,7 @@ void DisplayMock::Draw(void* context, const Point& location)
             uint8_t b = ((rgb565 & 0x1F) * 255 + 15) / 31;
 
             COLORREF color = RGB(r, g, b);
-            SetPixel((HDC)context, x + location.c_x, y + location.c_y, color);
+            SetPixel((HDC)context, x, y, color);
         }
     }
 }

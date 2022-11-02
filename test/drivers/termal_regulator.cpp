@@ -401,12 +401,12 @@ TEST_F(TermalRegulatorCorrector_Test, simple_warmup)
     
     testTermalStep();
 
-    ASSERT_EQ(33, TR_GetCurrentTemperature(termal_regulator));
+    ASSERT_EQ(30, TR_GetCurrentTemperature(termal_regulator));
 }
 
 TEST_F(TermalRegulatorCorrector_Test, simple_cooldown)
 {
-    value = 25;
+    value = 40;
     increment = 1;
     decrement = 1;
     deviation = 0;
@@ -418,7 +418,7 @@ TEST_F(TermalRegulatorCorrector_Test, simple_cooldown)
 
     testTermalStep();
 
-    ASSERT_TRUE(abs(17 - TR_GetCurrentTemperature(termal_regulator)) <= 1);
+    ASSERT_TRUE(abs(34 - TR_GetCurrentTemperature(termal_regulator)) <= 1);
 }
 
 TEST_F(TermalRegulatorCorrector_Test, reach_temperature)
@@ -500,6 +500,64 @@ TEST_F(TermalRegulatorCorrector_Test, regulator_5_and_5_random)
     }
 
     ASSERT_TRUE(TR_IsTemperatureReached(termal_regulator));
+    ASSERT_TRUE(abs(target - TR_GetCurrentTemperature(termal_regulator)) <= 2 * (decrement + increment) + deviation) <<
+        "Current temperature " << TR_GetCurrentTemperature(termal_regulator) << " expected " << target;
+}
+
+TEST_F(TermalRegulatorCorrector_Test, regulator_variative_temperature_overheat)
+{
+    value = 25;
+    increment = 5;
+    decrement = 5;
+    deviation = 5;
+    uint16_t target = 2700;
+
+    TR_SetTargetTemperature(termal_regulator, target);
+    warmupRegulator();
+
+    for (size_t i = 0; i < 1000; ++i)
+    {
+        testTermalStep();
+    }
+
+    ASSERT_TRUE(TR_IsHeaterStabilized(termal_regulator));
+
+    increment = 10;
+
+    for (size_t i = 0; i < 1000; ++i)
+    {
+        testTermalStep();
+    }
+
+    ASSERT_TRUE(abs(target - TR_GetCurrentTemperature(termal_regulator)) <= 2 * (decrement + increment) + deviation) <<
+        "Current temperature " << TR_GetCurrentTemperature(termal_regulator) << " expected " << target;
+}
+
+TEST_F(TermalRegulatorCorrector_Test, regulator_variative_temperature_overcool)
+{
+    value = 25;
+    increment = 5;
+    decrement = 5;
+    deviation = 5;
+    uint16_t target = 2700;
+
+    TR_SetTargetTemperature(termal_regulator, target);
+    warmupRegulator();
+
+    for (size_t i = 0; i < 1000; ++i)
+    {
+        testTermalStep();
+    }
+
+    ASSERT_TRUE(TR_IsHeaterStabilized(termal_regulator));
+
+    decrement = 10;
+
+    for (size_t i = 0; i < 1000; ++i)
+    {
+        testTermalStep();
+    }
+
     ASSERT_TRUE(abs(target - TR_GetCurrentTemperature(termal_regulator)) <= 2 * (decrement + increment) + deviation) <<
         "Current temperature " << TR_GetCurrentTemperature(termal_regulator) << " expected " << target;
 }

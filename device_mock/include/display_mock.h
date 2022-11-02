@@ -4,6 +4,7 @@
 #include "include/spibus.h"
 #include "display.h"
 #include <array>
+#include <stack>
 #include <string>
 #include <functional>
 
@@ -50,6 +51,8 @@ private:
     void drawSymbol(uint16_t x, uint16_t y, char character, uint16_t text_color, uint16_t background_color);
     void drawString(Point& placement, const Rect& rect, const std::string& str);
 
+    void drawRect(void* context, const Rect& area);
+
 private:
 
     std::function<void(void)> m_update_handler = nullptr;
@@ -58,6 +61,7 @@ private:
     Rect m_text_area = { 0 };
     Point m_c_placement = { 0 };
     std::array<uint16_t, s_display_width*s_display_height> m_device_memory = { 0 };
+    std::stack<Rect> m_update_regions;
 
     uint16_t m_background_color = 0;
     uint16_t m_font_color = 0;

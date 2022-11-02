@@ -1004,7 +1004,7 @@ protected:
         {
             ++nozzle_value;
         }
-        else
+        else if (nozzle_value > 10)
         {
             --nozzle_value;
         }
@@ -1016,9 +1016,12 @@ protected:
         GPIO_PinState state = device->GetPinState(port_table, 0).state;
         if (GPIO_PIN_SET == state)
         {
-            --table_value;
+            if (table_value > 10)
+            {
+                --table_value;
+            }
         }
-        else
+        else 
         {
             ++table_value;
         }
@@ -1197,7 +1200,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_table_temp_current_v
         status = PrinterExecuteCommand(printer_driver);
     }
 
-    ASSERT_TRUE(abs(110.0 - PrinterGetCurrentT(printer_driver, TERMO_TABLE)) < 5);
+    ASSERT_TRUE(abs(110.0 - PrinterGetCurrentT(printer_driver, TERMO_TABLE)) < 10);
 }
 
 TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_disbale_cooler)

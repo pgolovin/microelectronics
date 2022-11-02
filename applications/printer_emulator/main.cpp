@@ -29,11 +29,28 @@ const WCHAR szWindowClass[] = L"TitleClass";            // the main window class
 
 struct PrinterApplication
 {
-    PrinterConfiguration config;
-    HPRINTER printer;
+    PrinterConfiguration config = { 0 };
+    HPRINTER printer = nullptr;
     DisplayMock display;
-    bool run;
+    bool run = false;
 } app;
+
+uint16_t HandleNozzleEnvironmentTick(Device& device, GPIO_TypeDef port, uint16_t nozzle_value, const uint16_t atm_value)
+{
+    // emulate temperature. if value lower than 2200 units, it cannot be lower
+    GPIO_PinState state = device.GetPinState(port, 0).state;
+    int16_t multiplier = (GPIO_PIN_SET == state) ? 1 : -1;
+    int16_t limit_multiplier = (atm_value > nozzle_value && multiplier < 0) ? 0 : 1;
+    return nozzle_value + multiplier * (1 * limit_multiplier + rand() % 5);
+}
+uint16_t HandleTableEnvironmentTick(Device& device, GPIO_TypeDef port, uint16_t table_value, const uint16_t atm_value)
+{
+    //rever5ced pin state for heat and cool
+    GPIO_PinState state = device.GetPinState(port, 0).state;
+    int16_t multiplier = (GPIO_PIN_SET == state) ? -1 : 1;
+    int16_t limit_multiplier = (atm_value < table_value && multiplier < 0) ? 0 : 1;
+    return table_value + multiplier * (5 * limit_multiplier + rand() % 15);
+}
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -73,8 +90,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 int main(int argc, char** argv)
 {
-    GPIO_TypeDef EXTRUDER_HEATER_CONTROL_GPIO_Port = 0;
-    GPIO_TypeDef TABLE_HEATER_CONTROL_GPIO_Port = 0;
+    GPIO_TypeDef EXTRUDER_HEATER_CONTROL_GPIO_Port = 1;
+    GPIO_TypeDef TABLE_HEATER_CONTROL_GPIO_Port = 2;
+    GPIO_TypeDef EXTRUDER_COOLER_CONTROL_GPIO_Port = 3;
     GPIO_TypeDef X_ENG_STEP_GPIO_Port = 0;
     GPIO_TypeDef Y_ENG_STEP_GPIO_Port = 0;
     GPIO_TypeDef Z_ENG_STEP_GPIO_Port = 0;
@@ -83,7 +101,6 @@ int main(int argc, char** argv)
     GPIO_TypeDef Y_ENG_DIR_GPIO_Port = 0;
     GPIO_TypeDef Z_ENG_DIR_GPIO_Port = 0;
     GPIO_TypeDef E_ENG_DIR_GPIO_Port = 0;
-    GPIO_TypeDef EXTRUDER_COOLER_CONTROL_GPIO_Port = 0;
 
     uint16_t EXTRUDER_HEATER_CONTROL_Pin = 0;
     uint16_t TABLE_HEATER_CONTROL_Pin    = 0;
@@ -111,6 +128,8 @@ int main(int argc, char** argv)
     MemoryManagerConfigure(&app.config.memory_manager);
 
     std::string gcode_command_list = {
+        "M109 S200\r\n"
+        "M190 S60\r\n"
         "G91\r\n"
         "G0 F1800 X50 Y0\r\n"
         "G0 X0 Y50\r\n"
@@ -229,10 +248,10 @@ int main(int argc, char** argv)
     // setting up termo regulators
     TermalRegulatorConfig tr_configs[TERMO_REGULATOR_COUNT] = {
         {
-            &EXTRUDER_HEATER_CONTROL_GPIO_Port, EXTRUDER_HEATER_CONTROL_Pin, GPIO_PIN_SET, GPIO_PIN_RESET, 1.f, 0.f
+            &EXTRUDER_HEATER_CONTROL_GPIO_Port, EXTRUDER_HEATER_CONTROL_Pin, GPIO_PIN_SET, GPIO_PIN_RESET, 0.467f, -1065.f
         },
         {
-            &TABLE_HEATER_CONTROL_GPIO_Port, TABLE_HEATER_CONTROL_Pin, GPIO_PIN_RESET, GPIO_PIN_SET, 1.f, 0.f
+            &TABLE_HEATER_CONTROL_GPIO_Port, TABLE_HEATER_CONTROL_Pin, GPIO_PIN_RESET, GPIO_PIN_SET, -0.033f, 141.f
         }
     };
     for (int i = 0; i < TERMO_REGULATOR_COUNT; ++i)
@@ -260,6 +279,10 @@ int main(int argc, char** argv)
     // configuring file system
     app.printer = Configure(&app.config);
     app.run = true;
+
+    uint16_t nozzle_value = 2200;
+    uint16_t table_value = 3400;
+
     // configure printer
     WNDCLASSEXW wcex = { 0 };
     
@@ -293,8 +316,9 @@ int main(int argc, char** argv)
     ShowWindow(hWnd, TRUE);
     UpdateWindow(hWnd);
 
-
     MSG msg;
+
+    uint32_t step = 0;
     while (app.run)
     {
         if (PeekMessageW(&msg, NULL, 0, 0, TRUE))
@@ -303,8 +327,20 @@ int main(int argc, char** argv)
             DispatchMessage(&msg);
         }
 
+        ++step;
+        if (0 == step % 1000)
+        {
+            step = 0;
+
+            nozzle_value = HandleNozzleEnvironmentTick(device, EXTRUDER_HEATER_CONTROL_GPIO_Port, nozzle_value, 2200);
+            table_value = HandleTableEnvironmentTick(device, TABLE_HEATER_CONTROL_GPIO_Port, table_value, 3400);
+
+            ReadADCValue(app.printer, TERMO_NOZZLE, nozzle_value);
+            ReadADCValue(app.printer, TERMO_TABLE, table_value);
+        }
+
         MainLoop(app.printer);
-        OnTimer(app.printer); 
+        OnTimer(app.printer);
     }
 
     return (int)msg.wParam;

@@ -394,6 +394,7 @@ static GCODE_COMMAND_STATE setCoolerSpeed(GCodeSubCommandParams* params, void* h
 
 static GCODE_COMMAND_STATE resumePrint(GCodeSubCommandParams* params, void* hdriver)
 {
+#ifndef FIRMWARE
     Driver* driver = (Driver*)hdriver;
     driver->state.actual_position = driver->state.position;
     driver->state.position = driver->active_state->position;
@@ -408,14 +409,14 @@ static GCODE_COMMAND_STATE resumePrint(GCodeSubCommandParams* params, void* hdri
     driver->last_command_status = setTableTemperatureBlocking(&temperature, hdriver);
 
     driver->resume = true;
-
+#endif 
     return GCODE_OK;
 }
 
 // main body of driver code
 HDRIVER PrinterConfigure(DriverConfig* printer_cfg)
 {
-#ifndef PRINTER_FIRMWARE
+#ifndef FIRMWARE
 
     if (!printer_cfg || !printer_cfg->bytecode_storage || !printer_cfg->memory || !printer_cfg->axis_configuration ||
         !printer_cfg->motors || !printer_cfg->motors[MOTOR_X] || !printer_cfg->motors[MOTOR_Y] || !printer_cfg->motors[MOTOR_Z] || !printer_cfg->motors[MOTOR_E] ||
@@ -476,7 +477,7 @@ HDRIVER PrinterConfigure(DriverConfig* printer_cfg)
 
 PRINTER_STATUS PrinterReadControlBlock(HDRIVER hdriver, PrinterControlBlock* control_block)
 {
-#ifndef PRINTER_FIRMWARE
+#ifndef FIRMWARE
 
     if (!control_block)
     {
@@ -657,6 +658,7 @@ PRINTER_STATUS PrinterNextCommand(HDRIVER hdriver)
 
     driver->last_command_status = PRINTER_FINISHED;
 
+#ifndef FIRMWARE
     if (driver->resume)
     {
         // before printing the model return everything to the position where pause was pressed
@@ -674,7 +676,8 @@ PRINTER_STATUS PrinterNextCommand(HDRIVER hdriver)
 
         return driver->last_command_status;
     } 
-    
+#endif 
+
     if (driver->commands_count - driver->active_state->current_command)
     {
         // dont advance in commands execution if next data block is not ready
@@ -731,7 +734,7 @@ PRINTER_STATUS PrinterExecuteCommand(HDRIVER hdriver)
     
     if (0 == driver->tick_index % (MAIN_TIMER_FREQUENCY / TERMO_REQUEST_PER_SECOND))
     {
-        const PRINTER_COMMAD_MODE modes[TERMO_REGULATOR_COUNT] = { MODE_WAIT_NOZZLE, MODE_WAIT_TABLE};
+        const PRINTER_COMMAD_MODE modes[TERMO_REGULATOR_COUNT] = { MODE_WAIT_NOZZLE, MODE_WAIT_TABLE };
         driver->termo_regulators_state = 0;
         for (uint32_t i = 0; i < TERMO_REGULATOR_COUNT; ++i)
         {
