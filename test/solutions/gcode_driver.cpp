@@ -983,6 +983,18 @@ TEST_F(GCodeDriverCommandsTest, printer_save_coordinates_value)
     ASSERT_EQ(-60, params.z);
 }
 
+TEST_F(GCodeDriverCommandsTest, printer_set_speed)
+{
+    std::vector<std::string> commands = {
+        "G0 F150",
+        "G0 X210 Y0 Z330 E10",
+        "G1 X110 Y10 Z360 E15",
+    };
+    StartPrinting(commands, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver));
+}
+
 class GCodeDriverSubcommandsTest : public ::testing::Test, public PrinterEmulator
 {
 public:
@@ -1104,6 +1116,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_hotend_temp_target_v
     ASSERT_EQ(210, PrinterGetTargetT(printer_driver, TERMO_NOZZLE));
 }
 
+
 TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_hotend_temp_current_value)
 {
     std::vector<std::string> commands = {
@@ -1115,6 +1128,30 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_hotend_temp_current_
     CompleteCommand(PrinterNextCommand(printer_driver));
     PRINTER_STATUS status = PrinterNextCommand(printer_driver);
     size_t tick_index = 0;
+    while (status != PRINTER_OK)
+    {
+        if (0 == tick_index % 1000)
+        {
+            HandleNozzleEnvironmentTick();
+        }
+        ++tick_index;
+        status = PrinterExecuteCommand(printer_driver);
+    }
+    ASSERT_TRUE(abs(210.0 - PrinterGetCurrentT(printer_driver, TERMO_NOZZLE)) < 5);
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_hotend_temp_current_value_unsynced)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "M109 S210"
+    };
+    StartPrinting(commands, nullptr);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterExecuteCommand(printer_driver); // force timer increment
+    PRINTER_STATUS status = PrinterNextCommand(printer_driver);
+    size_t tick_index = 0;
     while(status != PRINTER_OK)
     {
         if (0 == tick_index % 1000)
@@ -1124,7 +1161,6 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_hotend_temp_current_
         ++tick_index;
         status = PrinterExecuteCommand(printer_driver);
     }
-
     ASSERT_TRUE(abs(210.0 - PrinterGetCurrentT(printer_driver, TERMO_NOZZLE)) < 5);
 }
 
@@ -1188,6 +1224,31 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_table_temp_current_v
     StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
+    PRINTER_STATUS status = PrinterNextCommand(printer_driver);
+    size_t tick_index = 0;
+    while (status != PRINTER_OK)
+    {
+        if (0 == tick_index % 1000)
+        {
+            HandleTableEnvironmentTick();
+        }
+        ++tick_index;
+        status = PrinterExecuteCommand(printer_driver);
+    }
+
+    ASSERT_TRUE(abs(110.0 - PrinterGetCurrentT(printer_driver, TERMO_TABLE)) < 10);
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_table_temp_current_value_unsynced)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "M190 S110"
+    };
+    StartPrinting(commands, nullptr);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterExecuteCommand(printer_driver); // force timer increment
     PRINTER_STATUS status = PrinterNextCommand(printer_driver);
     size_t tick_index = 0;
     while (status != PRINTER_OK)

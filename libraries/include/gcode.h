@@ -110,7 +110,7 @@ typedef struct GCodeAxisConfig_type
 typedef GCode_Type* HGCODE;
 
 HGCODE                  GC_Configure(const GCodeAxisConfig* config);
-
+void                    GC_Reset(HGCODE hcode);
 //parser
 GCODE_ERROR             GC_ParseCommand(HGCODE hcode, const char* command_line);
 

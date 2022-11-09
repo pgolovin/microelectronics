@@ -355,6 +355,7 @@ static GCODE_COMMAND_STATE setNozzleTemperatureBlocking(GCodeSubCommandParams* p
     if (params->s > 0)
     {
         driver->mode = MODE_WAIT_NOZZLE;
+        driver->termo_regulators_state |= MODE_WAIT_NOZZLE;
         return GCODE_INCOMPLETE;
     }
     return PRINTER_OK;
@@ -375,6 +376,7 @@ static GCODE_COMMAND_STATE setTableTemperatureBlocking(GCodeSubCommandParams* pa
     if (params->s > 0)
     {
         driver->mode = MODE_WAIT_TABLE;
+        driver->termo_regulators_state |= MODE_WAIT_TABLE;
         return GCODE_INCOMPLETE;
     }
     return PRINTER_OK;
@@ -552,6 +554,7 @@ PRINTER_STATUS PrinterPrintFromBuffer(HDRIVER hdriver, const uint8_t* command_st
     driver->active_state->caret_position = 0;
     driver->commands_count = commands_count;
     driver->data_pointer = command_stream;
+    driver->pre_load_required = false;
 
     PULSE_SetPower(driver->accelerator, STANDARD_ACCELERATION_SEGMENT);
 

@@ -259,7 +259,7 @@ static void DrawFrame(UI_CORE* ui, Frame* frame)
         return;
     }
 
-    if (frame->visible)
+    if (frame->visible && frame->enabled)
     {
         DrawRect(ui, &frame->frame, "", false, true, false, ui_item_frame, ui->color_schema[ColorMain], frame->font_height);
     }

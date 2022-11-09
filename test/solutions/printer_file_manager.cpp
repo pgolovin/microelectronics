@@ -17,8 +17,9 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_ram)
     SDcardMock card(1024);
     MemoryManager mem;
     FIL f;
+    HGCODE gc = GC_Configure(&axis_configuration);
 
-    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), 0, &mem, &axis_configuration, &f, nullptr));
+    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), 0, &mem, gc, &f, nullptr));
 }
 
 TEST(GCodeFileConverterBasicTest, cannot_create_without_card)
@@ -29,8 +30,9 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_card)
     SDcardMock card(1024);
     MemoryManager mem;
     FIL f;
+    HGCODE gc = GC_Configure(&axis_configuration);
 
-    ASSERT_TRUE(nullptr == FileManagerConfigure(0, (HSDCARD)(&card), &mem, &axis_configuration, &f, nullptr));
+    ASSERT_TRUE(nullptr == FileManagerConfigure(0, (HSDCARD)(&card), &mem, gc, &f, nullptr));
 }
 
 TEST(GCodeFileConverterBasicTest, cannot_create_without_memory)
@@ -40,8 +42,21 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_memory)
     AttachDevice(device);
     SDcardMock card(1024);
     FIL f;
+    HGCODE gc = GC_Configure(&axis_configuration);
 
-    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), 0, &axis_configuration, &f, nullptr));
+    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), 0, gc, &f, nullptr));
+}
+
+TEST(GCodeFileConverterBasicTest, cannot_create_without_interpreter)
+{
+    DeviceSettings ds;
+    Device device(ds);
+    AttachDevice(device);
+    SDcardMock card(1024);
+    MemoryManager mem;
+    FIL f;
+
+    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), &mem, 0, &f, nullptr));
 }
 
 TEST(GCodeFileConverterBasicTest, can_create)
@@ -52,8 +67,9 @@ TEST(GCodeFileConverterBasicTest, can_create)
     AttachDevice(device);
     MemoryManager mem;
     FIL f;
+    HGCODE gc = GC_Configure(&axis_configuration);
 
-    ASSERT_TRUE(nullptr != FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), &mem, &axis_configuration, &f, nullptr));
+    ASSERT_TRUE(nullptr != FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), &mem, gc, &f, nullptr));
 }
 
 class GCodeFileConverterTest : public ::testing::Test
@@ -68,7 +84,9 @@ protected:
         registerFileSystem();
         MemoryManagerConfigure(&m_memory_manager);
 
-        m_file_manager = FileManagerConfigure((HSDCARD)m_sdcard.get(), (HSDCARD)m_ram.get(), &m_memory_manager, &axis_configuration, m_f.get(), nullptr);
+        m_gc = GC_Configure(&axis_configuration);
+
+        m_file_manager = FileManagerConfigure((HSDCARD)m_sdcard.get(), (HSDCARD)m_ram.get(), &m_memory_manager, m_gc, m_f.get(), nullptr);
     }
 
     virtual void TearDown()
@@ -117,6 +135,7 @@ protected:
     std::unique_ptr<SDcardMock> m_ram = nullptr; 
         
     FATFS m_fatfs;
+    HGCODE m_gc;
     const size_t s_blocks_count = 1024;
 };
 

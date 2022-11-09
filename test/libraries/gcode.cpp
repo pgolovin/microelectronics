@@ -130,6 +130,14 @@ TEST_F(GCodeParserTest, caret_return)
     ASSERT_EQ(0, params->x);
 }
 
+TEST_F(GCodeParserTest, caret_return_with_space)
+{
+    std::string command = "G0 F6200 X0 \r";
+    ASSERT_EQ((int)GCODE_OK_COMMAND_CREATED, (int)GC_ParseCommand(code, const_cast<char*>(command.c_str())));
+    GCodeCommandParams* params = GC_GetCurrentCommand(code);
+    ASSERT_EQ(0, params->x);
+}
+
 TEST_F(GCodeParserTest, short_command)
 {
     std::string command = "G92";

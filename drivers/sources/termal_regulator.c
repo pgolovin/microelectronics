@@ -122,16 +122,21 @@ void TR_SetADCValue(HTERMALREGULATOR htr, uint16_t value)
     if (tr->current_voltage < tr->target_voltage)
     {
         power = tr->heat_power;
+
         if (tr->heating)
         {
             // heater have not enougth power to heat the system
             // in this case make a step back to continue heating with minimal power
             // if delta remains <=0 then heat probe index will continue to increment, as a result
             // when he reache overheat limit the system will be restarted
-            if (delta <= 0 && tr->heat_probe_index++ && tr->heat_power == tr->heat_power_min)
+            if (delta <= 0 && tr->heat_power == tr->heat_power_min && tr->heat_probe_index++)
             {
                 tr->heat_probe_index = 0;
                 tr->heat_power = tr->heat_power_min + POWER_REVERT_INDEX;
+            }
+            else if (delta <= 0)
+            {
+                tr->heat_probe_index++;
             }
         }
         else
@@ -156,10 +161,14 @@ void TR_SetADCValue(HTERMALREGULATOR htr, uint16_t value)
         {
             // cooler power exceeds threshold, means that using this power we actually start heating
             // in this case make a step back to continue cooling
-            if (delta >= 0 && tr->cool_power > POWER_REVERT_INDEX && tr->heat_probe_index++ && tr->cool_power == tr->cool_power_max)
+            if (delta >= 0 && tr->cool_power_max > POWER_REVERT_INDEX && tr->cool_power == tr->cool_power_max && tr->heat_probe_index++)
             {
                 tr->heat_probe_index = 0;
                 tr->cool_power = tr->cool_power_max - POWER_REVERT_INDEX;
+            }
+            if (delta >= 0)
+            {
+                tr->heat_probe_index++;
             }
         }
         else

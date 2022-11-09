@@ -28,6 +28,7 @@ public:
     HMOTOR m_motors[MOTOR_COUNT];
     HTERMALREGULATOR m_regulators[TERMO_REGULATOR_COUNT];
     FIL m_f;
+    HGCODE m_gc;
 
     GPIO_TypeDef port_x_step = 0;
     GPIO_TypeDef port_x_dir = 1;

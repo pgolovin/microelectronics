@@ -22,7 +22,7 @@ typedef struct FILE_MANAGER
     uint32_t id;
 } *HFILEMANAGER;
 
-HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, MemoryManager* memory, const GCodeAxisConfig* config, FIL* file_handle, void* logger);
+HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, MemoryManager* memory, HGCODE interpreter, FIL* file_handle, void* logger);
 
 // The following operation is split on 3 steps: [start -> work -> complete] to avoid blocking UI
 
@@ -48,6 +48,7 @@ PRINTER_STATUS FileManagerReadGCodeBlock(HFILEMANAGER hfile);
 /// <returns>Operation status. PRINTER_OK if no error ocured</returns>
 PRINTER_STATUS FileManagerCloseGCode(HFILEMANAGER hfile);
 
+char* FileManagerGetError(HFILEMANAGER hfile);
 /// <summary>
 /// Flash mtl file into RAM
 /// </summary>

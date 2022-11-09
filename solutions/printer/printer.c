@@ -4,6 +4,7 @@
 #include "printer/printer_constants.h"
 #include "stdio.h"
 
+#define COMMAND_LENGTH 24
 typedef enum
 {
     CONFIGURATION = 0,
@@ -20,6 +21,7 @@ typedef struct
     MODE current_mode;
 
     MemoryManager* memory_manager;
+    HGCODE         interpreter;
 
     HFILEMANAGER file_manager;
     FIL* file;
@@ -32,26 +34,15 @@ typedef struct
     HTOUCH htouch;
     UI ui_handle;
     HIndicator temperature[TERMO_REGULATOR_COUNT];
+    HIndicator progress;
+    HFrame     printing_frame;
     HButton    transfer_button;
     HButton    start_button;
     Rect       status_bar;
 
     uint32_t   total_commands_count;
+    uint8_t    service_stream[3 * GCODE_CHUNK_SIZE];
 } Printer;
-
-static uint8_t to_string(uint16_t number, char* string)
-{
-    uint8_t bytes = 0;
-    do
-    {
-        uint8_t digit = number % 10;
-        string[bytes] = '0' + digit;
-        number /= 10;
-        bytes++;
-
-    } while (number);
-    return bytes;
-}
 
 // on file select
 static bool startTransfer(ActionParameter* param)
@@ -80,21 +71,49 @@ static bool startPrinting(ActionParameter* param)
     PrinterPrintFromCache(printer->driver, 0, PRINTER_START);
 
     printer->total_commands_count = PrinterGetRemainingCommandsCount(printer->driver);
- //   UI_Print(printer->ui_handle, &printer->status_bar, "Printing Started");
+    char name[16];
+    sprintf(name, "%d", printer->total_commands_count);
+    UI_SetIndicatorLabel(printer->progress, name);
 
     printer->current_mode = PRINTING;
     return true;
 }
 
-static bool run_command(ActionParameter* param)
-{
-    param = param;
-    //CommandContext* context = (CommandContext*)metadata;
-    //
-    //PrinterInitialize(context->printer->driver);
-    //PrinterPrintFromBuffer(context->printer->driver, context->commands, context->command_count);
-    //
-    //context->printer->current_mode = PRINTING;
+static bool runCommand(ActionParameter* param)
+{    
+    static const char command_list[][COMMAND_LENGTH] = {
+        {"G91\0G0 F150 Z30\0G99"},
+        {"G91\0G0 F300 Z-30\0G99"},
+        {"G91\0G0 F150 Z-0.1\0G99"},
+        {"G91\0G0 F150 Z0.1\0G99"},
+        {"G92 X0 Y0 Z0"},
+        {"M109 S240\0G1 F150 E10"},
+    };
+
+    Printer* printer = (Printer*)param->metadata;
+    uint32_t index = (uint32_t)param->subparameter;
+
+    uint8_t* caret = printer->service_stream;
+    const char* cmd = command_list[index];
+
+    uint32_t count = 0;
+    for (uint32_t i = 0; i < COMMAND_LENGTH; ++i)
+    {
+        if (0 == command_list[index][i])
+        {
+            if (GCODE_OK_COMMAND_CREATED == GC_ParseCommand(printer->interpreter, cmd))
+            {
+                caret += GC_CompressCommand(printer->interpreter, caret);
+                cmd = &command_list[index][i + 1];
+                ++count;
+            }
+        }
+    }
+
+    PrinterInitialize(printer->driver);
+    PrinterPrintFromBuffer(printer->driver, printer->service_stream, count);
+    printer->current_mode = PRINTING;
+
     return true;
 }
 
@@ -109,7 +128,15 @@ HPRINTER Configure(PrinterConfiguration* cfg)
 
     Rect viewport = { 0, 0, 320, 240 };
 
-    printer->file_manager = FileManagerConfigure(cfg->storages[STORAGE_EXTERNAL], cfg->storages[STORAGE_INTERNAL], &cfg->memory_manager, &axis_configuration, &cfg->file_handle, printer);
+    printer->interpreter = GC_Configure(&axis_configuration);
+
+    printer->file_manager = FileManagerConfigure(
+        cfg->storages[STORAGE_EXTERNAL], 
+        cfg->storages[STORAGE_INTERNAL], 
+        &cfg->memory_manager, 
+        printer->interpreter, 
+        &cfg->file_handle, 
+        printer);
     
     printer->ui_handle = UI_Configure(cfg->hdisplay, viewport, 1, 1, false);
 
@@ -134,31 +161,40 @@ HPRINTER Configure(PrinterConfiguration* cfg)
         PrinterSetTemperature(printer->driver, i, 25, 0);
     }
 
-    Rect stub = { 0, 0, 160, 50 };
+    Rect progress = { 100, 0, 220, 50 };
+    printer->progress = UI_CreateIndicator(printer->ui_handle, 0, progress, "0000", LARGE_FONT, 0, true);
+
+    Rect stub = { 0, 0, 100, 50 };
     printer->temperature[TERMO_NOZZLE] = UI_CreateIndicator(printer->ui_handle, 0, stub, "0000", LARGE_FONT, 0, true);
 
-    Rect indicator = { 160, 0, 320, 50 };
+    Rect indicator = { 220, 0, 320, 50 };
     printer->temperature[TERMO_TABLE] = UI_CreateIndicator(printer->ui_handle, 0, indicator, "0000", LARGE_FONT, 0, true);
 
-    Rect frame = { 0, 50, 320, 200 };
-    HFrame fr = UI_CreateFrame(printer->ui_handle, 0, frame, true);
+    Rect frame = { 0, 50, 320, 240 };
+    printer->printing_frame = UI_CreateFrame(printer->ui_handle, 0, frame, true);
+
+    // calibration buttons
+    {
+        static const char names[][5] =
+        {
+            "Z30", "Z-30", "Z-01", "Z01", "Zero", "E10",
+        };
+        for (uint32_t i = 0; i < 6; ++i)
+        {
+            Rect location = { 200, 5 + 30 * i, 300, 35 + 30 * i };
+            UI_CreateButton(printer->ui_handle, printer->printing_frame, location, names[i], LARGE_FONT, true, runCommand, printer, (void*)i);
+        }
+    }
 
     Rect button = { 100, 10, 200, 50 };
-    printer->transfer_button = UI_CreateButton(printer->ui_handle, fr, button, "Transfer", LARGE_FONT, 
+    printer->transfer_button = UI_CreateButton(printer->ui_handle, printer->printing_frame, button, "Transfer", LARGE_FONT,
         (SDCARD_OK == SDCARD_IsInitialized(printer->storages[STORAGE_EXTERNAL])), startTransfer, printer, 0);
 
     Rect button_start = { 100, 50, 200, 90 };
-
     PrinterControlBlock cbl;
     PrinterReadControlBlock(printer->driver, &cbl);
-    printer->start_button = UI_CreateButton(printer->ui_handle, fr, button_start, "Start", LARGE_FONT, 
+    printer->start_button = UI_CreateButton(printer->ui_handle, printer->printing_frame, button_start, "Start", LARGE_FONT,
         (CONTROL_BLOCK_SEC_CODE == cbl.secure_id && cbl.commands_count), startPrinting, printer, 0);
-
-    Rect status_bar = { 0, 200, 320, 240 };
-    printer->status_bar = status_bar;
-    UI_CreateFrame(printer->ui_handle, 0, status_bar, true);
-    printer->status_bar.x0 = 10;
-    printer->status_bar.y0 = 210;
 
     UI_Refresh(printer->ui_handle);
     return (HPRINTER)printer;
@@ -176,18 +212,27 @@ void MainLoop(HPRINTER hprinter)
         PrinterControlBlock cbl;
         PrinterReadControlBlock(printer->driver, &cbl);
         UI_EnableButton(printer->start_button, (CONTROL_BLOCK_SEC_CODE == cbl.secure_id && cbl.commands_count));
- //       UI_Print(printer->ui_handle, &printer->status_bar, "Printing Finished");
     }
 
     if (PRINTING == printer->current_mode)
     {
         PrinterLoadData(printer->driver);
+        char name[16];
+        sprintf(name, "%d", PrinterGetRemainingCommandsCount(printer->driver));
+        UI_SetIndicatorLabel(printer->progress, name);
+
+        for (uint32_t regulator = 0; regulator < TERMO_REGULATOR_COUNT; ++regulator)
+        {
+            char name[16];
+            sprintf(name, "%d:%d", PrinterGetCurrentT(printer->driver, regulator), PrinterGetTargetT(printer->driver, regulator));
+            UI_SetIndicatorLabel(printer->temperature[regulator], name);
+        }
     }
 
     if (SDCARD_OK != SDCARD_IsInitialized(printer->storages[STORAGE_INTERNAL]))
     {
-        printer->current_mode = FAILURE;
-        // system failure;
+        printer->current_mode = CONFIGURATION;
+        UI_SetIndicatorLabel(printer->progress, "RAM ERROR");
         return;
     }
 
@@ -218,13 +263,27 @@ void MainLoop(HPRINTER hprinter)
             printer->current_mode = CONFIGURATION;
             return;
         }
+
         if (PRINTER_OK != FileManagerReadGCodeBlock(printer->file_manager))
         {
             // file failure
             printer->current_mode = FAILURE;
+            UI_SetIndicatorLabel(printer->progress, FileManagerGetError(printer->file_manager));
             return;
         }
         --printer->gcode_blocks_count;
+        if (0 == printer->gcode_blocks_count % 10)
+        {
+            char name[16];
+            sprintf(name, "%d", printer->gcode_blocks_count);
+            UI_SetIndicatorLabel(printer->progress, name);
+        }
+    }
+
+    if (FAILURE == printer->current_mode)
+    {
+        UI_SetIndicatorLabel(printer->progress, "ERROR");
+        printer->current_mode = CONFIGURATION;
     }
 }
 
@@ -253,14 +312,6 @@ void ReadADCValue(HPRINTER hprinter, TERMO_REGULATOR regulator, uint16_t value)
 {
     Printer* printer = (Printer*)hprinter;
     PrinterUpdateVoltageT(printer->driver, regulator, value);
-
-    char name[16];
-    sprintf(name, "%d:%d", PrinterGetCurrentT(printer->driver, regulator), PrinterGetTargetT(printer->driver, regulator));
-    //name[bytes++] = ';';
-    //bytes += to_string(PrinterGetTargetT(printer->driver, regulator), name + bytes);
-    //name[bytes] = 0;
-
-    UI_SetIndicatorLabel(printer->temperature[regulator], name);
 }
 
 void Log(HPRINTER hprinter, const char* string)

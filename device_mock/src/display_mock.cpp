@@ -7,12 +7,27 @@
 #include <stdlib.h>
 #include <string.h>
 
+bool operator == (const Rect& arg1, const Rect& arg2)
+{
+    return arg1.x0 == arg2.x0
+        && arg1.x1 == arg2.x1
+        && arg1.y0 == arg2.y0
+        && arg1.y1 == arg2.y1;
+}
+
 void DisplayMock::setAddressWindow(const Rect& window)
 {
     // define X area of the screen
     m_caret = 0;
     m_write_region = window;
-    m_update_regions.push(m_write_region);
+    for (auto& rect : m_update_regions)
+    {
+        if (rect == window)
+        {
+            return;
+        }
+    }
+    m_update_regions.push_back(m_write_region);
 }
 
 void DisplayMock::writeData(uint8_t* data, size_t size)
@@ -118,11 +133,11 @@ void DisplayMock::Blit(const Point& location)
 
 void DisplayMock::Draw(void* context, const Point& location)
 {
-    while (m_update_regions.size())
+    for (auto& rect : m_update_regions)
     {
-        drawRect(context, m_update_regions.top());
-        m_update_regions.pop();
+        drawRect(context, rect);
     }    
+    m_update_regions.clear();
 }
 
 void DisplayMock::drawRect(void* context, const Rect& area)

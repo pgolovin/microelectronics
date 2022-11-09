@@ -49,7 +49,7 @@ uint16_t HandleTableEnvironmentTick(Device& device, GPIO_TypeDef port, uint16_t 
     GPIO_PinState state = device.GetPinState(port, 0).state;
     int16_t multiplier = (GPIO_PIN_SET == state) ? -1 : 1;
     int16_t limit_multiplier = (atm_value < table_value && multiplier < 0) ? 0 : 1;
-    return table_value + multiplier * (5 * limit_multiplier + rand() % 15);
+    return table_value + multiplier * (5 * limit_multiplier + rand() % 10);
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -118,92 +118,14 @@ int main(int argc, char** argv)
     Device device(ds);
     AttachDevice(device);
 
-    SDcardMock external_card(1024);
-    SDcardMock internal_card(1024);
+    SDcardMock external_card(2048);
+    SDcardMock internal_card(2048);
 
     app.config.storages[STORAGE_EXTERNAL] = &external_card;
     app.config.storages[STORAGE_INTERNAL] = &internal_card;
     app.config.hdisplay = &app.display;
 
     MemoryManagerConfigure(&app.config.memory_manager);
-
-    std::string gcode_command_list = {
-        "M109 S200\r\n"
-        "M190 S60\r\n"
-        "G91\r\n"
-        "G0 F1800 X50 Y0\r\n"
-        "G0 X0 Y50\r\n"
-        "G0 X0 Y-50\r\n"
-        "G0 X-50 Y0\r\n"
-        "G90\r\n"
-        "G0 X0 Y50\r\n"
-        "G0 X9.75 Y49\r\n"
-        "G0 X19.1 Y46.2\r\n"
-        "G0 X27.8 Y41.6\r\n"
-        "G0 X35.4 Y35.4\r\n"
-        "G0 X41.6 Y27.8\r\n"
-        "G0 X46.2 Y19.1\r\n"
-        "G0 X49 Y9.75\r\n"
-        "G0 X50 Y0\r\n"
-        "G0 X49 Y-9.75\r\n"
-        "G0 X46.2 Y-19.1\r\n"
-        "G0 X41.6 Y-27.8\r\n"
-        "G0 X35.4 Y-35.4\r\n"
-        "G0 X27.8 Y-41.6\r\n"
-        "G0 X19.1 Y-46.2\r\n"
-        "G0 X9.75 Y-49\r\n"
-        "G0 X0 Y-50\r\n"
-        "G0 X-9.75 Y-49\r\n"
-        "G0 X-19.1 Y-46.2\r\n"
-        "G0 X-27.8 Y-41.6\r\n"
-        "G0 X-35.4 Y-35.4\r\n"
-        "G0 X-41.6 Y-27.8\r\n"
-        "G0 X-46.2 Y-19.1\r\n"
-        "G0 X-49 Y-9.75\r\n"
-        "G0 X-50 Y0\r\n"
-        "G0 X-49 Y9.75\r\n"
-        "G0 X-46.2 Y19.1\r\n"
-        "G0 X-41.6 Y27.8\r\n"
-        "G0 X-35.4 Y35.4\r\n"
-        "G0 X-27.8 Y41.6\r\n"
-        "G0 X-19.1 Y46.2\r\n"
-        "G0 X-9.75 Y49\r\n"
-        "G0 F300 Z10\r\n"
-        "G0 F1800 X0 Y0\r\n"
-        "G0 X0 Y50\r\n"
-        "G0 X-9.75 Y49\r\n"
-        "G0 X-19.1 Y46.2\r\n"
-        "G0 X-27.8 Y41.6\r\n"
-        "G0 X-35.4 Y35.4\r\n"
-        "G0 X-41.6 Y27.8\r\n"
-        "G0 X-46.2 Y19.1\r\n"
-        "G0 X-49 Y9.75\r\n"
-        "G0 X-50 Y0\r\n"
-        "G0 X-49 Y-9.75\r\n"
-        "G0 X-46.2 Y-19.1\r\n"
-        "G0 X-41.6 Y-27.8\r\n"
-        "G0 X-35.4 Y-35.4\r\n"
-        "G0 X-27.8 Y-41.6\r\n"
-        "G0 X-19.1 Y-46.2\r\n"
-        "G0 X-9.75 Y-49\r\n"
-        "G0 X0 Y-50\r\n"
-        "G0 X9.75 Y-49\r\n"
-        "G0 X19.1 Y-46.2\r\n"
-        "G0 X27.8 Y-41.6\r\n"
-        "G0 X35.4 Y-35.4\r\n"
-        "G0 X41.6 Y-27.8\r\n"
-        "G0 X46.2 Y-19.1\r\n"
-        "G0 X49 Y-9.75\r\n"
-        "G0 X50 Y0\r\n"
-        "G0 X49 Y9.75\r\n"
-        "G0 X46.2 Y19.1\r\n"
-        "G0 X41.6 Y27.8\r\n"
-        "G0 X35.4 Y35.4\r\n"
-        "G0 X27.8 Y41.6\r\n"
-        "G0 X19.1 Y46.2\r\n"
-        "G0 X9.75 Y49\r\n"
-        "G0 F1800 X0 Y0\r\n"
-    };
 
     MKFS_PARM fs_params =
     {
@@ -213,6 +135,10 @@ int main(int argc, char** argv)
         0,
         SDcardMock::s_sector_size
     };
+
+    FILE* source;
+    fopen_s(&source, "wanhao.gcode", "r");
+    std::vector<char> data(512);
 
     SDCARD_FAT_Register(&external_card, 0);
     std::vector<uint8_t> working_buffer(512);
@@ -230,14 +156,30 @@ int main(int argc, char** argv)
     {
         std::cout << "file creation failed with error " << (int)file_error << "\n";
     }
+
+    size_t bytes_read = 0;
+    do
     {
+        bytes_read = fread_s(data.data(), 512, 1, 512, source);
+        data.resize(bytes_read);
         uint32_t out;
-        file_error = f_write(&f, gcode_command_list.c_str(), gcode_command_list.size(), &out);
+        // emulate linux line endings \r\n
+        for (auto i = data.begin(); i != data.end(); ++i)
+        {
+            if ('\n' == *i)
+            {
+                i = data.insert(i, '\r') + 1;
+            }
+        }
+        file_error = f_write(&f, data.data(), data.size(), &out);
         if (FR_OK != file_error)
         {
             std::cout << "file write failed with error " << (int)file_error << "\n";
         }
-    }
+    } while (bytes_read);
+
+    fclose(source);
+
     file_error = f_close(&f);
     if (FR_OK != file_error)
     {
@@ -281,7 +223,10 @@ int main(int argc, char** argv)
     app.run = true;
 
     uint16_t nozzle_value = 2200;
-    uint16_t table_value = 3400;
+    uint16_t table_value = 3600;
+
+    const uint16_t min_nozzle_value = 2200;
+    const uint16_t max_table_value = 3600;
 
     // configure printer
     WNDCLASSEXW wcex = { 0 };
@@ -311,12 +256,42 @@ int main(int argc, char** argv)
         return 0;
     }
 
-    app.display.RegisterRefreshCallback([hwnd = hWnd](void) { InvalidateRect(hwnd, nullptr, false); });
+    DWORD threadID = GetCurrentThreadId();
+    app.display.RegisterRefreshCallback([hwnd = hWnd, threadID = threadID](void)
+        {
+            if (GetCurrentThreadId() == threadID)
+            {
+                InvalidateRect(hwnd, nullptr, false);
+            }
+        }
+    );
 
     ShowWindow(hWnd, TRUE);
     UpdateWindow(hWnd);
 
     MSG msg;
+
+    std::thread thread([&]()
+        {
+            uint32_t step = 0;
+            while (app.run)
+            {
+                ++step;
+                if (0 == step % 1000)
+                {
+                    nozzle_value = HandleNozzleEnvironmentTick(device, EXTRUDER_HEATER_CONTROL_GPIO_Port, nozzle_value, min_nozzle_value);
+                    table_value = HandleTableEnvironmentTick(device, TABLE_HEATER_CONTROL_GPIO_Port, table_value, max_table_value);
+
+                    ReadADCValue(app.printer, TERMO_NOZZLE, nozzle_value);
+                    ReadADCValue(app.printer, TERMO_TABLE, table_value);
+                    step = 0;
+                    //Sleep(10);
+                }
+
+                OnTimer(app.printer);
+            }
+        }
+    );    
 
     uint32_t step = 0;
     while (app.run)
@@ -325,23 +300,11 @@ int main(int argc, char** argv)
         {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
-        }
-
-        ++step;
-        if (0 == step % 1000)
-        {
-            step = 0;
-
-            nozzle_value = HandleNozzleEnvironmentTick(device, EXTRUDER_HEATER_CONTROL_GPIO_Port, nozzle_value, 2200);
-            table_value = HandleTableEnvironmentTick(device, TABLE_HEATER_CONTROL_GPIO_Port, table_value, 3400);
-
-            ReadADCValue(app.printer, TERMO_NOZZLE, nozzle_value);
-            ReadADCValue(app.printer, TERMO_TABLE, table_value);
-        }
+        }       
 
         MainLoop(app.printer);
-        OnTimer(app.printer);
     }
+    thread.join();
 
     return (int)msg.wParam;
 }

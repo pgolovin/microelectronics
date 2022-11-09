@@ -488,7 +488,7 @@ TEST_F(TermalRegulatorCorrector_Test, regulator_5_and_5_random)
     value = 25;
     increment = 5;
     decrement = 5;
-    deviation = 5;
+    deviation = 75;
     uint16_t target = 2700;
 
     TR_SetTargetTemperature(termal_regulator, target);
@@ -499,7 +499,7 @@ TEST_F(TermalRegulatorCorrector_Test, regulator_5_and_5_random)
         testTermalStep();
     }
 
-    ASSERT_TRUE(TR_IsTemperatureReached(termal_regulator));
+    ASSERT_TRUE(TR_IsHeaterStabilized(termal_regulator));
     ASSERT_TRUE(abs(target - TR_GetCurrentTemperature(termal_regulator)) <= 2 * (decrement + increment) + deviation) <<
         "Current temperature " << TR_GetCurrentTemperature(termal_regulator) << " expected " << target;
 }

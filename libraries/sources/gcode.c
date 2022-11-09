@@ -18,7 +18,7 @@ typedef struct
 
 static const char* trimSpaces(const char* command_line)
 {
-    while (*command_line == ' ')
+    while (*command_line == ' ' || *command_line == '\n' || *command_line == '\r')
     {
         ++command_line;
     }
@@ -40,7 +40,7 @@ static const char* parseValue(const char* command_line, parameterType multiplier
         ++command_line;
     }
     
-    for (; (*command_line && *command_line != ' ' && *command_line != '\r'); ++command_line)
+    for (; (*command_line && *command_line != ' ' && *command_line != '\r' && *command_line != '\n'); ++command_line)
     {
         if (*command_line == '.')
         {
@@ -51,7 +51,7 @@ static const char* parseValue(const char* command_line, parameterType multiplier
     }
 
     float divider = 10.f;
-    for (; (*command_line && *command_line != ' ' && *command_line != '\r'); ++command_line)
+    for (; (*command_line && *command_line != ' ' && *command_line != '\r' && *command_line != '\n'); ++command_line)
     {
         result = result + (*command_line - '0') / divider;
         divider *= 10;
@@ -159,7 +159,18 @@ HGCODE GC_Configure(const GCodeAxisConfig* config)
     gcode->cfg = *config;
     gcode->command.code = GCODE_COMMAND_NOOP;
 
+    GC_Reset(gcode);
+
     return (HGCODE)gcode;
+}
+
+void GC_Reset(HGCODE hcode)
+{
+    GCode* gcode = (GCode*)hcode;
+    GCodeCommandParams g = { 0 };
+    GCodeSubCommandParams m = { 0 };
+    gcode->command.g = g;
+    gcode->command.m = m;
 }
 
 GCODE_ERROR GC_ParseCommand(HGCODE hcode, const char* command_line)

@@ -61,7 +61,7 @@ private:
     Rect m_text_area = { 0 };
     Point m_c_placement = { 0 };
     std::array<uint16_t, s_display_width*s_display_height> m_device_memory = { 0 };
-    std::stack<Rect> m_update_regions;
+    std::vector<Rect> m_update_regions;
 
     uint16_t m_background_color = 0;
     uint16_t m_font_color = 0;
