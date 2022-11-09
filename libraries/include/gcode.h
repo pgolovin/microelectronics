@@ -73,9 +73,9 @@ typedef struct GCodeParamsG_type
 {
     parameterType x;
     parameterType y;
-    parameterType z; // in certain cases if deltaZ > 75 mm we have a trouble with number of steps, it is bigger than 0xFFFF
+    parameterType z;
     parameterType e;
-    parameterType fetch_speed;
+    parameterType fetch_speed; //mm per min
 } GCodeCommandParams;
 
 typedef struct GCodeParamsM_type

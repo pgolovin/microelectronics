@@ -108,9 +108,9 @@ static inline uint32_t compareTimeWithSpeedLimit(int32_t signed_segment, uint32_
     }
 
     // check if we reached speed limit: amount of steps required to reach destination lower than amount of requested steps 
-    if (MAIN_TIMER_FREQUENCY * SECONDS_IN_MINUTE / (resolution * driver->current_segment.fetch_speed) > 1)
+    if ((MAIN_TIMER_FREQUENCY * SECONDS_IN_MINUTE) / (resolution * driver->current_segment.fetch_speed) > 1)
     {
-        segment = segment * MAIN_TIMER_FREQUENCY * SECONDS_IN_MINUTE / (resolution * driver->current_segment.fetch_speed);
+        segment = segment * ((float)( MAIN_TIMER_FREQUENCY * SECONDS_IN_MINUTE) / (float)(resolution * driver->current_segment.fetch_speed));
     }
     // return the longest distance
     return segment > time ? segment : time;

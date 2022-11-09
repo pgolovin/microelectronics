@@ -512,3 +512,61 @@ TEST_F(GCodeDriverAccelZTest, printer_accel_end)
     ASSERT_GT(steps_e, steps_m);
     ASSERT_LT(abs(steps_s - steps_e), 100);
 }
+
+class GCodeDriverExtremeAccel : public ::testing::Test, public PrinterEmulator
+{
+public:
+    GCodeDriverExtremeAccel()
+        : PrinterEmulator(10000)
+    {}
+protected:
+    const size_t acceleration_value = 60; // mm/sec^2
+    const size_t steps_per_block = 25; // 1 mm per region
+    size_t commands_count = 0;
+    virtual void SetUp()
+    {
+        // with this settings the system will demonstrate behavior of the real printer
+        SetupAxisRestrictions(axis_configuration);
+        SetupPrinter(axis_configuration, PRINTER_ACCELERATION_ENABLE);
+    }
+};
+
+TEST_F(GCodeDriverExtremeAccel, accel_variation_z)
+{
+    std::vector<std::string> commands = { "G0 F360 Z30", "G0 F240 Z0", "G0 F120 Z30" };
+    StartPrinting(commands, nullptr);
+    device->ResetPinGPIOCounters(port_z_step, 0);
+    std::vector<Device::PinState> states;
+    for (size_t i = 0; i < commands.size(); ++i)
+    {
+        device->ResetPinGPIOCounters(port_z_step, 0);
+        CompleteCommand(PrinterNextCommand(printer_driver));
+        states.push_back(device->GetPinState(port_z_step, 0));
+    }
+
+    const size_t original_steps_count = 30 * axis_configuration.z_steps_per_mm * 2; // 30 is a distance, and 2 for on/off signal pair on each step
+    for (size_t i = 0; i < commands.size(); ++i)
+    {
+        ASSERT_EQ(original_steps_count, states[i].signals_log.size()) << "failed on command " << commands[i];
+    }
+}
+
+TEST_F(GCodeDriverExtremeAccel, accel_variation_xy)
+{
+    std::vector<std::string> commands = { "G0 F16000 X30", "G0 F7200 X0", "G0 F2400 X30", "G0 F1800 X0" };
+    StartPrinting(commands, nullptr);
+    device->ResetPinGPIOCounters(port_x_step, 0);
+    std::vector<Device::PinState> states;
+    for (size_t i = 0; i < commands.size(); ++i)
+    {
+        device->ResetPinGPIOCounters(port_x_step, 0);
+        CompleteCommand(PrinterNextCommand(printer_driver));
+        states.push_back(device->GetPinState(port_x_step, 0));
+    }
+
+    const size_t original_steps_count = 30 * axis_configuration.x_steps_per_mm * 2; // 30 is a distance, and 2 for on/off signal pair on each step
+    for (size_t i = 0; i < commands.size(); ++i)
+    {
+        ASSERT_EQ(original_steps_count, states[i].signals_log.size()) << "failed on command " << commands[i];
+    }
+}

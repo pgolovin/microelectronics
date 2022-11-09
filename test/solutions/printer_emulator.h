@@ -45,6 +45,8 @@ public:
     PrinterEmulator(uint16_t frequency) : main_frequency(frequency) {};
     virtual ~PrinterEmulator() {};
 
+    void SetupAxisRestrictions(const GCodeAxisConfig& axis_settings);
+
     void SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERATION enable_acceleration);
 
     void ConfigurePrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERATION enable_acceleration);

@@ -24,6 +24,11 @@ void PrinterEmulator::InsertSDCARD(SDcardMock* card)
     }
 }
 
+void PrinterEmulator::SetupAxisRestrictions(const GCodeAxisConfig& axis_settings)
+{
+    axis = axis_settings;
+}
+
 void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERATION enable_acceleration)
 {
     m_storage = std::make_unique<SDcardMock>(1024);

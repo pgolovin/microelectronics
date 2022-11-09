@@ -82,8 +82,8 @@ static bool startPrinting(ActionParameter* param)
 static bool runCommand(ActionParameter* param)
 {    
     static const char command_list[][COMMAND_LENGTH] = {
-        {"G91\0G0 F150 Z30\0G99"},
-        {"G91\0G0 F300 Z-30\0G99"},
+        {"G91\0G0 F300 Z30\0G99"},
+        {"G91\0G0 F150 Z-30\0G99"},
         {"G91\0G0 F150 Z-0.1\0G99"},
         {"G91\0G0 F150 Z0.1\0G99"},
         {"G92 X0 Y0 Z0"},
