@@ -83,7 +83,7 @@ typedef struct
     uint8_t   acceleration_region;
     uint32_t  acceleration_segments; // not sure that it is possible to have more than 256 acceleration segments
     int8_t    acceleration_region_increment;
-    uint16_t  acceleration_distance;
+    uint32_t  acceleration_distance;
     uint8_t   acceleration_distance_increment;
     uint32_t  acceleration_subsequent_region_length;
 
@@ -284,6 +284,18 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hdriver)
     return driver->last_command_status;
 };
 
+static GCODE_COMMAND_STATE setupHome(GCodeCommandParams* params, void* hdriver)
+{
+    Driver* driver = (Driver*)hdriver;
+    GCodeCommandParams home_params = *params;
+    home_params.fetch_speed = 1800;
+    GCODE_COODRINATES_MODE previous_mode = driver->active_state->coordinates_mode;
+    driver->active_state->coordinates_mode = GCODE_ABSOLUTE;
+    GCODE_COMMAND_STATE state = setupMove(&home_params, hdriver);
+    driver->active_state->coordinates_mode = previous_mode;
+    return state;
+}
+
 static GCODE_COMMAND_STATE setupSet(GCodeCommandParams* params, void* hdriver)
 {
     Driver* driver = (Driver*)hdriver;
@@ -437,7 +449,7 @@ HDRIVER PrinterConfigure(DriverConfig* printer_cfg)
     driver->service_state.sec_code = STATE_BLOCK_SEC_CODE;
 
     driver->setup_calls.commands[GCODE_MOVE]                       = setupMove;
-    driver->setup_calls.commands[GCODE_HOME]                       = setupMove; // the same command here
+    driver->setup_calls.commands[GCODE_HOME]                       = setupHome;
     driver->setup_calls.commands[GCODE_SET]                        = setupSet;
     driver->setup_calls.commands[GCODE_SAVE_POSITION]              = saveCoordinates;
     driver->setup_calls.commands[GCODE_SET_COORDINATES_MODE]       = setCoordinatesMode;
@@ -616,7 +628,10 @@ PRINTER_STATUS PrinterLoadData(HDRIVER hdriver)
     Driver* driver = (Driver*)hdriver;
     if (driver->pre_load_required)
     {
-        SDCARD_ReadSingleBlock(driver->storage, driver->memory->pages[driver->secondary_load_page], driver->active_state->current_sector + 1);
+        if (SDCARD_OK != SDCARD_ReadSingleBlock(driver->storage, driver->memory->pages[driver->secondary_load_page], driver->active_state->current_sector + 1))
+        {
+            return PRINTER_RAM_FAILURE;
+        }
         driver->pre_load_required = false;
     }
     return PRINTER_OK;

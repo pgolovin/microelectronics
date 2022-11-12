@@ -207,7 +207,7 @@ int main(int argc, char** argv)
         {PULSE_LOWER,  &X_ENG_STEP_GPIO_Port, X_ENG_STEP_Pin, &X_ENG_DIR_GPIO_Port, X_ENG_DIR_Pin },
         {PULSE_LOWER,  &Y_ENG_STEP_GPIO_Port, Y_ENG_STEP_Pin, &Y_ENG_DIR_GPIO_Port, Y_ENG_DIR_Pin },
         {PULSE_LOWER,  &Z_ENG_STEP_GPIO_Port, Z_ENG_STEP_Pin, &Z_ENG_DIR_GPIO_Port, Z_ENG_DIR_Pin },
-        {PULSE_HIGHER, &E_ENG_STEP_GPIO_Port, E_ENG_STEP_Pin, &E_ENG_DIR_GPIO_Port, E_ENG_DIR_Pin },
+        {PULSE_LOWER,  &E_ENG_STEP_GPIO_Port, E_ENG_STEP_Pin, &E_ENG_DIR_GPIO_Port, E_ENG_DIR_Pin },
     };
     for (int i = 0; i < MOTOR_COUNT; ++i)
     {

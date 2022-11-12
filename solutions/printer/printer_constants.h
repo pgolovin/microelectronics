@@ -8,39 +8,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-/*
-const char cmd_home[] = {
-    "G90\0"
-    "G0 F1800 X0 Y0 Z0\0"
-    "G99" 
-};
 
-const char service_finish[] = {
-    "G90\0"
-    "G0 F300 X0 Y0 Z199\0"
-    "G99"
-};
-
-const char service_template_z[] = {
-    "G91\0"
-    "G0 F300 Z0\0" // to work with the template, 2nd command parameter should be replaced by actual value
-    "G99"
-};
-
-const char service_extract_e[] = {
-    "G90\0"
-    "G0 F1800 X100 Y10\0"
-    "G91\0"
-    "M109 S0\0" // to work with the template, command parameter should be replaced by actual value
-    "G1 F1800 E-100"
-};
-
-const char service_insert_e[] = {
-    "G91\0"
-    "M109 S0\0" // to work with the template, command parameter should be replaced by actual value
-    "G1 F1800 E100"
-};
-*/
 const GCodeAxisConfig axis_configuration =
 {
     80,
@@ -49,12 +17,21 @@ const GCodeAxisConfig axis_configuration =
     104
 };
 
-const GCodeAxisConfig axis_configuration_1 =
+#define COMMAND_LENGTH 27
+
+typedef struct
 {
-    1,
-    1,
-    1,
-    1
+    char name[16];
+    char command[COMMAND_LENGTH];
+} GCodeCommand;
+
+const GCodeCommand service_commands_list[] = 
+{
+    {"Z 0.1",    "G91\0G0 F300 Z0.1\0G99"},
+    {"Z -0.05",  "G91\0G0 F150 Z-0.05\0G99"},
+    {"Z -0.1",   "G91\0G0 F150 Z-0.1\0G99"},
+    {"Set Zero", "G92 X0 Y0 Z0"},
+    {"Abort",    "G90\0G0 F150 X0 Y0 Z150\0G99"},
 };
 
 #ifdef __cplusplus

@@ -4,7 +4,6 @@
 #include "printer/printer_constants.h"
 #include "stdio.h"
 
-#define COMMAND_LENGTH 24
 typedef enum
 {
     CONFIGURATION = 0,
@@ -51,12 +50,7 @@ static bool startTransfer(ActionParameter* param)
     printer->gcode_blocks_count = FileManagerOpenGCode(printer->file_manager, "model.gcode");
     if (0 != printer->gcode_blocks_count)
     {
- //       UI_Print(printer->ui_handle, &printer->status_bar, "File accepted");
         printer->current_mode = FILE_TRANSFERING;
-    }
-    else
-    {
- //       UI_Print(printer->ui_handle, &printer->status_bar, "File open failed");
     }
     return true;
 }
@@ -81,30 +75,21 @@ static bool startPrinting(ActionParameter* param)
 
 static bool runCommand(ActionParameter* param)
 {    
-    static const char command_list[][COMMAND_LENGTH] = {
-        {"G91\0G0 F300 Z30\0G99"},
-        {"G91\0G0 F150 Z-30\0G99"},
-        {"G91\0G0 F150 Z-0.1\0G99"},
-        {"G91\0G0 F150 Z0.1\0G99"},
-        {"G92 X0 Y0 Z0"},
-        {"M109 S240\0G1 F150 E10"},
-    };
-
     Printer* printer = (Printer*)param->metadata;
-    uint32_t index = (uint32_t)param->subparameter;
+    const char* command = service_commands_list[(size_t)param->subparameter].command;
 
     uint8_t* caret = printer->service_stream;
-    const char* cmd = command_list[index];
+    const char* cmd = command;
 
     uint32_t count = 0;
     for (uint32_t i = 0; i < COMMAND_LENGTH; ++i)
     {
-        if (0 == command_list[index][i])
+        if (0 == command[i])
         {
             if (GCODE_OK_COMMAND_CREATED == GC_ParseCommand(printer->interpreter, cmd))
             {
                 caret += GC_CompressCommand(printer->interpreter, caret);
-                cmd = &command_list[index][i + 1];
+                cmd = &command[i + 1];
                 ++count;
             }
         }
@@ -174,23 +159,17 @@ HPRINTER Configure(PrinterConfiguration* cfg)
     printer->printing_frame = UI_CreateFrame(printer->ui_handle, 0, frame, true);
 
     // calibration buttons
+    for (size_t i = 0; i < sizeof(service_commands_list) / sizeof(GCodeCommand); ++i)
     {
-        static const char names[][5] =
-        {
-            "Z30", "Z-30", "Z-01", "Z01", "Zero", "E10",
-        };
-        for (uint32_t i = 0; i < 6; ++i)
-        {
-            Rect location = { 200, 5 + 30 * i, 300, 35 + 30 * i };
-            UI_CreateButton(printer->ui_handle, printer->printing_frame, location, names[i], LARGE_FONT, true, runCommand, printer, (void*)i);
-        }
+        Rect location = { 230, 5 + 30 * i, 310, 35 + 30 * i };
+        UI_CreateButton(printer->ui_handle, printer->printing_frame, location, service_commands_list[i].name, LARGE_FONT, true, runCommand, printer, (void*)i);
     }
 
-    Rect button = { 100, 10, 200, 50 };
+    Rect button = { 100, 10, 220, 50 };
     printer->transfer_button = UI_CreateButton(printer->ui_handle, printer->printing_frame, button, "Transfer", LARGE_FONT,
         (SDCARD_OK == SDCARD_IsInitialized(printer->storages[STORAGE_EXTERNAL])), startTransfer, printer, 0);
 
-    Rect button_start = { 100, 50, 200, 90 };
+    Rect button_start = { 100, 50, 220, 90 };
     PrinterControlBlock cbl;
     PrinterReadControlBlock(printer->driver, &cbl);
     printer->start_button = UI_CreateButton(printer->ui_handle, printer->printing_frame, button_start, "Start", LARGE_FONT,
@@ -212,14 +191,26 @@ void MainLoop(HPRINTER hprinter)
         PrinterControlBlock cbl;
         PrinterReadControlBlock(printer->driver, &cbl);
         UI_EnableButton(printer->start_button, (CONTROL_BLOCK_SEC_CODE == cbl.secure_id && cbl.commands_count));
+
+        UI_SetIndicatorLabel(printer->progress, "DONE");
     }
 
     if (PRINTING == printer->current_mode)
     {
         PrinterLoadData(printer->driver);
-        char name[16];
-        sprintf(name, "%d", PrinterGetRemainingCommandsCount(printer->driver));
-        UI_SetIndicatorLabel(printer->progress, name);
+        if (PRINTER_OK != PrinterLoadData(printer->driver))
+        {
+            char name[16];
+            sprintf(name, "F: %d", PrinterGetRemainingCommandsCount(printer->driver));
+            UI_SetIndicatorLabel(printer->progress, name);
+            printer->current_mode = CONFIGURATION;
+        }
+        else
+        {
+            char name[16];
+            sprintf(name, "%d", PrinterGetRemainingCommandsCount(printer->driver));
+            UI_SetIndicatorLabel(printer->progress, name);
+        }
 
         for (uint32_t regulator = 0; regulator < TERMO_REGULATOR_COUNT; ++regulator)
         {
@@ -227,13 +218,6 @@ void MainLoop(HPRINTER hprinter)
             sprintf(name, "%d:%d", PrinterGetCurrentT(printer->driver, regulator), PrinterGetTargetT(printer->driver, regulator));
             UI_SetIndicatorLabel(printer->temperature[regulator], name);
         }
-    }
-
-    if (SDCARD_OK != SDCARD_IsInitialized(printer->storages[STORAGE_INTERNAL]))
-    {
-        printer->current_mode = CONFIGURATION;
-        UI_SetIndicatorLabel(printer->progress, "RAM ERROR");
-        return;
     }
 
     if (CONFIGURATION == printer->current_mode)
@@ -282,7 +266,7 @@ void MainLoop(HPRINTER hprinter)
 
     if (FAILURE == printer->current_mode)
     {
-        UI_SetIndicatorLabel(printer->progress, "ERROR");
+        //UI_SetIndicatorLabel(printer->progress, "ERROR");
         printer->current_mode = CONFIGURATION;
     }
 }
