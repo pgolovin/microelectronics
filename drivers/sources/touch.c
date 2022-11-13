@@ -2,7 +2,7 @@
 #include <stdlib.h>
 
 // private members part
-typedef struct TOUCH_Internal_type
+typedef struct
 {
 	// SD CARD protocol
 	HSPIBUS hspi;
@@ -11,7 +11,7 @@ typedef struct TOUCH_Internal_type
     GPIO_TypeDef* irq_port;
     uint16_t irq_pin;
 
-} TOUCH;
+} TouchInternal;
 
 #define POSITION_EPSILON  10
 #define X_VOLTAGE_MAX     31000
@@ -27,7 +27,7 @@ enum TOUCH_Commands_Rotated
 	READ_Y = 0xD0
 };
 
-static uint16_t GetRawPosition(TOUCH* touch, uint8_t command, uint8_t samples, uint16_t min, uint16_t max, uint16_t scale)
+static uint16_t GetRawPosition(TouchInternal* touch, uint8_t command, uint8_t samples, uint16_t min, uint16_t max, uint16_t scale)
 {
     uint8_t position[2];
     uint8_t receive_guard[2] = {0,0};
@@ -52,7 +52,7 @@ static uint16_t GetRawPosition(TOUCH* touch, uint8_t command, uint8_t samples, u
     return sample;
 }
 
-static uint16_t GetPosition(TOUCH* touch, uint8_t command, uint8_t samples, uint16_t min, uint16_t max, uint16_t scale)
+static uint16_t GetPosition(TouchInternal* touch, uint8_t command, uint8_t samples, uint16_t min, uint16_t max, uint16_t scale)
 {
     uint32_t raw_result = 0;
     uint8_t position[2];
@@ -95,7 +95,7 @@ static uint16_t GetPosition(TOUCH* touch, uint8_t command, uint8_t samples, uint
 
 HTOUCH TOUCH_Configure(const TouchConfig* touch_config)
 {
-    TOUCH* touch = malloc(sizeof(TOUCH));
+    TouchInternal* touch = malloc(sizeof(TouchInternal));
     touch->hspi = touch_config->hspi;
     touch->spi_id = SPIBUS_AddPeripherialDevice(touch_config->hspi, touch_config->cs_port_array, touch_config->cs_port);
     touch->irq_port = touch_config->irq_port;
@@ -106,14 +106,14 @@ HTOUCH TOUCH_Configure(const TouchConfig* touch_config)
 
 bool TOUCH_Pressed(HTOUCH htouch)
 {
-    TOUCH* touch = (TOUCH*)htouch;
+    TouchInternal* touch = (TouchInternal*)htouch;
     
     return GPIO_PIN_RESET == HAL_GPIO_ReadPin(touch->irq_port, touch->irq_pin);
 }
 
 uint16_t TOUCH_GetX(HTOUCH htouch)
 {
-    TOUCH* touch = (TOUCH*)htouch;
+    TouchInternal* touch = (TouchInternal*)htouch;
     if (!TOUCH_Pressed(htouch))
     {
         return 0xFFFF;
@@ -123,7 +123,7 @@ uint16_t TOUCH_GetX(HTOUCH htouch)
 
 uint16_t TOUCH_GetY(HTOUCH htouch)
 {
-    TOUCH* touch = (TOUCH*)htouch;
+    TouchInternal* touch = (TouchInternal*)htouch;
     if (!TOUCH_Pressed(htouch))
     {
         return 0xFFFF;
@@ -133,7 +133,7 @@ uint16_t TOUCH_GetY(HTOUCH htouch)
 
 uint16_t TOUCH_GetRawX(HTOUCH htouch)
 {
-    TOUCH* touch = (TOUCH*)htouch;
+    TouchInternal* touch = (TouchInternal*)htouch;
     if (!TOUCH_Pressed(htouch))
     {
         return 0xFFFF;
@@ -143,7 +143,7 @@ uint16_t TOUCH_GetRawX(HTOUCH htouch)
 
 uint16_t TOUCH_GetRawY(HTOUCH htouch)
 {
-    TOUCH* touch = (TOUCH*)htouch;
+    TouchInternal* touch = (TouchInternal*)htouch;
     if (!TOUCH_Pressed(htouch))
     {
         return 0xFFFF;

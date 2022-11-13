@@ -8,11 +8,10 @@
 extern "C" {
 #endif
 
-struct EQUALIZER_type
+typedef struct
 {
     uint32_t id;
-};
-typedef struct EQUALIZER_type* HEQUALIZER;
+} *HEQUALIZER;
 
 typedef struct
 {
@@ -26,12 +25,12 @@ typedef struct
 } EqualizerConfig;
 
 HEQUALIZER  EQ_Configure(EqualizerConfig* config);
-void        EQ_Release(HEQUALIZER equalizer);
+void        EQ_Release(HEQUALIZER hequalizer);
 void        EQ_Reset(EqualizerConfig* config);
-void        EQ_SetTargetValue(HEQUALIZER equalizer, uint16_t value);
-uint16_t    EQ_GetTargetValue(HEQUALIZER equalizer);
+void        EQ_SetTargetValue(HEQUALIZER hequalizer, uint16_t value);
+uint16_t    EQ_GetTargetValue(HEQUALIZER hequalizer);
 
-void        EQ_HandleTick(HEQUALIZER equalizer, uint16_t value);
+void        EQ_HandleTick(HEQUALIZER hequalizer, uint16_t value);
 
 #ifdef __cplusplus
 }

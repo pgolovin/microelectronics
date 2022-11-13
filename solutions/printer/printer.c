@@ -159,7 +159,7 @@ HPRINTER Configure(PrinterConfiguration* cfg)
     printer->printing_frame = UI_CreateFrame(printer->ui_handle, 0, frame, true);
 
     // calibration buttons
-    for (size_t i = 0; i < sizeof(service_commands_list) / sizeof(GCodeCommand); ++i)
+    for (uint16_t i = 0; i < sizeof(service_commands_list) / sizeof(GCodeCommand); ++i)
     {
         Rect location = { 230, 5 + 30 * i, 310, 35 + 30 * i };
         UI_CreateButton(printer->ui_handle, printer->printing_frame, location, service_commands_list[i].name, LARGE_FONT, true, runCommand, printer, (void*)i);

@@ -61,7 +61,7 @@ bool PULSE_HandleTick(HPULSE pulse)
 
 	++internal_pulse->tick;
 	
-	// higher signal produces 'on' signal as a 1st signal, if power permits :)
+	// HIGH signal produces 'on' signal as a 1st signal, if power permits
 	uint32_t signal_tick = internal_pulse->signal_type * internal_pulse->power +
 		(internal_pulse->tick - internal_pulse->signal_type) * ((float)internal_pulse->power / (float)internal_pulse->period);
 	

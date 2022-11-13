@@ -2,7 +2,7 @@
 #include <stdlib.h>
 
 // private members part
-typedef struct SDCARD_Internal_type
+typedef struct
 {
     // SD CARD protocol
     HSPIBUS hspi;
@@ -14,13 +14,14 @@ typedef struct SDCARD_Internal_type
     uint32_t block_size;
 
     bool initialized;
-} SDCARD;
+} SDCardInternal;
+
 #define FAT_DRIVES 10
 static HSDCARD s_fat_drives[FAT_DRIVES] = {0};
 
 #define INVERT_INT(buffer) buffer[0] << 24 | buffer[1] << 16 | buffer[2] << 8 | buffer[3]
 
-// list of sdcard commands supported by V2 SDCARD protocol
+// list of sdcard commands supported by V2 SDCardInternal protocol
 // http://chlazza.nfshost.com/sdcardinfo.html
 enum SDCARD_Commands
 {
@@ -74,14 +75,14 @@ enum SDCARD_Command_Tokens
 };
 
 // private functions
-static SDCARD_Status AbortProcedure(SDCARD* sdcard, int32_t error)
+static SDCARD_Status AbortProcedure(SDCardInternal* sdcard, int32_t error)
 {
     SPIBUS_UnselectDevice(sdcard->hspi, sdcard->spi_id);
     sdcard->initialized = false;
     return (SDCARD_Status)error;
 }
 
-static size_t AbortTransmission(SDCARD* sdcard, size_t data_written)
+static size_t AbortTransmission(SDCardInternal* sdcard, size_t data_written)
 {
     SPIBUS_UnselectDevice(sdcard->hspi, sdcard->spi_id);
     sdcard->initialized = false;
@@ -104,7 +105,7 @@ typedef struct ReturnValueR1_Type
     HAL_StatusTypeDef command_status;
 } ReturnValueR1;
 
-static ReturnValueR1 ReadReturnValue(SDCARD* sdcard)
+static ReturnValueR1 ReadReturnValue(SDCardInternal* sdcard)
 {
     ReturnValueR1 return_value = {0xff, HAL_OK};
     uint8_t transmission_guard = 0xff;
@@ -127,7 +128,7 @@ static ReturnValueR1 ReadReturnValue(SDCARD* sdcard)
 }
 
 // preffix to each commnad is a specific data token (response) that must be received before data can be read
-static HAL_StatusTypeDef ReadResponse(SDCARD* sdcard, uint8_t token)
+static HAL_StatusTypeDef ReadResponse(SDCardInternal* sdcard, uint8_t token)
 {
     uint8_t retval_r1 = 0xFF;
     uint8_t transmission_guard = 0xFF;
@@ -153,7 +154,7 @@ static HAL_StatusTypeDef ReadResponse(SDCARD* sdcard, uint8_t token)
 }
 
 // read data block of given size from SPI protocol.
-static HAL_StatusTypeDef ReadData(SDCARD* sdcard, uint8_t* buffer, size_t buffer_size)
+static HAL_StatusTypeDef ReadData(SDCardInternal* sdcard, uint8_t* buffer, size_t buffer_size)
 {
     uint8_t transmission_guard = 0xFF;
     HAL_StatusTypeDef status = HAL_OK;
@@ -174,7 +175,7 @@ static HAL_StatusTypeDef ReadData(SDCARD* sdcard, uint8_t* buffer, size_t buffer
 // read data chunk formatted according to SD-MMC spec SPI protocol
 // ref: https://elinux.org/images/d/d3/Mmc_spec.pdf chapter 5.4.3
 
-static HAL_StatusTypeDef ReadSingleDataChunk(SDCARD* sdcard, uint8_t data_token, uint8_t* buffer, size_t buffer_size)
+static HAL_StatusTypeDef ReadSingleDataChunk(SDCardInternal* sdcard, uint8_t data_token, uint8_t* buffer, size_t buffer_size)
 {
     HAL_StatusTypeDef status = HAL_OK;
     
@@ -197,8 +198,8 @@ static HAL_StatusTypeDef ReadSingleDataChunk(SDCARD* sdcard, uint8_t data_token,
     return ReadData(sdcard, (uint8_t*)&crc, sizeof(crc));
 }
 
-// wait SDCARD to be ready to receive command
-static HAL_StatusTypeDef WaitReady(SDCARD* sdcard)
+// wait SDCardInternal to be ready to receive command
+static HAL_StatusTypeDef WaitReady(SDCardInternal* sdcard)
 {
     uint8_t busy_flag = 0;
     
@@ -217,7 +218,7 @@ static HAL_StatusTypeDef WaitReady(SDCARD* sdcard)
 
 // writes single block of data to SD card.
 // return number of bites written
-static size_t WriteSingleDataChunk(SDCARD* sdcard, uint8_t token, const uint8_t* data, size_t data_size, uint8_t *respond)
+static size_t WriteSingleDataChunk(SDCardInternal* sdcard, uint8_t token, const uint8_t* data, size_t data_size, uint8_t *respond)
 {
     HAL_StatusTypeDef status = HAL_OK;
     // data format is: Data token[1], data[512], crc[2]
@@ -257,8 +258,8 @@ static size_t WriteSingleDataChunk(SDCARD* sdcard, uint8_t token, const uint8_t*
     return status == HAL_OK ? data_size : 0;
 }
 
-// send command to SDCARD
-static ReturnValueR1 SendCommand(SDCARD* sdcard, uint8_t command, uint32_t params, uint8_t* r1b)
+// send command to SDCardInternal
+static ReturnValueR1 SendCommand(SDCardInternal* sdcard, uint8_t command, uint32_t params, uint8_t* r1b)
 {
     uint8_t crc = 0x00;
     switch (command)
@@ -317,10 +318,10 @@ static ReturnValueR1 SendCommand(SDCARD* sdcard, uint8_t command, uint32_t param
 ////////////////////////////////////////////////////////////////////////////////////////////////
 // public functionality
 
-// create SDCARD handle and configure ports
+// create SDCardInternal handle and configure ports
 HSDCARD SDCARD_Configure(HSPIBUS hspi, GPIO_TypeDef* cs_port_array, uint16_t cs_port)
 {
-    SDCARD* sdcard = malloc(sizeof(SDCARD));
+    SDCardInternal* sdcard = malloc(sizeof(SDCardInternal));
     
     sdcard->hspi = hspi;
     sdcard->spi_id = SPIBUS_AddPeripherialDevice(hspi, cs_port_array, cs_port);
@@ -338,7 +339,7 @@ HSDCARD SDCARD_Configure(HSPIBUS hspi, GPIO_TypeDef* cs_port_array, uint16_t cs_
 // according to SD CARD protocol: http://elm-chan.org/docs/mmc/mmc_e.html#spiinit
 SDCARD_Status SDCARD_Init(HSDCARD hsdcard)
 {
-    SDCARD* sdcard = (SDCARD*)hsdcard;
+    SDCardInternal* sdcard = (SDCardInternal*)hsdcard;
     if (!sdcard || sdcard->initialized)
     {
         return SDCARD_INCORRECT_STATE;
@@ -435,7 +436,7 @@ SDCARD_Status SDCARD_Init(HSDCARD hsdcard)
 // check the latest card status
 SDCARD_Status SDCARD_IsInitialized(HSDCARD hsdcard)
 {
-    SDCARD* sdcard = (SDCARD*)hsdcard;
+    SDCardInternal* sdcard = (SDCardInternal*)hsdcard;
     if (!sdcard && !sdcard->initialized)
     {
         return SDCARD_NOT_READY;
@@ -465,7 +466,7 @@ SDCARD_Status SDCARD_IsInitialized(HSDCARD hsdcard)
 // Get card blocks number, this required to calculate card capacity
 SDCARD_Status SDCARD_ReadBlocksNumber(HSDCARD hsdcard)
 {
-    SDCARD* sdcard = (SDCARD*)hsdcard;
+    SDCardInternal* sdcard = (SDCardInternal*)hsdcard;
     if (!sdcard || !sdcard->initialized)
     {
         return SDCARD_INVALID_ARGUMENT;
@@ -530,7 +531,7 @@ SDCARD_Status SDCARD_ReadBlocksNumber(HSDCARD hsdcard)
 
 size_t SDCARD_GetBlocksNumber(HSDCARD hsdcard)
 {
-    SDCARD* sdcard = (SDCARD*)hsdcard;
+    SDCardInternal* sdcard = (SDCardInternal*)hsdcard;
     if (!sdcard || !sdcard->initialized)
     {
         return 0;
@@ -542,7 +543,7 @@ size_t SDCARD_GetBlocksNumber(HSDCARD hsdcard)
 // Read a single block from SD card
 SDCARD_Status SDCARD_ReadSingleBlock(HSDCARD hsdcard, uint8_t *buffer, uint32_t sector)
 {
-    SDCARD* sdcard = (SDCARD*)hsdcard;
+    SDCardInternal* sdcard = (SDCardInternal*)hsdcard;
     if (!sdcard || !sdcard->initialized || !sdcard->block_size)
     {
         return SDCARD_INCORRECT_STATE;
@@ -569,18 +570,18 @@ SDCARD_Status SDCARD_ReadSingleBlock(HSDCARD hsdcard, uint8_t *buffer, uint32_t 
     return SDCARD_OK;
 }
 
-// read multiple blocks from SDCARD starting from block block_number
+// read multiple blocks from SDCardInternal starting from block block_number
 // reading procedure can be stopped at any moment by Stop Transmission command
 SDCARD_Status SDCARD_Read(HSDCARD hsdcard,  uint8_t *buffer, uint32_t sector, uint32_t count)
 {
-    SDCARD* sdcard = (SDCARD*)hsdcard;
+    SDCardInternal* sdcard = (SDCardInternal*)hsdcard;
     if (!sdcard || !sdcard->initialized || !sdcard->block_size)
     {
         return SDCARD_INCORRECT_STATE;
     }
     SPIBUS_SelectDevice(sdcard->hspi, sdcard->spi_id);
 
-    // to start reading data send Read multiple blocks command to SDCARD
+    // to start reading data send Read multiple blocks command to SDCardInternal
     ReturnValueR1 return_value = {0xff, HAL_OK};
     return_value = SendCommand(sdcard, READ_MULTIPLE_BLOCK, sector, 0);
     if (return_value.command_status != HAL_OK || return_value.r1 != 0x00)
@@ -617,7 +618,7 @@ SDCARD_Status SDCARD_Read(HSDCARD hsdcard,  uint8_t *buffer, uint32_t sector, ui
 // Write commands
 SDCARD_Status SDCARD_WriteSingleBlock(HSDCARD hsdcard, const uint8_t *data, uint32_t sector)
 {
-    SDCARD* sdcard = (SDCARD*)hsdcard;
+    SDCardInternal* sdcard = (SDCardInternal*)hsdcard;
     if (!sdcard || !sdcard->initialized || !sdcard->block_size)
     {
         return SDCARD_INCORRECT_STATE;
@@ -644,11 +645,11 @@ SDCARD_Status SDCARD_WriteSingleBlock(HSDCARD hsdcard, const uint8_t *data, uint
     return SDCARD_OK;
 }
 
-// Write multiple blocks to SDCARD starting from block block_number
+// Write multiple blocks to SDCardInternal starting from block block_number
 // Writting procedure can be stopped at any moment by sending CMD25 data token
 size_t SDCARD_Write(HSDCARD hsdcard, const uint8_t *buffer, uint32_t sector, uint32_t count)
 {
-    SDCARD* sdcard = (SDCARD*)hsdcard;
+    SDCardInternal* sdcard = (SDCardInternal*)hsdcard;
     if (!sdcard || !sdcard->initialized || !sdcard->block_size)
     {
         return 0;

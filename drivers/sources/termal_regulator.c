@@ -4,7 +4,7 @@
 #define POWER_REVERT_INDEX 1
 #define OVERTEMPERATURE_PROBE_LIMIT 10
 // private members part
-typedef struct TermalRegulatorInternal_type
+typedef struct
 {
     TermalRegulatorConfig config;
 

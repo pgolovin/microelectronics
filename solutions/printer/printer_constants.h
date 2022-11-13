@@ -31,7 +31,8 @@ const GCodeCommand service_commands_list[] =
     {"Z -0.05",  "G91\0G0 F150 Z-0.05\0G99"},
     {"Z -0.1",   "G91\0G0 F150 Z-0.1\0G99"},
     {"Set Zero", "G92 X0 Y0 Z0"},
-    {"Abort",    "G90\0G0 F150 X0 Y0 Z150\0G99"},
+    {"Abort",    "G91\0G0 F150 X0 Y0 Z0.5\0G99"},
+    {"Heat",     "M104 S220"},
 };
 
 #ifdef __cplusplus

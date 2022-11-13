@@ -2,7 +2,7 @@
 #include <stdlib.h>
 
 // private members part
-typedef struct PeripherialDevice_type
+typedef struct
 {
     GPIO_TypeDef* cs_port_array;
 	uint16_t sc_port;
@@ -17,11 +17,11 @@ typedef struct SPIBUS_Internal_type
     uint8_t dma_lines;
     uint32_t timeout;
 	
-} SPIBUS;
+} SPIBus;
 
 HSPIBUS SPIBUS_Configure(SPI_HandleTypeDef* hspi, uint32_t timeout)
 {
-    SPIBUS* spibus = DeviceAlloc(sizeof(SPIBUS));
+    SPIBus* spibus = DeviceAlloc(sizeof(SPIBus));
     spibus->hspi = hspi;
     spibus->device_count = 0;
     spibus->dma_lines = 0;
@@ -32,13 +32,13 @@ HSPIBUS SPIBUS_Configure(SPI_HandleTypeDef* hspi, uint32_t timeout)
 
 void SPIBUS_Release(HSPIBUS hspi)
 {
-    SPIBUS* spibus = (SPIBUS*)hspi;
+    SPIBus* spibus = (SPIBus*)hspi;
     DeviceFree(spibus);
 }
 
 SPIBUS_Status SPIBUS_AddPeripherialDevice(HSPIBUS hspi, GPIO_TypeDef* cs_port_array, uint16_t sc_port)
 {
-    SPIBUS* spibus = (SPIBUS*)hspi;
+    SPIBus* spibus = (SPIBus*)hspi;
     if (spibus->device_count >= SPIBUS_DeviceLimit)
     {
         // means error;
@@ -52,7 +52,7 @@ SPIBUS_Status SPIBUS_AddPeripherialDevice(HSPIBUS hspi, GPIO_TypeDef* cs_port_ar
 
 SPIBUS_Status SPIBUS_SelectDevice(HSPIBUS hspi, uint32_t id)
 {
-    SPIBUS* spibus = (SPIBUS*)hspi;
+    SPIBus* spibus = (SPIBus*)hspi;
     if (id >= spibus->device_count)
     {
         return SPIBUS_FAIL;
@@ -64,7 +64,7 @@ SPIBUS_Status SPIBUS_SelectDevice(HSPIBUS hspi, uint32_t id)
 
 SPIBUS_Status SPIBUS_UnselectDevice(HSPIBUS hspi, uint32_t id)
 {
-    SPIBUS* spibus = (SPIBUS*)hspi;
+    SPIBus* spibus = (SPIBus*)hspi;
     if (id >= spibus->device_count)
     {
         return SPIBUS_FAIL;
@@ -76,7 +76,7 @@ SPIBUS_Status SPIBUS_UnselectDevice(HSPIBUS hspi, uint32_t id)
 
 void SPIBUS_UnselectAll(HSPIBUS hspi)
 {
-    SPIBUS* spibus = (SPIBUS*)hspi;
+    SPIBus* spibus = (SPIBus*)hspi;
     for (uint8_t i = 0; i < spibus->device_count; ++i)
     {
         HAL_GPIO_WritePin(spibus->devices[i].cs_port_array, spibus->devices[i].sc_port, GPIO_PIN_SET);
@@ -85,21 +85,27 @@ void SPIBUS_UnselectAll(HSPIBUS hspi)
 
 HAL_StatusTypeDef SPIBUS_SetValue(HSPIBUS hspi, uint8_t* transmit_data, size_t size)
 {
-    SPIBUS* spibus = (SPIBUS*)hspi;
+    SPIBus* spibus = (SPIBus*)hspi;
 
     return HAL_SPI_Transmit(spibus->hspi, transmit_data, size*2, spibus->timeout);
 }
 
 HAL_StatusTypeDef SPIBUS_Transmit(HSPIBUS hspi, uint8_t* transmit_data, size_t size)
 {
-    SPIBUS* spibus = (SPIBUS*)hspi;
+    SPIBus* spibus = (SPIBus*)hspi;
     return HAL_SPI_Transmit(spibus->hspi, transmit_data, size, spibus->timeout);
 }
 
-/*
+HAL_StatusTypeDef SPIBUS_TransmitReceive(HSPIBUS hspi, uint8_t* transmit_data, uint8_t* receive_data, size_t size)
+{
+    SPIBus* spibus = (SPIBus*)hspi;
+    return HAL_SPI_TransmitReceive(spibus->hspi, transmit_data, receive_data, size, spibus->timeout);
+}
+
+/* //Temporary commented out. the functionality is not supported in the initial version
 HAL_StatusTypeDef SPIBUS_TransmitDMA(HSPIBUS hspi, uint8_t* transmit_data, size_t size, size_t lines_count)
 {
-    SPIBUS* spibus = (SPIBUS*)hspi;
+    SPIBus* spibus = (SPIBus*)hspi;
     spibus->dma_lines = lines_count;
     if (0 == lines_count)
     {
@@ -130,7 +136,7 @@ HAL_StatusTypeDef SPIBUS_TransmitDMA(HSPIBUS hspi, uint8_t* transmit_data, size_
 
 HAL_StatusTypeDef SPIBUS_CallbackDMA(HSPIBUS hspi)
 {
-    SPIBUS* spibus = (SPIBUS*)hspi;
+    SPIBus* spibus = (SPIBus*)hspi;
     if (0 == spibus->dma_lines)
     {
         return HAL_ERROR;
@@ -146,10 +152,4 @@ HAL_StatusTypeDef SPIBUS_CallbackDMA(HSPIBUS hspi)
     return status;
 }
 */
-
-HAL_StatusTypeDef SPIBUS_TransmitReceive(HSPIBUS hspi, uint8_t* transmit_data, uint8_t* receive_data, size_t size)
-{
-    SPIBUS* spibus = (SPIBUS*)hspi;
-    return HAL_SPI_TransmitReceive(spibus->hspi, transmit_data, receive_data, size, spibus->timeout);
-}
 

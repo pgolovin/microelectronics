@@ -7,21 +7,21 @@
 extern "C" {
 #endif
 
-typedef struct LED_type 
+typedef struct 
 {
     uint32_t id;
-} LED;
+} *HLED;
 
-LED* LED_Configure(GPIO_TypeDef* pin_array, uint16_t pin);
-void LED_Release(LED* led);
+HLED LED_Configure(GPIO_TypeDef* pin_array, uint16_t pin);
+void LED_Release(HLED led);
 
-void LED_On(LED* led);
-void LED_Off(LED* led);
-void LED_Toggle(LED* led);
-GPIO_PinState LED_GetState(LED* led);
+void LED_On(HLED led);
+void LED_Off(HLED led);
+void LED_Toggle(HLED led);
+GPIO_PinState LED_GetState(HLED led);
 
-void LED_SetPower(LED* led, int power);
-void LED_HandleTick(LED* led);
+void LED_SetPower(HLED led, int power);
+void LED_HandleTick(HLED led);
 
 #ifdef __cplusplus
 }

@@ -8,11 +8,10 @@
 extern "C" {
 #endif
 
-struct SPI_BUS_type
+typedef struct
 {
     uint32_t id;
-};
-typedef struct SPI_BUS_type * HSPIBUS;
+} *HSPIBUS;
 
 typedef enum SPIBUS_Status_type
 {

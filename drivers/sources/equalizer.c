@@ -3,7 +3,7 @@
 #include <stdlib.h>
 
 // private members part
-typedef struct Equalizer_type
+typedef struct
 {
     EqualizerConfig config;
     uint16_t current_value;
@@ -24,44 +24,44 @@ HEQUALIZER EQ_Configure(EqualizerConfig* config)
     return (HEQUALIZER)eq;
 }
 
-void EQ_SetTargetValue(HEQUALIZER equalizer, uint16_t value)
+void EQ_SetTargetValue(HEQUALIZER hequalizer, uint16_t value)
 {
-    Equalizer* heq = (Equalizer*)equalizer;
-    heq->config.target_value = value;
-    heq->temperature_reached = false;
+    Equalizer* equalizer = (Equalizer*)hequalizer;
+    equalizer->config.target_value = value;
+    equalizer->temperature_reached = false;
 }
 
-uint16_t EQ_GetTargetValue(HEQUALIZER equalizer)
+uint16_t EQ_GetTargetValue(HEQUALIZER hequalizer)
 {
-    Equalizer* heq = (Equalizer*)equalizer;
-    return heq->config.target_value;
+    Equalizer* equalizer = (Equalizer*)hequalizer;
+    return equalizer->config.target_value;
 }
 
-void EQ_HandleTick(HEQUALIZER equalizer, uint16_t value)
+void EQ_HandleTick(HEQUALIZER hequalizer, uint16_t value)
 {
-    Equalizer* heq = (Equalizer*)equalizer;
+    Equalizer* equalizer = (Equalizer*)hequalizer;
 
-    if (heq->current_value != 0 && !heq->temperature_reached && heq->config.onValueReached)
+    if (equalizer->current_value != 0 && !equalizer->temperature_reached && equalizer->config.onValueReached)
     {
         //TODO: add tests
         //TODO: ugly code
-        if ((value > heq->config.target_value && heq->current_value <= heq->config.target_value) ||
-            (value < heq->config.target_value && heq->current_value >= heq->config.target_value))
+        if ((value > equalizer->config.target_value && equalizer->current_value <= equalizer->config.target_value) ||
+            (value < equalizer->config.target_value && equalizer->current_value >= equalizer->config.target_value))
         {
-            heq->config.onValueReached(heq->config.parameter);
-            heq->temperature_reached = true;
+            equalizer->config.onValueReached(equalizer->config.parameter);
+            equalizer->temperature_reached = true;
         }
     }
     
-    heq->current_value = value;
+    equalizer->current_value = value;
     
-    if (value < heq->config.target_value)
+    if (value < equalizer->config.target_value)
     {
-        heq->config.increment(heq->config.parameter);
+        equalizer->config.increment(equalizer->config.parameter);
     }
     else
     {
-        heq->config.decrement(heq->config.parameter);
+        equalizer->config.decrement(equalizer->config.parameter);
     }
 }
 
