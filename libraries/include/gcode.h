@@ -31,7 +31,7 @@ typedef enum
     GCODE_COMMAND_COUNT,
 } GCODE_COMMAND_LIST;
 
-typedef enum
+typedef enum 
 {
     GCODE_SET_NOZZLE_TEMPERATURE = 0,
     GCODE_WAIT_NOZZLE,
@@ -43,7 +43,7 @@ typedef enum
     GCODE_SUBCOMMAND_COUNT,
 } GCODE_SUBCOMMAND_LIST;
 
-typedef enum GCODE_COMMAND_STATE_Type
+enum GCODE_COMMAND_STATE_Type
 {
     GCODE_OK = 0,
     GCODE_INCOMPLETE,
@@ -51,9 +51,11 @@ typedef enum GCODE_COMMAND_STATE_Type
     GCODE_FATAL_ERROR_NO_DATA,
     GCODE_FATAL_ERROR_UNKNOWN_COMMAND,
     GCODE_COMMAND_ERROR_COUNT,
-} GCODE_COMMAND_STATE;
+};
 
-typedef enum GCODE_ERROR_Type
+typedef uint32_t GCODE_COMMAND_STATE;
+
+enum GCODE_ERROR_Type
 {
     GCODE_OK_COMMAND_CREATED = 0,
     GCODE_OK_NO_COMMAND, // comment or empty line
@@ -61,7 +63,9 @@ typedef enum GCODE_ERROR_Type
     GCODE_ERROR_UNKNOWN_PARAM,
     GCODE_ERROR_UNKNOWN_COMMAND,
     GCODE_ERROR_UNKNOWN,
-} GCODE_ERROR;
+} ;
+
+typedef uint32_t GCODE_ERROR;
 
 typedef struct
 {

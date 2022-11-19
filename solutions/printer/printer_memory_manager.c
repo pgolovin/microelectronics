@@ -9,3 +9,4 @@ void MemoryManagerConfigure(MemoryManager* manager)
         manager->pages[i] = manager->memory_pool + SDCARD_BLOCK_SIZE * i;
     }
 }
+//eof

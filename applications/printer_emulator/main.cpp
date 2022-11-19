@@ -4,6 +4,10 @@
 #include "printer/printer_entities.h"
 #include "include/touch.h"
 #include "include/termal_regulator.h"
+
+#include "printer_interface.h"
+#include "plot_area.h"
+
 // device mock
 #include "device_mock.h"
 #include "display_mock.h"
@@ -15,24 +19,18 @@
 #include <algorithm>
 #include <thread>
 
-#define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
-// Windows Header Files
-#include <windows.h>
 // C RunTime Header Files
 #include <stdlib.h>
 #include <malloc.h>
 #include <memory.h>
 #include <tchar.h>
 
-const WCHAR szTitle[] = L"Title";                  // The title bar text
-const WCHAR szWindowClass[] = L"TitleClass";            // the main window class name
-
 struct PrinterApplication
 {
     PrinterConfiguration config = { 0 };
     HPRINTER printer = nullptr;
     DisplayMock display;
-    bool run = false;
+
 } app;
 
 uint16_t HandleNozzleEnvironmentTick(Device& device, GPIO_TypeDef port, uint16_t nozzle_value, const uint16_t atm_value)
@@ -52,55 +50,19 @@ uint16_t HandleTableEnvironmentTick(Device& device, GPIO_TypeDef port, uint16_t 
     return table_value + multiplier * (5 * limit_multiplier + rand() % 10);
 }
 
-LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-    switch (message)
-    {
-    case WM_PAINT:
-    {
-        PAINTSTRUCT ps;
-        HDC hdc = BeginPaint(hWnd, &ps);
-        app.display.Draw(hdc, { 0, 0 });
-        EndPaint(hWnd, &ps);
-    }
-    break;
-    case WM_LBUTTONDOWN:
-    {        
-        uint16_t x = LOWORD(lParam);
-        uint16_t y = HIWORD(lParam);
-        if (x < 320 && y < 250)
-        {
-            TrackAction(app.printer, x, y, true);
-        }
-    }
-    break;
-    case WM_LBUTTONUP:
-        TrackAction(app.printer, 0, 0, false);
-        break;
-    case WM_DESTROY:
-        PostQuitMessage(0);
-        app.run = false;
-        break;
-    default:
-        return DefWindowProc(hWnd, message, wParam, lParam);
-    }
-
-    return 0;
-}
-
 int main(int argc, char** argv)
 {
-    GPIO_TypeDef EXTRUDER_HEATER_CONTROL_GPIO_Port = 1;
-    GPIO_TypeDef TABLE_HEATER_CONTROL_GPIO_Port = 2;
-    GPIO_TypeDef EXTRUDER_COOLER_CONTROL_GPIO_Port = 3;
-    GPIO_TypeDef X_ENG_STEP_GPIO_Port = 0;
-    GPIO_TypeDef Y_ENG_STEP_GPIO_Port = 0;
-    GPIO_TypeDef Z_ENG_STEP_GPIO_Port = 0;
-    GPIO_TypeDef E_ENG_STEP_GPIO_Port = 0;
-    GPIO_TypeDef X_ENG_DIR_GPIO_Port = 0;
-    GPIO_TypeDef Y_ENG_DIR_GPIO_Port = 0;
-    GPIO_TypeDef Z_ENG_DIR_GPIO_Port = 0;
-    GPIO_TypeDef E_ENG_DIR_GPIO_Port = 0;
+    GPIO_TypeDef EXTRUDER_HEATER_CONTROL_GPIO_Port  = 1;
+    GPIO_TypeDef TABLE_HEATER_CONTROL_GPIO_Port     = 2;
+    GPIO_TypeDef EXTRUDER_COOLER_CONTROL_GPIO_Port  = 3;
+    GPIO_TypeDef X_ENG_STEP_GPIO_Port               = 4;
+    GPIO_TypeDef Y_ENG_STEP_GPIO_Port               = 5;
+    GPIO_TypeDef Z_ENG_STEP_GPIO_Port               = 6;
+    GPIO_TypeDef E_ENG_STEP_GPIO_Port               = 7;
+    GPIO_TypeDef X_ENG_DIR_GPIO_Port                = 8;
+    GPIO_TypeDef Y_ENG_DIR_GPIO_Port                = 9;
+    GPIO_TypeDef Z_ENG_DIR_GPIO_Port                = 10;
+    GPIO_TypeDef E_ENG_DIR_GPIO_Port                = 11;
 
     uint16_t EXTRUDER_HEATER_CONTROL_Pin = 0;
     uint16_t TABLE_HEATER_CONTROL_Pin    = 0;
@@ -118,8 +80,8 @@ int main(int argc, char** argv)
     Device device(ds);
     AttachDevice(device);
 
-    SDcardMock external_card(2048);
-    SDcardMock internal_card(2048);
+    SDcardMock external_card(4096);
+    SDcardMock internal_card(4096);
 
     app.config.storages[STORAGE_EXTERNAL] = &external_card;
     app.config.storages[STORAGE_INTERNAL] = &internal_card;
@@ -136,8 +98,29 @@ int main(int argc, char** argv)
         SDcardMock::s_sector_size
     };
 
+    OPENFILENAME ofn;       // common dialog box structure
+    TCHAR szFile[260] = { 0 };       // if using TCHAR macros
+
+    // Initialize OPENFILENAME
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = nullptr;
+    ofn.lpstrFile = szFile;
+    ofn.nMaxFile = sizeof(szFile);
+    ofn.lpstrFilter = _T("All\0*.*\0GCode\0*.gcode\0");
+    ofn.nFilterIndex = 1;
+    ofn.lpstrFileTitle = NULL;
+    ofn.nMaxFileTitle = 0;
+    ofn.lpstrInitialDir = NULL;
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+    if (GetOpenFileName(&ofn) != TRUE)
+    {
+        return 1;
+    }
+
     FILE* source;
-    fopen_s(&source, "wanhao.gcode", "r");
+    fopen_s(&source, ofn.lpstrFile, "r");
     std::vector<char> data(512);
 
     SDCARD_FAT_Register(&external_card, 0);
@@ -186,7 +169,6 @@ int main(int argc, char** argv)
         std::cout << "file close failed with error " << (int)file_error << "\n";
     }
 
-
     // setting up termo regulators
     TermalRegulatorConfig tr_configs[TERMO_REGULATOR_COUNT] = {
         {
@@ -220,7 +202,6 @@ int main(int argc, char** argv)
 
     // configuring file system
     app.printer = Configure(&app.config);
-    app.run = true;
 
     uint16_t nozzle_value = 2200;
     uint16_t table_value = 3600;
@@ -228,53 +209,21 @@ int main(int argc, char** argv)
     const uint16_t min_nozzle_value = 2200;
     const uint16_t max_table_value = 3600;
 
-    // configure printer
-    WNDCLASSEXW wcex = { 0 };
-    
-    wcex.cbSize = sizeof(WNDCLASSEX);
-    wcex.style = CS_HREDRAW | CS_VREDRAW;
-    wcex.lpfnWndProc = WndProc;
-    wcex.cbClsExtra = 0;
-    wcex.cbWndExtra = 0;
-    wcex.hInstance = GetModuleHandle(NULL);
-    wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    wcex.hbrBackground = (HBRUSH)(0x000000);
-    wcex.lpszClassName = szWindowClass;
+    RECT wnd = { 0, 0, 320, 240 };
+    PrinterInterface printer_ui(app.printer, app.display, wnd, "UI Simulator", "SYM");
 
-    if (!RegisterClassExW(&wcex))
-    {
-        return 0;
-    }
-    RECT rt = { 0, 0, 320, 240 };
-    AdjustWindowRect(&rt, WS_OVERLAPPEDWINDOW, FALSE);
+    RECT plot = { 0, 0, 800, 800 };
+    PlotArea plot_area(plot, "Plot area", "PLOT");
 
-    HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, rt.right - rt.left, rt.bottom - rt.top, nullptr, nullptr, GetModuleHandle(NULL), nullptr);
-
-    if (!hWnd)
-    {
-        return 0;
-    }
-
-    DWORD threadID = GetCurrentThreadId();
-    app.display.RegisterRefreshCallback([hwnd = hWnd, threadID = threadID](void)
-        {
-            if (GetCurrentThreadId() == threadID)
-            {
-                InvalidateRect(hwnd, nullptr, false);
-            }
-        }
-    );
-
-    ShowWindow(hWnd, TRUE);
-    UpdateWindow(hWnd);
-
-    MSG msg;
+    printer_ui.Show();
+    plot_area.Show();
 
     std::thread thread([&]()
         {
             uint32_t step = 0;
-            while (app.run)
+            device.ResetPinGPIOCounters(X_ENG_STEP_GPIO_Port, 0);
+            device.ResetPinGPIOCounters(Y_ENG_STEP_GPIO_Port, 0);
+            while (printer_ui.IsRunning())
             {
                 ++step;
                 if (0 == step % 1000)
@@ -289,24 +238,33 @@ int main(int argc, char** argv)
                 }
 
                 OnTimer(app.printer);
+                
+                //calculate step using pin state of engine steppers.
+                auto x_state = device.GetPinState(X_ENG_STEP_GPIO_Port, 0);
+                auto y_state = device.GetPinState(Y_ENG_STEP_GPIO_Port, 0);
+                
+                auto x_dir = device.GetPinState(X_ENG_DIR_GPIO_Port, 0).state == GPIO_PIN_SET ? 1 : -1;
+                auto y_dir = device.GetPinState(Y_ENG_DIR_GPIO_Port, 0).state == GPIO_PIN_SET ? 1 : -1;
+
+                if (x_state.signals_log.size() || y_state.signals_log.size())
+                {
+                    plot_area.Step(x_state.signals_log.size() / 2 * x_dir, y_state.signals_log.size() / 2 * y_dir);
+                }
+
+                device.ResetPinGPIOCounters(X_ENG_STEP_GPIO_Port, 0);
+                device.ResetPinGPIOCounters(Y_ENG_STEP_GPIO_Port, 0);
             }
         }
     );    
-
-    uint32_t step = 0;
-    while (app.run)
+    while (printer_ui.IsRunning())
     {
-        if (PeekMessageW(&msg, NULL, 0, 0, TRUE))
-        {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }       
-
-        MainLoop(app.printer);
+        printer_ui.ProcessMessage();
+        plot_area.ProcessMessage();
     }
+
     thread.join();
 
-    return (int)msg.wParam;
+    return 0;
 }
 
 

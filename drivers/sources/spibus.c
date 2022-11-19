@@ -36,40 +36,45 @@ void SPIBUS_Release(HSPIBUS hspi)
     DeviceFree(spibus);
 }
 
-SPIBUS_Status SPIBUS_AddPeripherialDevice(HSPIBUS hspi, GPIO_TypeDef* cs_port_array, uint16_t sc_port)
+uint32_t SPIBUS_AddPeripherialDevice(HSPIBUS hspi, GPIO_TypeDef* cs_port_array, uint16_t sc_port)
 {
     SPIBus* spibus = (SPIBus*)hspi;
+#ifndef FIRMWARE
     if (spibus->device_count >= SPIBUS_DeviceLimit)
     {
         // means error;
         return SPIBUS_FAIL;
     }
+#endif
     spibus->devices[spibus->device_count].cs_port_array = cs_port_array;
     spibus->devices[spibus->device_count].sc_port = sc_port;
     
     return spibus->device_count++;
 }
 
-SPIBUS_Status SPIBUS_SelectDevice(HSPIBUS hspi, uint32_t id)
+uint32_t SPIBUS_SelectDevice(HSPIBUS hspi, uint32_t id)
 {
     SPIBus* spibus = (SPIBus*)hspi;
+#ifndef FIRMWARE
     if (id >= spibus->device_count)
     {
         return SPIBUS_FAIL;
     }
+#endif
     SPIBUS_UnselectAll(hspi);
 	HAL_GPIO_WritePin(spibus->devices[id].cs_port_array, spibus->devices[id].sc_port, GPIO_PIN_RESET);
     return id;
 }
 
-SPIBUS_Status SPIBUS_UnselectDevice(HSPIBUS hspi, uint32_t id)
+uint32_t SPIBUS_UnselectDevice(HSPIBUS hspi, uint32_t id)
 {
     SPIBus* spibus = (SPIBus*)hspi;
+#ifndef FIRMWARE
     if (id >= spibus->device_count)
     {
         return SPIBUS_FAIL;
     }
-    
+#endif
 	HAL_GPIO_WritePin(spibus->devices[id].cs_port_array, spibus->devices[id].sc_port, GPIO_PIN_SET);
     return id;
 }

@@ -869,6 +869,75 @@ TEST_F(GCodeExecutorTest, execute_forward_return_value)
     ASSERT_EQ((int)GCODE_INCOMPLETE, GC_ExecuteFromBuffer(&functions, (void*)&check_parameter, data.data()));
 }
 
+class GCodeParserStateTest : public ::testing::Test
+{
+protected:
+    std::unique_ptr<Device> device;
+    HGCODE code = nullptr;
+
+    virtual void SetUp()
+    {
+        DeviceSettings ds;
+        device = std::make_unique<Device>(ds);
+        AttachDevice(*device);
+
+        GCodeAxisConfig cfg = { 1, 1, 1, 1 };
+        code = GC_Configure(&cfg);
+    }
+
+    virtual void TearDown()
+    {
+        DetachDevice();
+        device = nullptr;
+    }
+};
+
+TEST_F(GCodeParserStateTest, relative_unspecified_assume_zero)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X10",
+        "G91",
+    };
+    uint8_t buffer[GCODE_CHUNK_SIZE];
+
+    for (const auto& command : commands)
+    {
+        GC_ParseCommand(code, const_cast<char*>(command.c_str()));
+        GC_CompressCommand(code, buffer);
+    }
+
+    GC_ParseCommand(code, "G0 F1800 Y10");
+    GC_CompressCommand(code, buffer);
+
+    auto params = GC_GetCurrentCommand(code);
+    ASSERT_EQ(0, params->x);
+}
+
+TEST_F(GCodeParserStateTest, absolut_unspecified_remains_after_relative_zero)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X30",
+        "G91",
+        "G0 F1800 Y20",
+        "G90",
+    };
+    uint8_t buffer[GCODE_CHUNK_SIZE];
+
+    for (const auto& command : commands)
+    {
+        GC_ParseCommand(code, const_cast<char*>(command.c_str()));
+        GC_CompressCommand(code, buffer);
+    }
+
+    GC_ParseCommand(code, "G0 F1800 Z10"); // should be at position 30,20,10
+    GC_CompressCommand(code, buffer);
+
+    auto params = GC_GetCurrentCommand(code);
+    ASSERT_EQ(30, params->x);
+    ASSERT_EQ(20, params->y);
+    ASSERT_EQ(10, params->z);
+}
+
 class GCodeParserDialectTest : public ::testing::Test
 {
 protected:

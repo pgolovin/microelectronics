@@ -1,5 +1,6 @@
 #include "main.h"
 #include "stm32f7xx_hal_spi.h"
+#include "ff.h"
 
 #ifndef _WIN32
 #include "include/sdcard.h"
@@ -46,6 +47,8 @@ typedef struct
 
     // Flag to enable acceleration control or not.
     PRINTER_ACCELERATION acceleration_enabled;
+
+    FIL* log_file;
 } DriverConfig;
 
 typedef struct
@@ -73,6 +76,7 @@ uint32_t       PrinterGetAccelerationRegion(HDRIVER hdriver);
 // returns speed and length of current path segment.
 // equals to relative command parameters
 GCodeCommandParams* PrinterGetCurrentPath(HDRIVER hdriver);
+GCodeCommandParams* PrinterGetCurrentPosition(HDRIVER hdriver);
 
 void PrinterUpdateVoltageT(HDRIVER hdriver, TERMO_REGULATOR regulator, uint16_t voltage);
 uint16_t PrinterGetTargetT(HDRIVER hdriver, TERMO_REGULATOR regulator);

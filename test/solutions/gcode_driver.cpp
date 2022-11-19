@@ -174,7 +174,7 @@ TEST_F(GCodeDriverTest, printer_initialize_after_start)
     PrinterInitialize(printer_driver);
     PrinterPrintFromCache(printer_driver, nullptr, PRINTER_START);
     uint32_t remainder = PrinterGetRemainingCommandsCount(printer_driver);
-    ASSERT_EQ(PRINTER_ALREADY_STARTED, PrinterInitialize(printer_driver));
+    ASSERT_EQ(PRINTER_OK, PrinterInitialize(printer_driver));
     ASSERT_EQ(remainder, PrinterGetRemainingCommandsCount(printer_driver)) << "state was spoiled by double init";
 }
 
@@ -911,6 +911,24 @@ TEST_F(GCodeDriverCommandsTest, printer_relative_positioning)
     PrinterNextCommand(printer_driver);
     GCodeCommandParams path = *PrinterGetCurrentPath(printer_driver);
     ASSERT_EQ(50, path.x);
+}
+
+TEST_F(GCodeDriverCommandsTest, printer_relative_positioning_xy)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G91",
+        "G0 F1800 X30",
+        "G0 F1800 Y20",
+    };
+    StartPrinting(commands, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    GCodeCommandParams path = *PrinterGetCurrentPosition(printer_driver);
+    ASSERT_EQ(30, path.x);
+    ASSERT_EQ(20, path.y);
 }
 
 TEST_F(GCodeDriverCommandsTest, printer_relative_to_absolute_positioning)

@@ -24,11 +24,11 @@ typedef enum SPIBUS_Status_type
 HSPIBUS SPIBUS_Configure(SPI_HandleTypeDef* hspi, uint32_t timeout);
 void SPIBUS_Release(HSPIBUS hspi);
 
-SPIBUS_Status SPIBUS_AddPeripherialDevice(HSPIBUS hspi, GPIO_TypeDef* cs_port_array, uint16_t sc_port);
+uint32_t SPIBUS_AddPeripherialDevice(HSPIBUS hspi, GPIO_TypeDef* cs_port_array, uint16_t sc_port);
 
 // selected device means all low
-SPIBUS_Status SPIBUS_SelectDevice(HSPIBUS hspi, uint32_t id);
-SPIBUS_Status SPIBUS_UnselectDevice(HSPIBUS hspi, uint32_t id);
+uint32_t SPIBUS_SelectDevice(HSPIBUS hspi, uint32_t id);
+uint32_t SPIBUS_UnselectDevice(HSPIBUS hspi, uint32_t id);
 void SPIBUS_UnselectAll(HSPIBUS hspi);
 
 // fasade on HAL_SPI functions to hide internal implementation of SPIBUS 'class'

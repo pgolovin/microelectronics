@@ -3,6 +3,7 @@
 #include "printer/printer_file_manager.h"
 #include "printer/printer_constants.h"
 #include "stdio.h"
+#include "ff.h"
 
 typedef enum
 {
@@ -25,7 +26,7 @@ typedef struct
     HFILEMANAGER file_manager;
     FIL* file;
     DIR* dir;
-    uint32_t gcode_blocks_count;
+    size_t gcode_blocks_count;
 
     HSDCARD* storages;
 
@@ -137,6 +138,7 @@ HPRINTER Configure(PrinterConfiguration* cfg)
         cfg->cooler_pin,
         &axis_configuration,
         PRINTER_ACCELERATION_ENABLE,
+        printer->file,
     };
 
     printer->driver = PrinterConfigure(&drv_cfg);
@@ -193,6 +195,8 @@ void MainLoop(HPRINTER hprinter)
         UI_EnableButton(printer->start_button, (CONTROL_BLOCK_SEC_CODE == cbl.secure_id && cbl.commands_count));
 
         UI_SetIndicatorLabel(printer->progress, "DONE");
+
+        f_close(printer->file);
     }
 
     if (PRINTING == printer->current_mode)
@@ -230,6 +234,7 @@ void MainLoop(HPRINTER hprinter)
         UI_EnableButton(printer->transfer_button, (SDCARD_OK == SDCARD_IsInitialized(printer->storages[STORAGE_EXTERNAL])));
         return;
     }
+    /*
     if (FILE_TRANSFERING == printer->current_mode)
     {
         if (SDCARD_OK != SDCARD_IsInitialized(printer->storages[STORAGE_EXTERNAL]))
@@ -263,7 +268,8 @@ void MainLoop(HPRINTER hprinter)
             UI_SetIndicatorLabel(printer->progress, name);
         }
     }
-
+    */
+    
     if (FAILURE == printer->current_mode)
     {
         //UI_SetIndicatorLabel(printer->progress, "ERROR");
@@ -298,8 +304,3 @@ void ReadADCValue(HPRINTER hprinter, TERMO_REGULATOR regulator, uint16_t value)
     PrinterUpdateVoltageT(printer->driver, regulator, value);
 }
 
-void Log(HPRINTER hprinter, const char* string)
-{
-    Printer* printer = (Printer*)hprinter;
-  //  UI_Print(printer->ui_handle, &printer->status_bar, string);
-}

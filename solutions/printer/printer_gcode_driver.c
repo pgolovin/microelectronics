@@ -2,6 +2,7 @@
 #include "printer/printer_entities.h"
 #include "include/motor.h"
 #include <math.h>
+#include <stdio.h>
 
 #define COS_15_GRAD 0.966
 
@@ -24,17 +25,17 @@ typedef enum
 
 typedef struct
 {
-    uint32_t            sec_code;
-    GCodeCommandParams  position;
-    GCodeCommandParams  actual_position; // G60 head position may differs from saved position.
+    uint32_t                sec_code;
+    GCodeCommandParams      position;
+    GCodeCommandParams      actual_position; // G60 head position may differs from saved position.
 
     // for printing resuming;
-    uint8_t             coordinates_mode;
-    uint8_t             extrusion_mode;
-    uint16_t            temperature[TERMO_REGULATOR_COUNT];
-    uint32_t            current_command;
-    uint32_t            current_sector;
-    uint8_t             caret_position;
+    GCODE_COODRINATES_MODE  coordinates_mode;
+    uint8_t                 extrusion_mode;
+    uint16_t                temperature[TERMO_REGULATOR_COUNT];
+    uint32_t                current_command;
+    uint32_t                current_sector;
+    uint8_t                 caret_position;
 } PrinterState;
 
 #ifdef _WIN32
@@ -96,6 +97,8 @@ typedef struct
     HPULSE cooler;
     GPIO_TypeDef* cooler_port;
     uint16_t      cooler_pin;
+
+    FIL* log_file;
 } Driver;
 
 static inline uint32_t compareTimeWithSpeedLimit(int32_t signed_segment, uint32_t time, uint16_t resolution, Driver* driver)
@@ -246,7 +249,7 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hdriver)
     driver->active_state->position.y += driver->current_segment.y;
     driver->active_state->position.z += driver->current_segment.z;
     driver->active_state->position.e += driver->current_segment.e;
-    
+
     driver->last_command_status = GCODE_OK;
 
     // basic fetch speed is calculated as velocity of the head, without velocity of the table, it is calculated independently.
@@ -307,7 +310,7 @@ static GCODE_COMMAND_STATE setupSet(GCodeCommandParams* params, void* hdriver)
 static GCODE_COMMAND_STATE setCoordinatesMode(GCodeCommandParams* params, void* hdriver)
 {
     Driver* driver = (Driver*)hdriver;
-    driver->active_state->coordinates_mode = params->x;
+    driver->active_state->coordinates_mode = (GCODE_COODRINATES_MODE)params->x;
     driver->active_state->extrusion_mode = params->x;
     return GCODE_OK;
 }
@@ -527,35 +530,24 @@ PRINTER_STATUS PrinterInitialize(HDRIVER hdriver)
 {
     Driver* driver = (Driver*)hdriver;
 
-#ifndef FIRMWARE
-
-    if (driver->commands_count - driver->active_state->current_command > 0)
-    {
-        return PRINTER_ALREADY_STARTED;
-    }
-
-#endif
-
     driver->mode = MODE_IDLE;
     driver->tick_index = 0;
     driver->termo_regulators_state = 0;
     driver->last_command_status = GCODE_OK;
     driver->pre_load_required = false;
 
-    return restoreState(driver);
+    return PRINTER_OK;
 }
 
 PRINTER_STATUS PrinterPrintFromBuffer(HDRIVER hdriver, const uint8_t* command_stream, uint32_t commands_count)
 {
     Driver* driver = (Driver*)hdriver;
-#ifndef FIRMWARE
 
     if (!command_stream || !commands_count)
     {
         return PRINTER_INVALID_PARAMETER;
     }
 
-#endif 
     driver->resume = false;
     driver->material_override = 0;
     driver->service_state = *driver->active_state;
@@ -592,6 +584,8 @@ PRINTER_STATUS PrinterPrintFromCache(HDRIVER hdriver, MaterialFile * material_ov
     {
         return status;
     }
+
+    restoreState(driver);
 
     driver->resume                         = (mode == PRINTER_RESUME);
     driver->material_override              = material_override;
@@ -664,6 +658,12 @@ GCodeCommandParams* PrinterGetCurrentPath(HDRIVER hdriver)
 {
     Driver* driver = (Driver*)hdriver;
     return &driver->current_segment;
+}
+
+GCodeCommandParams* PrinterGetCurrentPosition(HDRIVER hdriver)
+{
+    Driver* driver = (Driver*)hdriver;
+    return &driver->active_state->position;
 }
 
 PRINTER_STATUS PrinterNextCommand(HDRIVER hdriver)
@@ -757,7 +757,7 @@ PRINTER_STATUS PrinterExecuteCommand(HDRIVER hdriver)
         for (uint32_t i = 0; i < TERMO_REGULATOR_COUNT; ++i)
         {
             TR_HandleTick(driver->regulators[i]);
-            driver->termo_regulators_state |= (driver->mode & modes[i]) && !TR_IsHeaterStabilized(driver->regulators[i]) ? modes[i] : 0;
+            driver->termo_regulators_state |= (driver->mode & modes[i]) && !TR_IsTemperatureReached(driver->regulators[i]) ? modes[i] : 0;
         }
     }
 

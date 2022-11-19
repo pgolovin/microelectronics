@@ -37,7 +37,7 @@ typedef struct
 HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, MemoryManager* memory, HGCODE interpreter, FIL* file_handle, void* logger)
 {
 
-#ifndef PRINTER_FIRMWARE
+#ifndef FIRMWARE
 
     if (!ram || !sdcard || !memory || !interpreter)
     {
@@ -134,7 +134,8 @@ PRINTER_STATUS FileManagerReadGCodeBlock(HFILEMANAGER hfile)
             continue;
         }
 
-        GCODE_ERROR error = GC_ParseCommand(fm->gcode_interpreter, fm->memory->pages[2]);
+        const char* data = (const char*)fm->memory->pages[2];
+        GCODE_ERROR error = GC_ParseCommand(fm->gcode_interpreter, data);
         if (GCODE_OK_NO_COMMAND == error)
         {
             // comment or empty line
@@ -318,3 +319,4 @@ MaterialFile* FileManagerGetNextMTL(HFILEMANAGER hfile)
     fm->mtl_caret = 0;
     return 0;
 }
+//eof

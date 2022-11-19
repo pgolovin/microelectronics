@@ -14,6 +14,8 @@ typedef struct
 {
     GCodeAxisConfig         cfg;
     GCodeCommand            command;
+    GCodeCommandParams      cumulative_state;
+    GCODE_COODRINATES_MODE  absolute_state;
 } GCode;
 
 static const char* trimSpaces(const char* command_line)
@@ -159,18 +161,22 @@ HGCODE GC_Configure(const GCodeAxisConfig* config)
     gcode->cfg = *config;
     gcode->command.code = GCODE_COMMAND_NOOP;
 
-    GC_Reset(gcode);
+    GC_Reset((HGCODE)gcode);
 
     return (HGCODE)gcode;
 }
 
+static const GCodeCommandParams zero_command = { 0 };
+static const GCodeSubCommandParams m = { 0 };
+
 void GC_Reset(HGCODE hcode)
 {
     GCode* gcode = (GCode*)hcode;
-    GCodeCommandParams g = { 0 };
-    GCodeSubCommandParams m = { 0 };
-    gcode->command.g = g;
+    
+    gcode->command.g = zero_command;
     gcode->command.m = m;
+    gcode->cumulative_state = zero_command;
+    gcode->absolute_state = GCODE_ABSOLUTE;
 }
 
 GCODE_ERROR GC_ParseCommand(HGCODE hcode, const char* command_line)
@@ -186,11 +192,28 @@ GCODE_ERROR GC_ParseCommand(HGCODE hcode, const char* command_line)
     {
     case 'G':
         command_line = parseCommand(&gcode->command, GCODE_COMMAND, command_line + 1);
+
+        cmd.g = (GCODE_RELATIVE == gcode->absolute_state) ? zero_command : gcode->cumulative_state;
+
         result = parseCommandParams(&cmd.g, &gcode->cfg, command_line);
-        if (GCODE_OK_COMMAND_CREATED == result)
+        if (GCODE_OK_COMMAND_CREATED != result)
         {
-            gcode->command.g = cmd.g;
+            break;
         }
+        gcode->command.g = cmd.g;
+
+        if (GCODE_ABSOLUTE == gcode->absolute_state)
+        {
+            gcode->cumulative_state = cmd.g;
+        }
+        else
+        {
+            gcode->cumulative_state.x += cmd.g.x;
+            gcode->cumulative_state.y += cmd.g.y;
+            gcode->cumulative_state.z += cmd.g.z;
+            gcode->cumulative_state.e += cmd.g.e;
+        }
+
         break;
     case 'M':
         command_line = parseCommand(&gcode->command, GCODE_SUBCOMMAND, command_line + 1);
@@ -271,10 +294,12 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
             break;
         case 90:
             index = GCODE_SET_COORDINATES_MODE;
+            gcode->absolute_state = GCODE_ABSOLUTE;
             gcode->command.g.x = GCODE_ABSOLUTE;
             break;
         case 91:
             index = GCODE_SET_COORDINATES_MODE;
+            gcode->absolute_state = GCODE_RELATIVE;
             gcode->command.g.x = GCODE_RELATIVE;
             break;
         case 92:
