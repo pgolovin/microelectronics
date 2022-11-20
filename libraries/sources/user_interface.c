@@ -8,7 +8,7 @@
 
 #define BORDER_OFFSET   4
 #define LABEL_LENGTH    16
-#define STRING_LENGTH   32
+#define STRING_LENGTH   24
 #define CHILDREN_COUNT  10
 
 #define LETTER_WIDTH    8
@@ -33,7 +33,7 @@ typedef struct
     UI      context;
     Rect    frame;
     uint8_t font_height;
-    char    label[LABEL_LENGTH];
+    char    label[STRING_LENGTH];
     uint16_t color;
     bool    state;
 } Indicator;
@@ -502,9 +502,9 @@ HIndicator UI_CreateIndicator(UI ui_handle, HFrame parent, Rect indicator_rect, 
 
     Indicator* indicator = DeviceAlloc(sizeof(Indicator));
     size_t len = strlen(label);
-    if (len > LABEL_LENGTH)
+    if (len > STRING_LENGTH)
     {
-        len = LABEL_LENGTH;
+        len = STRING_LENGTH;
     }
     
     strcpy(indicator->label, label);
@@ -597,9 +597,9 @@ void UI_SetIndicatorLabel(HIndicator indicator, const char* label)
     Indicator* ind = (Indicator*)indicator;
     UI_CORE* ui = (UI_CORE*)ind->context;
     size_t len = strlen(label);
-    if (len > LABEL_LENGTH-1)
+    if (len > STRING_LENGTH -1)
     {
-        len = LABEL_LENGTH-1;
+        len = STRING_LENGTH -1;
     }
     
     strcpy(ind->label, label);

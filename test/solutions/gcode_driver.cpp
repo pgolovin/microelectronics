@@ -1139,7 +1139,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_hotend_temp_current_
 {
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
-        "M109 S210"
+        "M109 S235"
     };
     StartPrinting(commands, nullptr);
 
@@ -1155,14 +1155,14 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_hotend_temp_current_
         ++tick_index;
         status = PrinterExecuteCommand(printer_driver);
     }
-    ASSERT_TRUE(abs(210.0 - PrinterGetCurrentT(printer_driver, TERMO_NOZZLE)) < 5);
+    ASSERT_TRUE(abs(235.0 - PrinterGetCurrentT(printer_driver, TERMO_NOZZLE)) < 5);
 }
 
 TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_hotend_temp_current_value_unsynced)
 {
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
-        "M109 S210"
+        "M109 S235"
     };
     StartPrinting(commands, nullptr);
 
@@ -1179,7 +1179,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_hotend_temp_current_
         ++tick_index;
         status = PrinterExecuteCommand(printer_driver);
     }
-    ASSERT_TRUE(abs(210.0 - PrinterGetCurrentT(printer_driver, TERMO_NOZZLE)) < 5);
+    ASSERT_TRUE(abs(235.0 - PrinterGetCurrentT(printer_driver, TERMO_NOZZLE)) < 5);
 }
 
 TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_table_temp)

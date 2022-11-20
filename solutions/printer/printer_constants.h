@@ -21,7 +21,7 @@ const GCodeAxisConfig axis_configuration =
 
 typedef struct
 {
-    char name[16];
+    char name[8];
     char command[COMMAND_LENGTH];
 } GCodeCommand;
 
@@ -30,7 +30,7 @@ const GCodeCommand service_commands_list[] =
     {"Z 0.1",    "G91\0G0 F300 Z0.1\0G99"},
     {"Z -0.05",  "G91\0G0 F150 Z-0.05\0G99"},
     {"Z -0.1",   "G91\0G0 F150 Z-0.1\0G99"},
-    {"Set Zero", "G92 X0 Y0 Z0"},
+    {"Zero",     "G92 X0 Y0 Z0"},
     {"Abort",    "G28 X0 Y0\0G99"},
     {"Heat",     "M104 S220"},
 };

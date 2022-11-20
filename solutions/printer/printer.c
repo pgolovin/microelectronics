@@ -215,7 +215,6 @@ void MainLoop(HPRINTER hprinter)
             sprintf(name, "%d", PrinterGetRemainingCommandsCount(printer->driver));
             UI_SetIndicatorLabel(printer->progress, name);
         }
-
         for (uint32_t regulator = 0; regulator < TERMO_REGULATOR_COUNT; ++regulator)
         {
             char name[16];
@@ -234,7 +233,7 @@ void MainLoop(HPRINTER hprinter)
         UI_EnableButton(printer->transfer_button, (SDCARD_OK == SDCARD_IsInitialized(printer->storages[STORAGE_EXTERNAL])));
         return;
     }
-    /*
+    
     if (FILE_TRANSFERING == printer->current_mode)
     {
         if (SDCARD_OK != SDCARD_IsInitialized(printer->storages[STORAGE_EXTERNAL]))
@@ -268,7 +267,7 @@ void MainLoop(HPRINTER hprinter)
             UI_SetIndicatorLabel(printer->progress, name);
         }
     }
-    */
+    
     
     if (FAILURE == printer->current_mode)
     {

@@ -291,7 +291,7 @@ TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_acceleration)
     size_t steps = 0;
     uint32_t cmd_index = 0;
     uint32_t prev_steps = 0xFFFFFFF;
-    while (steps < 5000 * fetch_speed / 1800)
+    while (steps < 500 * fetch_speed / 1800)
     {
         size_t local_steps = CompleteCommand(PrinterNextCommand(printer_driver));
         ASSERT_LT(local_steps, prev_steps);
@@ -358,7 +358,7 @@ TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_braking)
     PrinterNextCommand(printer_driver);
     CompleteCommand(PrinterNextCommand(printer_driver));
    
-    while (PrinterGetRemainingCommandsCount(printer_driver) > 3)
+    while (PrinterGetRemainingCommandsCount(printer_driver) > 1)
     {
         PrinterLoadData(printer_driver);
         CompleteCommand(PrinterNextCommand(printer_driver));

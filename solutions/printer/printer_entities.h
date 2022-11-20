@@ -11,25 +11,25 @@ extern "C" {
 
 // control information about cached file/ if any
 #define CONTROL_BLOCK_POSITION 10
-#define CONTROL_BLOCK_SEC_CODE 0x70726E74   //'prnt'
+#define CONTROL_BLOCK_SEC_CODE 0x70726E74   /*'prnt'*/
 
 // here is stored information about last coordinates and temperature
 // this sector can be used to restore printing from pause
 // and to keep all coordinates under control
 #define STATE_BLOCK_POSITION 4
-#define STATE_BLOCK_SEC_CODE 0x73746174     //'stat'
+#define STATE_BLOCK_SEC_CODE 0x73746174     /*'stat'*/
 
 // here all materials stored. during printing you can use
 // either stored material or gcode defined
 #define MATERIAL_BLOCK_POSITION 5
-#define MATERIAL_SEC_CODE 0x6D74726C        //'mtrl'
+#define MATERIAL_SEC_CODE 0x6D74726C        /*'mtrl'*/
     
 #define SECONDS_IN_MINUTE 60
 #define TERMO_REQUEST_PER_SECOND 10
 #define COOLER_MAX_POWER 255
-#define COOLER_RESOLUTION_PER_SECOND 100
-#define STANDARD_ACCELERATION 60
-#define STANDARD_ACCELERATION_SEGMENT 100U
+#define COOLER_RESOLUTION_PER_SECOND 100 
+#define STANDARD_ACCELERATION 300            /* mm/sec^2 */
+#define STANDARD_ACCELERATION_SEGMENT 20U
 #define MAIN_TIMER_FREQUENCY 10000
 
 #define FILE_NAME_LEN 32

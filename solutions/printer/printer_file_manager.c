@@ -134,8 +134,7 @@ PRINTER_STATUS FileManagerReadGCodeBlock(HFILEMANAGER hfile)
             continue;
         }
 
-        const char* data = (const char*)fm->memory->pages[2];
-        GCODE_ERROR error = GC_ParseCommand(fm->gcode_interpreter, data);
+        GCODE_ERROR error = GC_ParseCommand(fm->gcode_interpreter, fm->memory->pages[2]);
         if (GCODE_OK_NO_COMMAND == error)
         {
             // comment or empty line

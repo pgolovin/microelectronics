@@ -9,6 +9,7 @@
 #endif
 
 #include "include/gcode.h"
+#include "include/user_interface.h"
 #include "include/motor.h"
 #include "include/termal_regulator.h"
 #include "printer/printer_entities.h"
