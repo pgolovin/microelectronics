@@ -4,8 +4,6 @@
 #include <math.h>
 #include <stdio.h>
 
-#define COS_15_GRAD 0.966
-
 typedef enum
 {
     MAIN_COMMANDS_PAGE = 0,
@@ -113,7 +111,7 @@ static inline uint32_t compareTimeWithSpeedLimit(int32_t signed_segment, uint32_
     // check if we reached speed limit: amount of steps required to reach destination lower than amount of requested steps 
     if ((MAIN_TIMER_FREQUENCY * SECONDS_IN_MINUTE) / (resolution * driver->current_segment.fetch_speed) > 1)
     {
-        segment = segment * ((float)( MAIN_TIMER_FREQUENCY * SECONDS_IN_MINUTE) / (float)(resolution * driver->current_segment.fetch_speed));
+        segment = segment * ((float)(MAIN_TIMER_FREQUENCY * SECONDS_IN_MINUTE) / (float)(resolution * driver->current_segment.fetch_speed));
     }
     // return the longest distance
     return segment > time ? segment : time;
@@ -199,7 +197,7 @@ static void calculateAccelRegion(Driver* driver, uint32_t initial_region)
             return;
         }
 
-        if (scalar_mul / sqrt(last_length * length) < COS_15_GRAD)
+        if (scalar_mul / sqrt(last_length * length) < CONTINUOUS_SEGMENT_COS)
         {
             return;
         }

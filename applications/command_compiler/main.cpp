@@ -31,7 +31,7 @@ int main(int argc, char** argv)
     Device device(ds);
     AttachDevice(device);
 
-    HGCODE code = GC_Configure(&axis_configuration);
+    HGCODE code = GC_Configure(&axis_configuration, MAX_FETCH_SPEED);
 
     std::cout << "Enter commands (\'q\' for exit).\n";
     uint32_t i = 0;

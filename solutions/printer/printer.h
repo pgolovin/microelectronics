@@ -30,6 +30,17 @@ typedef struct
     uint32_t id;
 } *HPRINTER;
 
+//TODO: 
+// typedef struct
+// {
+//     /// printer configuration items
+//     uint16_t                max_fetch_speed;
+//     uint16_t                max_continuous_angle;
+//     uint16_t                acceleration_value; // mm/sec^2
+//     uint16_t                acceleration_region; // steps
+//     GCodeAxisConfig         axis_configuration;
+// } PrinterSettings;
+
 typedef struct
 {
     MemoryManager           memory_manager;

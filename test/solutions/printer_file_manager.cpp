@@ -17,7 +17,7 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_ram)
     SDcardMock card(1024);
     MemoryManager mem;
     FIL f;
-    HGCODE gc = GC_Configure(&axis_configuration);
+    HGCODE gc = GC_Configure(&axis_configuration, 0);
 
     ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), 0, &mem, gc, &f, nullptr));
 }
@@ -30,7 +30,7 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_card)
     SDcardMock card(1024);
     MemoryManager mem;
     FIL f;
-    HGCODE gc = GC_Configure(&axis_configuration);
+    HGCODE gc = GC_Configure(&axis_configuration, 0);
 
     ASSERT_TRUE(nullptr == FileManagerConfigure(0, (HSDCARD)(&card), &mem, gc, &f, nullptr));
 }
@@ -42,7 +42,7 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_memory)
     AttachDevice(device);
     SDcardMock card(1024);
     FIL f;
-    HGCODE gc = GC_Configure(&axis_configuration);
+    HGCODE gc = GC_Configure(&axis_configuration, 0);
 
     ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), 0, gc, &f, nullptr));
 }
@@ -67,7 +67,7 @@ TEST(GCodeFileConverterBasicTest, can_create)
     AttachDevice(device);
     MemoryManager mem;
     FIL f;
-    HGCODE gc = GC_Configure(&axis_configuration);
+    HGCODE gc = GC_Configure(&axis_configuration, 0);
 
     ASSERT_TRUE(nullptr != FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), &mem, gc, &f, nullptr));
 }
@@ -84,7 +84,7 @@ protected:
         registerFileSystem();
         MemoryManagerConfigure(&m_memory_manager);
 
-        m_gc = GC_Configure(&axis_configuration);
+        m_gc = GC_Configure(&axis_configuration, 0);
 
         m_file_manager = FileManagerConfigure((HSDCARD)m_sdcard.get(), (HSDCARD)m_ram.get(), &m_memory_manager, m_gc, m_f.get(), nullptr);
     }

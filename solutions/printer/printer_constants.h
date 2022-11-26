@@ -17,6 +17,8 @@ const GCodeAxisConfig axis_configuration =
     104
 };
 
+#define MAX_FETCH_SPEED 4500
+
 #define COMMAND_LENGTH 27
 
 typedef struct

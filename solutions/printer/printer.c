@@ -42,6 +42,7 @@ typedef struct
 
     uint32_t   total_commands_count;
     uint8_t    service_stream[3 * GCODE_CHUNK_SIZE];
+    uint32_t   fail_count;
 } Printer;
 
 // on file select
@@ -114,7 +115,7 @@ HPRINTER Configure(PrinterConfiguration* cfg)
 
     Rect viewport = { 0, 0, 320, 240 };
 
-    printer->interpreter = GC_Configure(&axis_configuration);
+    printer->interpreter = GC_Configure(&axis_configuration, MAX_FETCH_SPEED);
 
     printer->file_manager = FileManagerConfigure(
         cfg->storages[STORAGE_EXTERNAL], 
@@ -186,7 +187,7 @@ void MainLoop(HPRINTER hprinter)
     Printer* printer = (Printer*)hprinter;
     if (FINISHING == printer->current_mode )
     {
-        printer->current_mode = CONFIGURATION;
+        
         PrinterSaveState(printer->driver);
         UI_EnableButton(printer->transfer_button, (SDCARD_OK == SDCARD_IsInitialized(printer->storages[STORAGE_EXTERNAL])));
 
@@ -196,13 +197,24 @@ void MainLoop(HPRINTER hprinter)
 
         UI_SetIndicatorLabel(printer->progress, "DONE");
 
-        f_close(printer->file);
+        printer->current_mode = CONFIGURATION;
     }
 
     if (PRINTING == printer->current_mode)
     {
-        PrinterLoadData(printer->driver);
+        //TODO: dirty hack. need to create another way how to deal with loosing RAM card
         if (PRINTER_OK != PrinterLoadData(printer->driver))
+        {
+            SDCARD_Init(printer->storages[STORAGE_INTERNAL]);
+            SDCARD_ReadBlocksNumber(printer->storages[STORAGE_INTERNAL]);
+            ++printer->fail_count;
+        }
+        else
+        {
+            printer->fail_count = 0;
+        }
+
+        if (10 < printer->fail_count)
         {
             char name[16];
             sprintf(name, "F: %d", PrinterGetRemainingCommandsCount(printer->driver));
@@ -231,6 +243,7 @@ void MainLoop(HPRINTER hprinter)
             SDCARD_ReadBlocksNumber(printer->storages[STORAGE_EXTERNAL]);
         }
         UI_EnableButton(printer->transfer_button, (SDCARD_OK == SDCARD_IsInitialized(printer->storages[STORAGE_EXTERNAL])));
+        printer->fail_count = 0;
         return;
     }
     
@@ -245,7 +258,7 @@ void MainLoop(HPRINTER hprinter)
         if (0 == printer->gcode_blocks_count)
         {
             FileManagerCloseGCode(printer->file_manager);
-            
+            UI_SetIndicatorLabel(printer->progress, "Complete");
             UI_EnableButton(printer->transfer_button, true);
             UI_EnableButton(printer->start_button, true);
             printer->current_mode = CONFIGURATION;

@@ -13,6 +13,7 @@ typedef struct
 typedef struct
 {
     GCodeAxisConfig         cfg;
+    uint16_t                max_fetch_speed;
     GCodeCommand            command;
     GCodeCommandParams      cumulative_state;
     GCODE_COODRINATES_MODE  absolute_state;
@@ -149,17 +150,20 @@ static GCODE_ERROR parseSubCommandParams(GCodeSubCommandParams* params, const ch
     return GCODE_OK_COMMAND_CREATED;
 }
 
-HGCODE GC_Configure(const GCodeAxisConfig* config)
+HGCODE GC_Configure(const GCodeAxisConfig* config, uint16_t max_fetch_speed)
 {
+#ifndef FIRMWARE
     if (!config)
     {
         return 0;
     }
+#endif
 
     GCode* gcode = DeviceAlloc(sizeof(GCode));
 
     gcode->cfg = *config;
     gcode->command.code = GCODE_COMMAND_NOOP;
+    gcode->max_fetch_speed = max_fetch_speed;
 
     GC_Reset((HGCODE)gcode);
 
@@ -312,6 +316,13 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
             //the rest of commands is ignored
             return 0;
         }
+
+        //override fetch speed
+        if (gcode->max_fetch_speed && gcode->command.g.fetch_speed > gcode->max_fetch_speed)
+        {
+            gcode->command.g.fetch_speed = gcode->max_fetch_speed;
+        }
+
         *(GCodeCommandParams*)(buffer + sizeof(parameterType)) = gcode->command.g;
         *(uint32_t*)buffer = GCODE_COMMAND | index;
     }

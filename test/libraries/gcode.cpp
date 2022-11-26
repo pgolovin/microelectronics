@@ -12,7 +12,7 @@ TEST(GCodeBasicTest, cannot_create_without_config)
     AttachDevice(*device);
 
     HGCODE code = nullptr;
-    code = GC_Configure(nullptr);
+    code = GC_Configure(nullptr, 0);
     ASSERT_TRUE(nullptr == code);
 
     DetachDevice();
@@ -28,7 +28,7 @@ TEST(GCodeBasicTest, can_create)
     GCodeAxisConfig cfg = { 1, 1, 1, 100 };
 
     HGCODE code = nullptr;
-    code = GC_Configure(&cfg);
+    code = GC_Configure(&cfg, 0);
     ASSERT_FALSE(nullptr == code);
 
     DetachDevice();
@@ -48,7 +48,7 @@ protected:
         AttachDevice(*device);
 
         GCodeAxisConfig cfg = { 1, 1, 1, 100 };
-        code = GC_Configure(&cfg);
+        code = GC_Configure(&cfg, 0);
     }
 
     virtual void TearDown()
@@ -197,7 +197,7 @@ protected:
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
 
-        code = GC_Configure(&cfg);
+        code = GC_Configure(&cfg, 0);
 
         std::string command = "G0 F6200 X2.45 Y1.00 Z0.1 E1.764";
         GC_ParseCommand(code, const_cast<char*>(command.c_str()));
@@ -376,7 +376,7 @@ protected:
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
 
-        code = GC_Configure(&cfg);
+        code = GC_Configure(&cfg, 0);
 
         std::string command = "M140 I22 R4 S110 P1";
         GC_ParseCommand(code, const_cast<char*>(command.c_str()));
@@ -468,7 +468,7 @@ protected:
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
 
-        code = GC_Configure(&cfg);
+        code = GC_Configure(&cfg, 0);
 
         std::string command = "G1 F6200 X2.45 Y1.00 Z0.1 E1.764";
         GC_ParseCommand(code, const_cast<char*>(command.c_str()));
@@ -525,7 +525,7 @@ protected:
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
 
-        code = GC_Configure(&cfg);
+        code = GC_Configure(&cfg, 0);
 
         data.resize(GCODE_CHUNK_SIZE);
     }
@@ -594,7 +594,7 @@ protected:
         DeviceSettings ds;
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
-        code = GC_Configure(&cfg);
+        code = GC_Configure(&cfg, 0);
     }
 };
 
@@ -682,7 +682,7 @@ protected:
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
 
-        code = GC_Configure(&cfg);
+        code = GC_Configure(&cfg, 0);
 
         results_list.clear();
         functions.commands[GCODE_MOVE] = GCodeExecutorTest::move;
@@ -882,7 +882,7 @@ protected:
         AttachDevice(*device);
 
         GCodeAxisConfig cfg = { 1, 1, 1, 1 };
-        code = GC_Configure(&cfg);
+        code = GC_Configure(&cfg, 0);
     }
 
     virtual void TearDown()
@@ -938,6 +938,49 @@ TEST_F(GCodeParserStateTest, absolut_unspecified_remains_after_relative_zero)
     ASSERT_EQ(10, params->z);
 }
 
+TEST(GCodeParserSpeedLimitTest, zero_is_not_affect_fetch_speed)
+{
+    std::unique_ptr<Device> device;
+    DeviceSettings ds;
+    device = std::make_unique<Device>(ds);
+    AttachDevice(*device);
+
+    GCodeAxisConfig cfg = { 1, 1, 1, 100 };
+    HGCODE code = GC_Configure(&cfg, 0);
+
+    uint8_t buffer[GCODE_CHUNK_SIZE];
+    GC_ParseCommand(code, "G0 F7200 Z10"); 
+    GC_CompressCommand(code, buffer);
+    GCODE_COMMAND_LIST cmd_id;
+    GCodeCommandParams params = *GC_DecompileFromBuffer(buffer, &cmd_id);
+    ASSERT_EQ(params.fetch_speed, 7200);
+
+    DetachDevice();
+    device = nullptr;
+}
+
+TEST(GCodeParserSpeedLimitTest, fetch_speed_limited)
+{
+    const uint32_t fetch_speed_max = 4200;
+    std::unique_ptr<Device> device;
+    DeviceSettings ds;
+    device = std::make_unique<Device>(ds);
+    AttachDevice(*device);
+
+    GCodeAxisConfig cfg = { 1, 1, 1, 100 };
+    HGCODE code = GC_Configure(&cfg, fetch_speed_max);
+
+    uint8_t buffer[GCODE_CHUNK_SIZE];
+    GC_ParseCommand(code, "G0 F7200 Z10");
+    GC_CompressCommand(code, buffer);
+    GCODE_COMMAND_LIST cmd_id;
+    GCodeCommandParams params = *GC_DecompileFromBuffer(buffer, &cmd_id);
+    ASSERT_EQ(params.fetch_speed, fetch_speed_max);
+
+    DetachDevice();
+    device = nullptr;
+}
+
 class GCodeParserDialectTest : public ::testing::Test
 {
 protected:
@@ -951,7 +994,7 @@ protected:
         AttachDevice(*device);
 
         GCodeAxisConfig cfg = { 1, 1, 1, 100 };
-        code = GC_Configure(&cfg);
+        code = GC_Configure(&cfg, 0);
     }
 
     virtual void TearDown()

@@ -62,8 +62,17 @@ bool PULSE_HandleTick(HPULSE pulse)
 	++internal_pulse->tick;
 	
 	// HIGH signal produces 'on' signal as a 1st signal, if power permits
-	uint32_t signal_tick = internal_pulse->signal_type * internal_pulse->power +
-		((internal_pulse->tick - internal_pulse->signal_type) * (float)internal_pulse->power) / (float)internal_pulse->period;
+	uint32_t signal_tick = 0;
+	if (internal_pulse->period < 0xFFFF)
+	{
+		signal_tick = internal_pulse->signal_type* internal_pulse->power +
+			((internal_pulse->tick - internal_pulse->signal_type) * internal_pulse->power) / internal_pulse->period;
+	}
+	else
+	{
+		signal_tick = internal_pulse->signal_type * internal_pulse->power +
+			((uint64_t)(internal_pulse->tick - internal_pulse->signal_type) * (uint64_t)internal_pulse->power) / (uint64_t)internal_pulse->period;
+	}
 	
 	bool result = signal_tick > internal_pulse->signal_tick;
 	if (result)

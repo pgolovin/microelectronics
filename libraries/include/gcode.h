@@ -113,7 +113,7 @@ typedef struct GCodeAxisConfig_type
 
 typedef GCode_Type* HGCODE;
 
-HGCODE                  GC_Configure(const GCodeAxisConfig* config);
+HGCODE                  GC_Configure(const GCodeAxisConfig* config, uint16_t max_fetch_speed);
 void                    GC_Reset(HGCODE hcode);
 //parser
 GCODE_ERROR             GC_ParseCommand(HGCODE hcode, const char* command_line);

@@ -118,7 +118,7 @@ void PrinterEmulator::ConfigurePrinter(GCodeAxisConfig axis_config, PRINTER_ACCE
 void PrinterEmulator::RegisterSDCard()
 {
     InsertSDCARD(m_sdcard.get());
-    m_gc = GC_Configure(&axis);
+    m_gc = GC_Configure(&axis, 0);
     m_file_manager = FileManagerConfigure(m_sdcard.get(), m_storage.get(), &m_memory, m_gc, &m_f, 0);
 }
 
