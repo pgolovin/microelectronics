@@ -555,8 +555,6 @@ INSTANTIATE_TEST_SUITE_P(
         CompilerCommand{ "working_move",                "G1 F6200 X2.45 Y1.00 Z0.1 E1.764", GCODE_COMMAND,      GCODE_MOVE },
         CompilerCommand{ "homing_move",                 "G28 X2.45 Y1.00",                  GCODE_COMMAND,      GCODE_HOME },
         CompilerCommand{ "save_coordinates",            "G60",                              GCODE_COMMAND,      GCODE_SAVE_POSITION },
-        CompilerCommand{ "set_absolute_coordinates",    "G90",                              GCODE_COMMAND,      GCODE_SET_COORDINATES_MODE },
-        CompilerCommand{ "set_relative_coordinates",    "G91",                              GCODE_COMMAND,      GCODE_SET_COORDINATES_MODE },
         CompilerCommand{ "set_value",                   "G92 X0 Y0",                        GCODE_COMMAND,      GCODE_SET },
         CompilerCommand{ "save_printer_state",          "G99",                              GCODE_COMMAND,      GCODE_SAVE_STATE },
         CompilerCommand{ "restart",                     "M24",                              GCODE_SUBCOMMAND,   GCODE_START_RESUME },
@@ -565,9 +563,7 @@ INSTANTIATE_TEST_SUITE_P(
         CompilerCommand{ "enable_cooler",               "M106 S256",                        GCODE_SUBCOMMAND,   GCODE_SET_COOLER_SPEED },
         CompilerCommand{ "disable_cooler",              "M107",                             GCODE_SUBCOMMAND,   GCODE_SET_COOLER_SPEED },
         CompilerCommand{ "wait_nozzle_to_heat",         "M109 S256",                        GCODE_SUBCOMMAND,   GCODE_WAIT_NOZZLE },
-        CompilerCommand{ "wait_table_to_heat",          "M190 S256",                        GCODE_SUBCOMMAND,   GCODE_WAIT_TABLE },
-        CompilerCommand{ "absolute_extrusion_mode",     "M82",                              GCODE_SUBCOMMAND,   GCODE_SET_EXTRUSION_MODE },
-        CompilerCommand{ "relative_extrusion_mode",     "M83",                              GCODE_SUBCOMMAND,   GCODE_SET_EXTRUSION_MODE }
+        CompilerCommand{ "wait_table_to_heat",          "M190 S256",                        GCODE_SUBCOMMAND,   GCODE_WAIT_TABLE }
     ),
     [](const ::testing::TestParamInfo<GCodeCommandCompilerTest::ParamType>& info)
     {
@@ -892,10 +888,49 @@ protected:
     }
 };
 
-TEST_F(GCodeParserStateTest, relative_unspecified_assume_zero)
+TEST_F(GCodeParserStateTest, parser_reset_state_with_zero)
 {
     std::vector<std::string> commands = {
-        "G0 F1800 X10",
+        "G0 F1800 X30",
+    };
+    uint8_t buffer[GCODE_CHUNK_SIZE];
+
+    GC_Reset(code, 0);
+    GC_ParseCommand(code, "G0 F1800 Z10"); // should be at position 30,20,10
+    GC_CompressCommand(code, buffer);
+
+    auto params = GC_GetCurrentCommand(code);
+    ASSERT_EQ(0, params->x);
+    ASSERT_EQ(0, params->y);
+    ASSERT_EQ(10, params->z);
+    ASSERT_EQ(0, params->e);
+}
+
+
+TEST_F(GCodeParserStateTest, parser_reset_state_with_initial_position)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X30",
+    };
+    uint8_t buffer[GCODE_CHUNK_SIZE];
+
+    GCodeCommandParams initial_params = { 100, 20, 10, 5, 1800 };
+
+    GC_Reset(code, &initial_params);
+    GC_ParseCommand(code, "G0 F1800 Z30"); // should be at position 30,20,10
+    GC_CompressCommand(code, buffer);
+
+    auto params = GC_GetCurrentCommand(code);
+    ASSERT_EQ(100, params->x);
+    ASSERT_EQ(20, params->y);
+    ASSERT_EQ(30, params->z);
+    ASSERT_EQ(5, params->e);
+}
+
+TEST_F(GCodeParserStateTest, relative_unspecified_assume_zero_increment)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X30",
         "G91",
     };
     uint8_t buffer[GCODE_CHUNK_SIZE];
@@ -910,7 +945,7 @@ TEST_F(GCodeParserStateTest, relative_unspecified_assume_zero)
     GC_CompressCommand(code, buffer);
 
     auto params = GC_GetCurrentCommand(code);
-    ASSERT_EQ(0, params->x);
+    ASSERT_EQ(30, params->x);
 }
 
 TEST_F(GCodeParserStateTest, absolut_unspecified_remains_after_relative_zero)

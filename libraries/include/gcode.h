@@ -26,7 +26,6 @@ typedef enum
     GCODE_HOME,
     GCODE_SET,
     GCODE_SAVE_POSITION,
-    GCODE_SET_COORDINATES_MODE,
     GCODE_SAVE_STATE,
     GCODE_COMMAND_COUNT,
 } GCODE_COMMAND_LIST;
@@ -38,7 +37,6 @@ typedef enum
     GCODE_SET_TABLE_TEMPERATURE,
     GCODE_WAIT_TABLE,
     GCODE_SET_COOLER_SPEED,
-    GCODE_SET_EXTRUSION_MODE,
     GCODE_START_RESUME,
     GCODE_SUBCOMMAND_COUNT,
 } GCODE_SUBCOMMAND_LIST;
@@ -114,7 +112,7 @@ typedef struct GCodeAxisConfig_type
 typedef GCode_Type* HGCODE;
 
 HGCODE                  GC_Configure(const GCodeAxisConfig* config, uint16_t max_fetch_speed);
-void                    GC_Reset(HGCODE hcode);
+void                    GC_Reset(HGCODE hcode, const GCodeCommandParams* initial_state);
 //parser
 GCODE_ERROR             GC_ParseCommand(HGCODE hcode, const char* command_line);
 

@@ -28,8 +28,6 @@ typedef struct
     GCodeCommandParams      actual_position; // G60 head position may differs from saved position.
 
     // for printing resuming;
-    GCODE_COODRINATES_MODE  coordinates_mode;
-    uint8_t                 extrusion_mode;
     uint16_t                temperature[TERMO_REGULATOR_COUNT];
     uint32_t                current_command;
     uint32_t                current_sector;
@@ -222,25 +220,10 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hdriver)
     }
 
     driver->current_segment.fetch_speed = params->fetch_speed;
-    if (GCODE_ABSOLUTE == driver->active_state->coordinates_mode)
-    {
-        driver->current_segment.x = params->x - driver->active_state->position.x;
-        driver->current_segment.y = params->y - driver->active_state->position.y;
-        driver->current_segment.z = params->z - driver->active_state->position.z;
-    }
-    else
-    {
-        driver->current_segment = *params;
-    }
-
-    if (GCODE_ABSOLUTE == driver->active_state->extrusion_mode)
-    {
-        driver->current_segment.e = params->e - driver->active_state->position.e;
-    }
-    else
-    {
-        driver->current_segment.e = params->e;
-    }
+    driver->current_segment.x = params->x - driver->active_state->position.x;
+    driver->current_segment.y = params->y - driver->active_state->position.y;
+    driver->current_segment.z = params->z - driver->active_state->position.z;
+    driver->current_segment.e = params->e - driver->active_state->position.e;
 
     driver->active_state->position.fetch_speed = driver->current_segment.fetch_speed;
     driver->active_state->position.x += driver->current_segment.x;
@@ -287,13 +270,9 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hdriver)
 
 static GCODE_COMMAND_STATE setupHome(GCodeCommandParams* params, void* hdriver)
 {
-    Driver* driver = (Driver*)hdriver;
     GCodeCommandParams home_params = *params;
     home_params.fetch_speed = 1800;
-    GCODE_COODRINATES_MODE previous_mode = driver->active_state->coordinates_mode;
-    driver->active_state->coordinates_mode = GCODE_ABSOLUTE;
     GCODE_COMMAND_STATE state = setupMove(&home_params, hdriver);
-    driver->active_state->coordinates_mode = previous_mode;
     return state;
 }
 
@@ -302,14 +281,6 @@ static GCODE_COMMAND_STATE setupSet(GCodeCommandParams* params, void* hdriver)
     Driver* driver = (Driver*)hdriver;
     driver->active_state->position = *params;
 
-    return GCODE_OK;
-}
-
-static GCODE_COMMAND_STATE setCoordinatesMode(GCodeCommandParams* params, void* hdriver)
-{
-    Driver* driver = (Driver*)hdriver;
-    driver->active_state->coordinates_mode = (GCODE_COODRINATES_MODE)params->x;
-    driver->active_state->extrusion_mode = params->x;
     return GCODE_OK;
 }
 
@@ -345,13 +316,6 @@ static GCODE_COMMAND_STATE saveState(GCodeCommandParams* params, void* hdriver)
 }
 
 // Subcommands list. M-commands
-
-static GCODE_COMMAND_STATE setExtruderMode(GCodeSubCommandParams* params, void* hdriver)
-{
-    Driver* driver = (Driver*)hdriver;
-    driver->active_state->extrusion_mode = params->s;
-    return GCODE_OK;
-}
 
 static GCODE_COMMAND_STATE setNozzleTemperature(GCodeSubCommandParams* params, void* hdriver)
 {
@@ -453,7 +417,6 @@ HDRIVER PrinterConfigure(DriverConfig* printer_cfg)
     driver->setup_calls.commands[GCODE_HOME]                       = setupHome;
     driver->setup_calls.commands[GCODE_SET]                        = setupSet;
     driver->setup_calls.commands[GCODE_SAVE_POSITION]              = saveCoordinates;
-    driver->setup_calls.commands[GCODE_SET_COORDINATES_MODE]       = setCoordinatesMode;
     driver->setup_calls.commands[GCODE_SAVE_STATE]                 = saveState;
 
     driver->setup_calls.subcommands[GCODE_SET_NOZZLE_TEMPERATURE]  = setNozzleTemperature;
@@ -461,7 +424,6 @@ HDRIVER PrinterConfigure(DriverConfig* printer_cfg)
     driver->setup_calls.subcommands[GCODE_SET_TABLE_TEMPERATURE]   = setTableTemperature;
     driver->setup_calls.subcommands[GCODE_WAIT_TABLE]              = setTableTemperatureBlocking;
     driver->setup_calls.subcommands[GCODE_SET_COOLER_SPEED]        = setCoolerSpeed;
-    driver->setup_calls.subcommands[GCODE_SET_EXTRUSION_MODE]      = setExtruderMode;
     driver->setup_calls.subcommands[GCODE_START_RESUME]            = resumePrint;
 
     driver->acceleration_enabled = printer_cfg->acceleration_enabled;
@@ -681,13 +643,8 @@ PRINTER_STATUS PrinterNextCommand(HDRIVER hdriver)
         // we should do this in absolute coordinates
         // this is ugly block but it cannot be done via GCode commands, otherwise M24 leads to deadlock
         // beacuse it calls itself in the end
-        uint8_t p_mode = driver->active_state->coordinates_mode;
-        uint8_t e_mode = driver->active_state->extrusion_mode;
-        driver->active_state->coordinates_mode = GCODE_ABSOLUTE;
         driver->active_state->actual_position.fetch_speed = 1800;
         driver->last_command_status = setupMove(&driver->active_state->actual_position, driver);
-        driver->active_state->coordinates_mode = p_mode;
-        driver->active_state->extrusion_mode = e_mode;
         driver->resume = false;
 
         return driver->last_command_status;

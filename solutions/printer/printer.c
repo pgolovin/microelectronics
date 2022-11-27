@@ -83,6 +83,8 @@ static bool runCommand(ActionParameter* param)
     uint8_t* caret = printer->service_stream;
     const char* cmd = command;
 
+    GC_Reset(printer->interpreter, PrinterGetCurrentPosition(printer->driver));
+
     uint32_t count = 0;
     for (uint32_t i = 0; i < COMMAND_LENGTH; ++i)
     {

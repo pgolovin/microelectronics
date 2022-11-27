@@ -66,7 +66,7 @@ size_t FileManagerOpenGCode(HFILEMANAGER hfile, const char* filename)
 {
     FileManager* fm = (FileManager*)hfile;
 
-    GC_Reset(fm->gcode_interpreter);
+    GC_Reset(fm->gcode_interpreter, 0);
 
     if (FR_OK != f_open(fm->file, filename, FA_OPEN_EXISTING | FA_READ))
     {

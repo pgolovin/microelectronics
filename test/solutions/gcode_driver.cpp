@@ -857,7 +857,7 @@ TEST_F(GCodeDriverCommandsTest, printer_commands_print)
     ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
 }
 
-TEST_F(GCodeDriverCommandsTest, printer_coordinates_mode_absolute)
+TEST_F(GCodeDriverCommandsTest, printer_coordinates_mode_absolute_no_command)
 {
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
@@ -865,10 +865,10 @@ TEST_F(GCodeDriverCommandsTest, printer_coordinates_mode_absolute)
     };
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver));
-    ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
+    ASSERT_EQ(PRINTER_FINISHED, PrinterNextCommand(printer_driver));
 }
 
-TEST_F(GCodeDriverCommandsTest, printer_coordinates_mode_relative)
+TEST_F(GCodeDriverCommandsTest, printer_coordinates_mode_relative_no_command)
 {
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
@@ -876,7 +876,7 @@ TEST_F(GCodeDriverCommandsTest, printer_coordinates_mode_relative)
     };
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver));
-    ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
+    ASSERT_EQ(PRINTER_FINISHED, PrinterNextCommand(printer_driver));
 }
 
 TEST_F(GCodeDriverCommandsTest, printer_absolute_positioning)
@@ -888,7 +888,6 @@ TEST_F(GCodeDriverCommandsTest, printer_absolute_positioning)
         "G0 F1800 X50 Y0 Z0 E0",
     };
     StartPrinting(commands, nullptr);
-    CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
     PrinterNextCommand(printer_driver);
@@ -907,7 +906,6 @@ TEST_F(GCodeDriverCommandsTest, printer_relative_positioning)
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
-    CompleteCommand(PrinterNextCommand(printer_driver));
     PrinterNextCommand(printer_driver);
     GCodeCommandParams path = *PrinterGetCurrentPath(printer_driver);
     ASSERT_EQ(50, path.x);
@@ -922,7 +920,6 @@ TEST_F(GCodeDriverCommandsTest, printer_relative_positioning_xy)
         "G0 F1800 Y20",
     };
     StartPrinting(commands, nullptr);
-    CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
     PrinterNextCommand(printer_driver);
@@ -943,13 +940,54 @@ TEST_F(GCodeDriverCommandsTest, printer_relative_to_absolute_positioning)
     };
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0
-    CompleteCommand(PrinterNextCommand(printer_driver)); // G91
+    // G91
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0 30
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0 80
-    CompleteCommand(PrinterNextCommand(printer_driver)); // G90 
+    // G90 
     PrinterNextCommand(printer_driver); // back from 80 to 50. should be -30
     GCodeCommandParams path = *PrinterGetCurrentPath(printer_driver);
     ASSERT_EQ(-30, path.x);
+}
+
+TEST_F(GCodeDriverCommandsTest, printer_home_in_absolute)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G0 F1800 X50 Y60 Z30 E10",
+        "G90",
+        "G28 X0 Y0 Z0",
+    };
+    StartPrinting(commands, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0
+    // G90
+    PrinterNextCommand(printer_driver); // G0 30
+    GCodeCommandParams path = *PrinterGetCurrentPath(printer_driver);
+    ASSERT_EQ(-50, path.x);
+    ASSERT_EQ(-60, path.y);
+    ASSERT_EQ(-30, path.z);
+    ASSERT_EQ(0, path.e);
+}
+
+TEST_F(GCodeDriverCommandsTest, printer_home_in_relative)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G0 F1800 X50 Y60 Z30 E10",
+        "G91",
+        "G28 X0 Y0 Z0",
+    };
+    StartPrinting(commands, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0
+    // G90
+    PrinterNextCommand(printer_driver); // G0 30
+    GCodeCommandParams path = *PrinterGetCurrentPath(printer_driver);
+    // abs/relative is not affecting G28
+    ASSERT_EQ(-50, path.x);
+    ASSERT_EQ(-60, path.y);
+    ASSERT_EQ(-30, path.z);
+    ASSERT_EQ(0, path.e);
 }
 
 TEST_F(GCodeDriverCommandsTest, printer_save_coordinates)
@@ -1061,7 +1099,7 @@ protected:
     uint16_t table_value = 20;
 };
 
-TEST_F(GCodeDriverSubcommandsTest, printer_extrusion_mode_absolute)
+TEST_F(GCodeDriverSubcommandsTest, printer_extrusion_mode_absolute_no_command)
 {
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
@@ -1069,10 +1107,10 @@ TEST_F(GCodeDriverSubcommandsTest, printer_extrusion_mode_absolute)
     };
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver));
-    ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
+    ASSERT_EQ(PRINTER_FINISHED, PrinterNextCommand(printer_driver));
 }
 
-TEST_F(GCodeDriverSubcommandsTest, printer_extrusion_mode_relative)
+TEST_F(GCodeDriverSubcommandsTest, printer_extrusion_mode_relative_no_command)
 {
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
@@ -1080,7 +1118,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_extrusion_mode_relative)
     };
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver));
-    ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
+    ASSERT_EQ(PRINTER_FINISHED, PrinterNextCommand(printer_driver));
 }
 
 TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_hotend_temp)
@@ -1584,11 +1622,11 @@ TEST_F(GCodeDriverSubcommandsTest, printer_positioning_abs_extrusion_rel)
     };
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0
-    CompleteCommand(PrinterNextCommand(printer_driver)); // G90
-    CompleteCommand(PrinterNextCommand(printer_driver)); // M83
+    // G90
+    // M83
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0 30
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0 80
-    CompleteCommand(PrinterNextCommand(printer_driver)); // G90 
+    // G90 
     PrinterNextCommand(printer_driver); // E back from 80 to 50. should be -30, X from 50 to 60
     GCodeCommandParams path = *PrinterGetCurrentPath(printer_driver);
     ASSERT_EQ(-30, path.e);
@@ -1608,11 +1646,11 @@ TEST_F(GCodeDriverSubcommandsTest, printer_positioning_rel_extrusion_abs)
     };
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0
-    CompleteCommand(PrinterNextCommand(printer_driver)); // G91
-    CompleteCommand(PrinterNextCommand(printer_driver)); // M82
+    // G91
+    // M82
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0 30
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0 80
-    CompleteCommand(PrinterNextCommand(printer_driver)); // G90 
+    // G90 
     PrinterNextCommand(printer_driver); // X back from 80 to 50. should be -30, E from 50 to 60
     GCodeCommandParams path = *PrinterGetCurrentPath(printer_driver);
     ASSERT_EQ(10, path.e);
@@ -1879,7 +1917,7 @@ TEST_F(GCodeDriverStateTest, extrusion_mode)
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
         "G0 F1800 X30 Y0 Z0 E30",
-        "M83",
+        "M83", // relative extrusion...
         "G0 F1800 X30 Y0 Z0 E30",
         "G99",
         "G0 F1800 X30 Y0 Z0 E30",
@@ -1887,7 +1925,7 @@ TEST_F(GCodeDriverStateTest, extrusion_mode)
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
-    CompleteCommand(PrinterNextCommand(printer_driver));
+    //M83
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver)); // save
 
@@ -1896,6 +1934,7 @@ TEST_F(GCodeDriverStateTest, extrusion_mode)
     //should set position to the 3rd comand and continue printing from the save point
     PrinterInitialize(printer_driver);
     PrinterPrintFromCache(printer_driver, nullptr, PRINTER_RESUME);
+    
     CompleteCommand(PrinterNextCommand(printer_driver)); // resume add restoration command
     PrinterNextCommand(printer_driver); // save command will be repeated
 
