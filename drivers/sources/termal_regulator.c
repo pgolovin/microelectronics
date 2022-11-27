@@ -2,8 +2,9 @@
 #include "include/pulse_engine.h"
 
 #define POWER_REVERT_INDEX 1
+#define OVERTEMPERATURE_PROBE_LIMIT 10
 // private members part
-typedef struct TermalRegulatorInternal_type
+typedef struct
 {
     TermalRegulatorConfig config;
 
@@ -31,6 +32,17 @@ typedef struct TermalRegulatorInternal_type
     bool temperature_reached;
 } TermalRegulator;
 
+static void resetTermalRegulator(TermalRegulator* tr)
+{
+    tr->heat_power = TERMAL_REGULATOR_HEAT_PERIOD;
+    tr->heat_power_min = TERMAL_REGULATOR_HEAT_PERIOD;
+
+    tr->cool_power = 0;
+    tr->cool_power_max = 0;
+
+    tr->heat_probe_index = 0;
+}
+
 HTERMALREGULATOR TR_Configure(TermalRegulatorConfig* config)
 {
     if (!config || (config->line_angle < 0.00001f && config->line_angle > -0.00001f))
@@ -47,12 +59,10 @@ HTERMALREGULATOR TR_Configure(TermalRegulatorConfig* config)
     tr->offset = config->line_offset;
 
     tr->heatup_regulator = PULSE_Configure(PULSE_HIGHER);
-    tr->heat_power = TERMAL_REGULATOR_HEAT_PERIOD;
-    tr->heat_power_min = TERMAL_REGULATOR_HEAT_PERIOD;
-
-    tr->cool_power = 0;
-    tr->cool_power_max = 0;
+    
     PULSE_SetPeriod(tr->heatup_regulator, TERMAL_REGULATOR_HEAT_PERIOD);
+
+    resetTermalRegulator(tr);
 
     return (HTERMALREGULATOR)tr;
 }
@@ -66,11 +76,7 @@ void TR_SetTargetTemperature(HTERMALREGULATOR htr, uint16_t value)
     tr->intermediate_voltage = 0;
     tr->temperature_reached = false;
     
-    tr->heat_power = TERMAL_REGULATOR_HEAT_PERIOD;
-    tr->heat_power_min = TERMAL_REGULATOR_HEAT_PERIOD;
-
-    tr->cool_power = 0;
-    tr->cool_power_max = 0;
+    resetTermalRegulator(tr);
 }
 
 uint16_t TR_GetTargetTemperature(HTERMALREGULATOR htr)
@@ -82,7 +88,8 @@ uint16_t TR_GetTargetTemperature(HTERMALREGULATOR htr)
 uint16_t TR_GetCurrentTemperature(HTERMALREGULATOR htr)
 {
     TermalRegulator* tr = (TermalRegulator*)htr;
-    return (uint16_t)(tr->angle * tr->current_voltage + tr->offset);
+    float result = tr->angle * tr->current_voltage + tr->offset;
+    return (uint16_t)(result > 0 ? result : 0);
 }
 
 void TR_SetADCValue(HTERMALREGULATOR htr, uint16_t value)
@@ -96,6 +103,7 @@ void TR_SetADCValue(HTERMALREGULATOR htr, uint16_t value)
         return;
     }
 
+    // once backet size is full start processing of the temperature
     int16_t delta = (tr->intermediate_voltage / TERMAL_REGULATOR_BACKET_SIZE) - tr->current_voltage;
 
     tr->current_voltage = tr->intermediate_voltage / TERMAL_REGULATOR_BACKET_SIZE;
@@ -114,35 +122,76 @@ void TR_SetADCValue(HTERMALREGULATOR htr, uint16_t value)
     if (tr->current_voltage < tr->target_voltage)
     {
         power = tr->heat_power;
-        if (tr->heating && delta <= 0 && tr->heat_probe_index++)
+
+        if (tr->heating)
         {
-            tr->heat_probe_index = 0;
-            tr->heat_power = tr->heat_power_min + POWER_REVERT_INDEX;
+            // heater have not enougth power to heat the system
+            // in this case make a step back to continue heating with minimal power
+            // if delta remains <=0 then heat probe index will continue to increment, as a result
+            // when he reache overheat limit the system will be restarted
+            if (delta <= 0 && tr->heat_power == tr->heat_power_min && tr->heat_probe_index++)
+            {
+                tr->heat_probe_index = 0;
+                tr->heat_power = tr->heat_power_min + POWER_REVERT_INDEX;
+            }
+            else if (delta <= 0)
+            {
+                tr->heat_probe_index++;
+            }
         }
-        if (tr->temperature_reached && tr->cool_power < tr->heat_power && tr->cool_power_max == tr->cool_power && !tr->heating)
+        else
         {
-            ++tr->cool_power_max;
-            ++tr->cool_power;
+            // we had crossed target temperature and become below target value, heat to target temperature
+            // and try to increase heater power in cooling sequence to reduce cooling speed.
+            // in final we should have a balance between cooling and heating so deviation of the temperature 
+            // could be minimal
+            if (tr->temperature_reached && tr->cool_power < tr->heat_power && tr->cool_power_max == tr->cool_power)
+            {
+                ++tr->cool_power_max;
+                ++tr->cool_power;
+            }
             tr->heat_probe_index = 0;
+            tr->heating = true;
         }
-        tr->heating = true;
-    } 
-    else
+    }
+    else // we have to cool down the system to reach requested temperature
     {
         power = tr->cool_power;
-        if (!tr->heating && delta >= 0 && tr->cool_power > POWER_REVERT_INDEX && tr->heat_probe_index++)
+        if (!tr->heating)
         {
-            tr->heat_probe_index = 0;
-            tr->cool_power = tr->cool_power_max - POWER_REVERT_INDEX;
+            // cooler power exceeds threshold, means that using this power we actually start heating
+            // in this case make a step back to continue cooling
+            if (delta >= 0 && tr->cool_power_max > POWER_REVERT_INDEX && tr->cool_power == tr->cool_power_max && tr->heat_probe_index++)
+            {
+                tr->heat_probe_index = 0;
+                tr->cool_power = tr->cool_power_max - POWER_REVERT_INDEX;
+            }
+            if (delta >= 0)
+            {
+                tr->heat_probe_index++;
+            }
         }
-        if (tr->temperature_reached && tr->cool_power < tr->heat_power && tr->heat_power_min == tr->heat_power && tr->heating)
+        else
         {
-            --tr->heat_power;
-            --tr->heat_power_min;
+            // heater had overcome target temperature, cooldown to target temperature
+            // and try to reduce heater power to reduce heating speed.
+            if (tr->temperature_reached && tr->cool_power < tr->heat_power && tr->heat_power_min == tr->heat_power)
+            {
+                --tr->heat_power;
+                --tr->heat_power_min;
+            }
             tr->heat_probe_index = 0;
+            tr->heating = false;
         }
-        tr->heating = false;
     }
+
+    // the external temperatue characteristics had been changed. 
+    // we should reset the system, and try to pick-up temperature characteristics
+    if (tr->heat_probe_index > OVERTEMPERATURE_PROBE_LIMIT)
+    {
+        resetTermalRegulator(tr);
+    }
+
     PULSE_SetPower(tr->heatup_regulator, power);
 }
 

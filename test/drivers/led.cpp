@@ -10,7 +10,7 @@ TEST(LED_BasicTest, can_create_led_signal)
     AttachDevice(device);
 
     GPIO_TypeDef led_array = 0;
-    LED* led = LED_Configure(&led_array, 0);
+    HLED led = LED_Configure(&led_array, 0);
     ASSERT_FALSE(led == nullptr);
     LED_Release(led);
 
@@ -20,7 +20,7 @@ TEST(LED_BasicTest, can_create_led_signal)
 class LED_Test : public ::testing::Test
 {
 protected:
-    LED* led = nullptr;
+    HLED led = nullptr;
     std::unique_ptr<Device> device;
     GPIO_TypeDef port = 0;
     const uint16_t pin = 1;
@@ -101,7 +101,7 @@ TEST_F(LED_Test, on_twice_produces_one_signal)
 class LED_BasePulseTest : public ::testing::Test
 {
 protected:
-    LED* led = nullptr;
+    HLED led = nullptr;
     std::unique_ptr<Device> device;
     GPIO_TypeDef port = 0;
     const uint16_t pin = 1;
@@ -151,7 +151,7 @@ TEST_F(LED_BasePulseTest, pulse_0_power)
 class LED_PulseTest : public ::testing::TestWithParam<int>
 {
 protected:
-    LED* led = nullptr;
+    HLED led = nullptr;
     std::unique_ptr<Device> device;
     GPIO_TypeDef port = 0;
     const uint16_t pin = 1;

@@ -1,5 +1,5 @@
-#include "printer_constants.h"
 #include "printer/printer_file_manager.h"
+#include "printer/printer.h"
 #include "ff.h"
 
 #define DEFAULT_DRIVE_ID 0
@@ -12,7 +12,8 @@ typedef struct
 
 typedef struct
 {
-    HMemoryManager memory;
+    MemoryManager* memory;
+    void* logger;
 
     HSDCARD sdcard;
     HSDCARD ram;
@@ -29,15 +30,16 @@ typedef struct
     PrinterControlBlock gcode;
 
     uint8_t mtl_caret;
+    char error[16];
     
 } FileManager;
 
-HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, HMemoryManager memory, const GCodeAxisConfig* config, FIL* file_handle)
+HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, MemoryManager* memory, HGCODE interpreter, FIL* file_handle, void* logger)
 {
 
-#ifndef PRINTER_FIRMWARE
+#ifndef FIRMWARE
 
-    if (!ram || !sdcard || !memory)
+    if (!ram || !sdcard || !memory || !interpreter)
     {
         return 0;
     }
@@ -48,10 +50,11 @@ HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, HMemoryManager me
 
     fm->sdcard = sdcard;
     fm->ram = ram;
-    fm->gcode_interpreter = GC_Configure(config);
+    fm->gcode_interpreter = interpreter;
     fm->memory = memory;
     fm->mtl_caret = 0;
     fm->file = file_handle;
+    fm->logger = logger;
 
     SDCARD_FAT_Register(sdcard, DEFAULT_DRIVE_ID);
     f_mount(&fm->file_system, "", 0);
@@ -62,6 +65,9 @@ HFILEMANAGER FileManagerConfigure(HSDCARD sdcard, HSDCARD ram, HMemoryManager me
 size_t FileManagerOpenGCode(HFILEMANAGER hfile, const char* filename)
 {
     FileManager* fm = (FileManager*)hfile;
+
+    GC_Reset(fm->gcode_interpreter, 0);
+
     if (FR_OK != f_open(fm->file, filename, FA_OPEN_EXISTING | FA_READ))
     {
         return 0;
@@ -138,13 +144,23 @@ PRINTER_STATUS FileManagerReadGCodeBlock(HFILEMANAGER hfile)
 
         if (GCODE_OK != error)
         {
+            for (uint32_t j = 0; j < 16; ++j)
+            {
+                fm->error[j] = fm->memory->pages[2][j];
+            }
             return PRINTER_FILE_NOT_GCODE;
         }
 
-        fm->buffer_size += GC_CompressCommand(fm->gcode_interpreter, fm->memory->pages[1] + fm->buffer_size);
+        uint32_t bytes_written = GC_CompressCommand(fm->gcode_interpreter, fm->memory->pages[1] + fm->buffer_size);
+        if ( 0 == bytes_written )
+        {
+            fm->caret = 0;
+            continue;
+        }
+        fm->buffer_size += bytes_written;
         ++cb->commands_count;
         fm->caret = 0;
-        if (SDCARD_BLOCK_SIZE == fm->buffer_size || eof)
+        if (SDCARD_BLOCK_SIZE == fm->buffer_size)
         {
             fm->buffer_size = 0;
             if (SDCARD_OK != SDCARD_WriteSingleBlock(fm->ram, fm->memory->pages[1], fm->current_block++))
@@ -161,6 +177,14 @@ PRINTER_STATUS FileManagerReadGCodeBlock(HFILEMANAGER hfile)
 PRINTER_STATUS FileManagerCloseGCode(HFILEMANAGER hfile)
 {
     FileManager* fm = (FileManager*)hfile;
+    if (fm->buffer_size)
+    {
+        fm->buffer_size = 0;
+        if (SDCARD_OK != SDCARD_WriteSingleBlock(fm->ram, fm->memory->pages[1], fm->current_block))
+        {
+            return PRINTER_RAM_FAILURE;
+        }
+    }
     if (FR_OK != f_close(fm->file))
     {
         return PRINTER_FILE_NOT_GCODE;
@@ -174,6 +198,12 @@ PRINTER_STATUS FileManagerCloseGCode(HFILEMANAGER hfile)
     }
     
     return PRINTER_OK;
+}
+
+char* FileManagerGetError(HFILEMANAGER hfile)
+{
+    FileManager* fm = (FileManager*)hfile;
+    return fm->error;
 }
 
 static bool streq(const char* str1, const char* str2, uint8_t len)
@@ -288,3 +318,4 @@ MaterialFile* FileManagerGetNextMTL(HFILEMANAGER hfile)
     fm->mtl_caret = 0;
     return 0;
 }
+//eof

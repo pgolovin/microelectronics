@@ -259,11 +259,10 @@ protected:
     const size_t steps_per_block = 100; // 1 mm per region
     const size_t fetch_speed = 1800; // 1 mm per region
     size_t commands_count = 0;
+    std::vector<std::string> commands;
     virtual void SetUp()
     {
         SetupPrinter(axis_configuration, PRINTER_ACCELERATION_ENABLE);
-
-        std::vector<std::string> commands;
 
         for (size_t i = 0; i < 60 * 3 * fetch_speed / 1800; ++i)
         {
@@ -292,7 +291,7 @@ TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_acceleration)
     size_t steps = 0;
     uint32_t cmd_index = 0;
     uint32_t prev_steps = 0xFFFFFFF;
-    while (steps < 5000 * fetch_speed / 1800)
+    while (steps < 500 * fetch_speed / 1800)
     {
         size_t local_steps = CompleteCommand(PrinterNextCommand(printer_driver));
         ASSERT_LT(local_steps, prev_steps);
@@ -334,6 +333,7 @@ TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_end)
 
     while (steps < 5000 * fetch_speed / 1800)
     {
+        PrinterLoadData(printer_driver);
         steps += CompleteCommand(PrinterNextCommand(printer_driver));
         ASSERT_NE(commands_count - 1, cmd_index) << "Commands count exceeded";
     }
@@ -341,6 +341,7 @@ TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_end)
     
     while (region_length > (braking_distance - CalculateStepsCount(fetch_speed, steps_per_block, 100)))
     {
+        PrinterLoadData(printer_driver);
         steps += CompleteCommand(PrinterNextCommand(printer_driver));
         region_length = PrinterGetAccelerationRegion(printer_driver);
         ++cmd_index;
@@ -357,17 +358,20 @@ TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_braking)
     PrinterNextCommand(printer_driver);
     CompleteCommand(PrinterNextCommand(printer_driver));
    
-    while (PrinterGetRemainingCommandsCount(printer_driver) > 3)
+    while (PrinterGetRemainingCommandsCount(printer_driver) > 1)
     {
+        PrinterLoadData(printer_driver);
         CompleteCommand(PrinterNextCommand(printer_driver));
     }
     // getting to the braking zone
     size_t steps = CalculateStepsCount(fetch_speed, steps_per_block, 100);
-    size_t local_steps = CalculateStepsCount(fetch_speed, steps_per_block, 100);
+    size_t local_steps = 0;
     while (PrinterGetRemainingCommandsCount(printer_driver))
     {
         local_steps = CompleteCommand(PrinterNextCommand(printer_driver));
-        ASSERT_GT(local_steps, steps) << "command: " << PrinterGetRemainingCommandsCount(printer_driver);
+        PrinterLoadData(printer_driver);
+        uint32_t count = PrinterGetRemainingCommandsCount(printer_driver);
+        ASSERT_GT(local_steps, steps) << "command: " << count;
         steps = local_steps;
     }
 }
@@ -377,6 +381,7 @@ TEST_F(GCodeDriverAccelLongRegionTest, printer_accel_can_be_printed)
     uint32_t printer_commands_count = PrinterGetRemainingCommandsCount(printer_driver);
     for (size_t i = 0; i < printer_commands_count; ++i)
     {
+        PrinterLoadData(printer_driver);
         PRINTER_STATUS status = PrinterNextCommand(printer_driver);
         ASSERT_NE(PRINTER_FINISHED, status);
         CompleteCommand(status);
@@ -506,4 +511,62 @@ TEST_F(GCodeDriverAccelZTest, printer_accel_end)
     ASSERT_GT(steps_e, CalculateStepsCount(600, steps_per_block, 400));
     ASSERT_GT(steps_e, steps_m);
     ASSERT_LT(abs(steps_s - steps_e), 100);
+}
+
+class GCodeDriverExtremeAccel : public ::testing::Test, public PrinterEmulator
+{
+public:
+    GCodeDriverExtremeAccel()
+        : PrinterEmulator(10000)
+    {}
+protected:
+    const size_t acceleration_value = 60; // mm/sec^2
+    const size_t steps_per_block = 25; // 1 mm per region
+    size_t commands_count = 0;
+    virtual void SetUp()
+    {
+        // with this settings the system will demonstrate behavior of the real printer
+        SetupAxisRestrictions(axis_configuration);
+        SetupPrinter(axis_configuration, PRINTER_ACCELERATION_ENABLE);
+    }
+};
+
+TEST_F(GCodeDriverExtremeAccel, accel_variation_z)
+{
+    std::vector<std::string> commands = { "G0 F360 Z30", "G0 F240 Z0", "G0 F120 Z30" };
+    StartPrinting(commands, nullptr);
+    device->ResetPinGPIOCounters(port_z_step, 0);
+    std::vector<Device::PinState> states;
+    for (size_t i = 0; i < commands.size(); ++i)
+    {
+        device->ResetPinGPIOCounters(port_z_step, 0);
+        CompleteCommand(PrinterNextCommand(printer_driver));
+        states.push_back(device->GetPinState(port_z_step, 0));
+    }
+
+    const size_t original_steps_count = 30 * axis_configuration.z_steps_per_mm * 2; // 30 is a distance, and 2 for on/off signal pair on each step
+    for (size_t i = 0; i < commands.size(); ++i)
+    {
+        ASSERT_EQ(original_steps_count, states[i].signals_log.size()) << "failed on command " << commands[i];
+    }
+}
+
+TEST_F(GCodeDriverExtremeAccel, accel_variation_xy)
+{
+    std::vector<std::string> commands = { "G0 F16000 X30", "G0 F7200 X0", "G0 F2400 X30", "G0 F1800 X0" };
+    StartPrinting(commands, nullptr);
+    device->ResetPinGPIOCounters(port_x_step, 0);
+    std::vector<Device::PinState> states;
+    for (size_t i = 0; i < commands.size(); ++i)
+    {
+        device->ResetPinGPIOCounters(port_x_step, 0);
+        CompleteCommand(PrinterNextCommand(printer_driver));
+        states.push_back(device->GetPinState(port_x_step, 0));
+    }
+
+    const size_t original_steps_count = 30 * axis_configuration.x_steps_per_mm * 2; // 30 is a distance, and 2 for on/off signal pair on each step
+    for (size_t i = 0; i < commands.size(); ++i)
+    {
+        ASSERT_EQ(original_steps_count, states[i].signals_log.size()) << "failed on command " << commands[i];
+    }
 }

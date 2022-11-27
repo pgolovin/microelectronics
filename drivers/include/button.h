@@ -3,15 +3,15 @@
 #ifndef __BUTTON__
 #define __BUTTON__
 
-typedef struct Button_type
+typedef struct
 {
-} Button;
+} *HBUTTON;
 
-Button* BtnConfigure(GPIO_TypeDef* pin_array, uint16_t pin);
-void BtnRelease(Button* btn);
+HBUTTON BtnConfigure(GPIO_TypeDef* pin_array, uint16_t pin);
+void BtnRelease(HBUTTON hbutton);
 
-void BtnHandleTick(Button* btn);
-bool BtnGetState(Button* btn);
-bool BtnStateChanged(Button* btn);
+void BtnHandleTick(HBUTTON hbutton);
+bool BtnGetState(HBUTTON hbutton);
+bool BtnStateChanged(HBUTTON hbutton);
 
 #endif //__BUTTON__

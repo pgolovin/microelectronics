@@ -2,66 +2,7 @@
 #include "ff.h"
 #include <sstream>
 
-void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERATION enable_acceleration)
-{
-    m_storage = std::make_unique<SDcardMock>(1024);
-    m_sdcard = std::make_unique<SDcardMock>(1024);
-
-    DeviceSettings ds;
-    device = std::make_unique<Device>(ds);
-    AttachDevice(*device);
-
-    MotorConfig motor_x = {PULSE_LOWER, &port_x_step, 0, &port_x_dir, 0 };
-    MotorConfig motor_y = {PULSE_LOWER, &port_y_step, 0, &port_y_dir, 0 };
-    MotorConfig motor_z = {PULSE_LOWER, &port_z_step, 0, &port_z_dir, 0 };
-    //extruder engine starts extrusion and the start of the segment, to avoid gaps in the printing
-    MotorConfig motor_e = {PULSE_HIGHER, &port_e_step, 0, &port_e_dir, 0 };
-
-    TermalRegulatorConfig nozzle = { &port_nozzle, 0, GPIO_PIN_SET, GPIO_PIN_RESET, 1.f, 0.f };
-    TermalRegulatorConfig table  = { &port_table, 0, GPIO_PIN_RESET, GPIO_PIN_SET, 1.f, 0.f };
-
-    MemoryManagerConfigure(&m_memory);
-
-    RegisterSDCard();
-
-    external_config = axis_config;
-    PrinterConfig cfg = { &m_memory, m_storage.get(),
-        {&motor_x, &motor_y, &motor_z, &motor_e}, enable_acceleration,
-        &nozzle, &table,
-        &port_cooler, 0,
-        &external_config };
-
-    printer_driver = PrinterConfigure(&cfg);
-}
-
-void PrinterEmulator::ConfigurePrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERATION enable_acceleration)
-{
-    DeviceSettings ds;
-    device = std::make_unique<Device>(ds);
-    AttachDevice(*device);
-
-    MotorConfig motor_x = { PULSE_LOWER, &port_x_step, 0, &port_x_dir, 0 };
-    MotorConfig motor_y = { PULSE_LOWER, &port_y_step, 0, &port_y_dir, 0 };
-    MotorConfig motor_z = { PULSE_LOWER, &port_z_step, 0, &port_z_dir, 0 };
-    //extruder engine starts extrusion and the start of the segment, to avoid gaps in the printing
-    MotorConfig motor_e = { PULSE_HIGHER, &port_e_step, 0, &port_e_dir, 0 };
-
-    TermalRegulatorConfig nozzle = { &port_nozzle, 0, GPIO_PIN_SET, GPIO_PIN_RESET, 1.f, 0.f };
-    TermalRegulatorConfig table = { &port_table, 0, GPIO_PIN_RESET, GPIO_PIN_SET, 1.f, 0.f };
-
-    MemoryManagerConfigure(&m_memory);
-
-    external_config = axis_config;
-    PrinterConfig cfg = { &m_memory, m_storage.get(),
-        {&motor_x, &motor_y, &motor_z, &motor_e}, enable_acceleration,
-        &nozzle, &table,
-        &port_cooler, 0,
-        &external_config };
-
-    printer_driver = PrinterConfigure(&cfg);
-}
-
-void PrinterEmulator::RegisterSDCard()
+void PrinterEmulator::InsertSDCARD(SDcardMock* card)
 {
     MKFS_PARM fs_params =
     {
@@ -72,7 +13,7 @@ void PrinterEmulator::RegisterSDCard()
         SDcardMock::s_sector_size
     };
 
-    SDCARD_FAT_Register(m_sdcard.get(), 0);
+    SDCARD_FAT_Register(card, 0);
     std::vector<uint8_t> working_buffer(512);
     FRESULT file_error = f_mkfs("0", &fs_params, working_buffer.data(), working_buffer.size());
     if (FR_OK != file_error)
@@ -81,8 +22,104 @@ void PrinterEmulator::RegisterSDCard()
         str << "file creation failed with error " << file_error;
         throw str.str();
     }
+}
 
-    m_file_manager = FileManagerConfigure(m_sdcard.get(), m_storage.get(), &m_memory, &axis, &m_f);
+void PrinterEmulator::SetupAxisRestrictions(const GCodeAxisConfig& axis_settings)
+{
+    axis = axis_settings;
+}
+
+void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERATION enable_acceleration)
+{
+    m_storage = std::make_unique<SDcardMock>(1024);
+    m_sdcard = std::make_unique<SDcardMock>(1024);
+
+    DeviceSettings ds;
+    device = std::make_unique<Device>(ds);
+    AttachDevice(*device);
+
+    //extruder engine starts extrusion and the start of the segment, to avoid gaps in the printing
+    MotorConfig motor[MOTOR_COUNT] = 
+    {
+        {PULSE_LOWER, &port_x_step, 0, &port_x_dir, 0 },
+        {PULSE_LOWER, &port_y_step, 0, &port_y_dir, 0 },
+        {PULSE_LOWER, &port_z_step, 0, &port_z_dir, 0 },
+        {PULSE_HIGHER, &port_e_step, 0, &port_e_dir, 0 },
+    };
+
+    TermalRegulatorConfig regulators[TERMO_REGULATOR_COUNT] = 
+    {
+        { &port_nozzle, 0, GPIO_PIN_SET, GPIO_PIN_RESET, 1.f, 0.f },
+        { &port_table, 0, GPIO_PIN_RESET, GPIO_PIN_SET, 1.f, 0.f }
+    };
+
+    for (size_t i = 0; i < MOTOR_COUNT; ++i)
+    {
+        m_motors[i] = MOTOR_Configure(&motor[i]);
+    }
+    for (size_t i = 0; i < TERMO_REGULATOR_COUNT; ++i)
+    {
+        m_regulators[i] = TR_Configure(&regulators[i]);
+    }
+
+    MemoryManagerConfigure(&m_memory);
+
+    RegisterSDCard();
+
+    external_config = axis_config;
+    DriverConfig cfg = { &m_memory, m_storage.get(),
+        m_motors,
+        m_regulators,
+        &port_cooler, 0,
+        &external_config , enable_acceleration };
+
+    printer_driver = PrinterConfigure(&cfg);
+}
+
+void PrinterEmulator::ConfigurePrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERATION enable_acceleration)
+{
+    DeviceSettings ds;
+    device = std::make_unique<Device>(ds);
+    AttachDevice(*device);
+
+    MotorConfig motor[MOTOR_COUNT] =
+    {
+        {PULSE_LOWER, &port_x_step, 0, &port_x_dir, 0 },
+        {PULSE_LOWER, &port_y_step, 0, &port_y_dir, 0 },
+        {PULSE_LOWER, &port_z_step, 0, &port_z_dir, 0 },
+        {PULSE_HIGHER, &port_e_step, 0, &port_e_dir, 0 },
+    };
+
+    TermalRegulatorConfig regulators[TERMO_REGULATOR_COUNT] =
+    {
+        { &port_nozzle, 0, GPIO_PIN_SET, GPIO_PIN_RESET, 1.f, 0.f },
+        { &port_table, 0, GPIO_PIN_RESET, GPIO_PIN_SET, 1.f, 0.f }
+    };
+
+    for (size_t i = 0; i < MOTOR_COUNT; ++i)
+    {
+        m_motors[i] = MOTOR_Configure(&motor[i]);
+    }
+    for (size_t i = 0; i < TERMO_REGULATOR_COUNT; ++i)
+    {
+        m_regulators[i] = TR_Configure(&regulators[i]);
+    }
+
+    external_config = axis_config;
+    DriverConfig cfg = { &m_memory, m_storage.get(),
+        m_motors,
+        m_regulators,
+        &port_cooler, 0,
+        &external_config , enable_acceleration };
+
+    printer_driver = PrinterConfigure(&cfg);
+}
+
+void PrinterEmulator::RegisterSDCard()
+{
+    InsertSDCARD(m_sdcard.get());
+    m_gc = GC_Configure(&axis, 0);
+    m_file_manager = FileManagerConfigure(m_sdcard.get(), m_storage.get(), &m_memory, m_gc, &m_f, 0);
 }
 
 void PrinterEmulator::StartPrinting(const std::vector<std::string>& commands, MaterialFile* material_override)
@@ -118,6 +155,11 @@ size_t PrinterEmulator::CompleteCommand(PRINTER_STATUS command_status)
     {
         ++i;
         command_status = PrinterExecuteCommand(printer_driver);
+        if (PRINTER_PRELOAD_REQUIRED == command_status)
+        {
+            throw std::exception("Preload is required");
+            break;
+        }
     }
     return i;
 }

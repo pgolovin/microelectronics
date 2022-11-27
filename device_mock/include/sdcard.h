@@ -1,6 +1,7 @@
 #pragma once
 
 //SDCARD MOC FILE
+// it is being duplicated to avoid clashes with original implementation
 #include <main.h>
 
 #ifdef __cplusplus
@@ -30,6 +31,7 @@ typedef enum SDCARD_Status_type
 
 } SDCARD_Status;
 
+SDCARD_Status SDCARD_Init(HSDCARD hsdcard);
 SDCARD_Status SDCARD_IsInitialized(HSDCARD hsdcard);
 
 // Service commands

@@ -2,7 +2,7 @@
 set(HEADERS
     "include/led.h"
     "include/sdcard.h"
-    "include/display.h"
+    #"include/display.h"
     "include/spibus.h"
     "include/pulse_engine.h"
     "include/equalizer.h"
@@ -12,7 +12,7 @@ set(HEADERS
 set(SOURCES
     "sources/led.c"
     #"sources/sdcard.c" implementation of SDCARD is mocked in device_mock library
-    "sources/display.c"
+    #"sources/display.c"
     "sources/spibus.c"
     "sources/pulse_engine.c"
     "sources/equalizer.c"

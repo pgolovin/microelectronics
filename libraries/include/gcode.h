@@ -26,24 +26,22 @@ typedef enum
     GCODE_HOME,
     GCODE_SET,
     GCODE_SAVE_POSITION,
-    GCODE_SET_COORDINATES_MODE,
     GCODE_SAVE_STATE,
     GCODE_COMMAND_COUNT,
 } GCODE_COMMAND_LIST;
 
-typedef enum
+typedef enum 
 {
     GCODE_SET_NOZZLE_TEMPERATURE = 0,
     GCODE_WAIT_NOZZLE,
     GCODE_SET_TABLE_TEMPERATURE,
     GCODE_WAIT_TABLE,
     GCODE_SET_COOLER_SPEED,
-    GCODE_SET_EXTRUSION_MODE,
     GCODE_START_RESUME,
     GCODE_SUBCOMMAND_COUNT,
 } GCODE_SUBCOMMAND_LIST;
 
-typedef enum GCODE_COMMAND_STATE_Type
+enum GCODE_COMMAND_STATE_Type
 {
     GCODE_OK = 0,
     GCODE_INCOMPLETE,
@@ -51,9 +49,11 @@ typedef enum GCODE_COMMAND_STATE_Type
     GCODE_FATAL_ERROR_NO_DATA,
     GCODE_FATAL_ERROR_UNKNOWN_COMMAND,
     GCODE_COMMAND_ERROR_COUNT,
-} GCODE_COMMAND_STATE;
+};
 
-typedef enum GCODE_ERROR_Type
+typedef uint32_t GCODE_COMMAND_STATE;
+
+enum GCODE_ERROR_Type
 {
     GCODE_OK_COMMAND_CREATED = 0,
     GCODE_OK_NO_COMMAND, // comment or empty line
@@ -61,7 +61,9 @@ typedef enum GCODE_ERROR_Type
     GCODE_ERROR_UNKNOWN_PARAM,
     GCODE_ERROR_UNKNOWN_COMMAND,
     GCODE_ERROR_UNKNOWN,
-} GCODE_ERROR;
+} ;
+
+typedef uint32_t GCODE_ERROR;
 
 typedef struct
 {
@@ -73,9 +75,9 @@ typedef struct GCodeParamsG_type
 {
     parameterType x;
     parameterType y;
-    parameterType z; // in certain cases if deltaZ > 75 mm we have a trouble with number of steps, it is bigger than 0xFFFF
+    parameterType z;
     parameterType e;
-    parameterType fetch_speed;
+    parameterType fetch_speed; //mm per min
 } GCodeCommandParams;
 
 typedef struct GCodeParamsM_type
@@ -109,8 +111,8 @@ typedef struct GCodeAxisConfig_type
 
 typedef GCode_Type* HGCODE;
 
-HGCODE                  GC_Configure(const GCodeAxisConfig* config);
-
+HGCODE                  GC_Configure(const GCodeAxisConfig* config, uint16_t max_fetch_speed);
+void                    GC_Reset(HGCODE hcode, const GCodeCommandParams* initial_state);
 //parser
 GCODE_ERROR             GC_ParseCommand(HGCODE hcode, const char* command_line);
 

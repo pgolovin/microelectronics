@@ -138,10 +138,20 @@ void SDcardMock::SetCardStatus(SDCARD_Status new_status)
     m_status = new_status;
 }
 
+SDCARD_Status SDCARD_Init(HSDCARD)
+{
+    return SDCARD_OK;
+}
+
 SDCARD_Status SDCARD_IsInitialized(HSDCARD hsdcard)
 {
     SDcardMock* sdcard = (SDcardMock*)(hsdcard);
     return sdcard->IsInitialized();
+}
+
+SDCARD_Status SDCARD_ReadBlocksNumber(HSDCARD hsdcard)
+{
+    return SDCARD_OK;
 }
 
 size_t SDCARD_GetBlocksNumber(HSDCARD hsdcard)

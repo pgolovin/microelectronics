@@ -1,9 +1,14 @@
 #include "printer/printer_constants.h"
 #include "printer/printer_gcode_driver.h"
-#include "include/gcode.h"
 #include "solutions/printer_emulator.h"
+#include "include/gcode.h"
+
+#include "sdcard.h"
+#include "sdcard_mock.h"
+
 #include <gtest/gtest.h>
 #include <sstream>
+#include <memory>
 
 TEST(GCodeDriverBasicTest, printer_cannot_create_without_config)
 {
@@ -19,105 +24,85 @@ TEST(GCodeDriverBasicTest, printer_cannot_create_without_storage)
     DeviceSettings ds;
     Device device(ds);
     AttachDevice(device);
-    PrinterConfig cfg = { 0 };
+    DriverConfig cfg = { 0 };
 
     ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
 }
 
-
-TEST(GCodeDriverBasicTest, printer_cannot_create_without_memory)
+class GCodeDriverCreationTest : public ::testing::Test
 {
-    DeviceSettings ds;
-    Device device(ds);
-    AttachDevice(device);
+public:
+    GPIO_TypeDef m_port = 0;
+    MemoryManager m_mem;
+    GCodeAxisConfig m_axis_cfg = { 1,1,1,1 };
 
-    GPIO_TypeDef port = 0;
-    TermalRegulatorConfig ts = { &port, 0, GPIO_PIN_SET, GPIO_PIN_RESET };
-    MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
-    SDcardMock storage(1024);
-    PrinterConfig cfg = { 0, &storage, &motor, &motor, &motor, &motor, PRINTER_ACCELERATION_DISABLE, &ts, &ts, &port, 0, 0 };
+    std::unique_ptr<SDcardMock> m_storage;
+    std::unique_ptr<Device> m_device;
+    std::vector<HMOTOR> m_motors;
+    std::vector<HTERMALREGULATOR> m_trs;
+
+    virtual void SetUp()
+    {
+        DeviceSettings ds;
+        m_device = std::make_unique<Device>(ds);
+        AttachDevice(*m_device);
+
+        m_storage = std::make_unique<SDcardMock>(1024);
+
+        TermalRegulatorConfig ts = { &m_port, 0, GPIO_PIN_SET, GPIO_PIN_RESET, 1, 0 };
+        MotorConfig motor = { PULSE_LOWER, &m_port, 0, &m_port, 0 };
+        HMOTOR hmotor = MOTOR_Configure(&motor);
+        HTERMALREGULATOR htr = TR_Configure(&ts);
+        m_motors = { hmotor, hmotor, hmotor, hmotor };
+        m_trs = { htr, htr };
+    }
+
+
+    virtual void TearDown()
+    {
+        DetachDevice();
+        m_device = nullptr;
+    }
+};
+
+TEST_F(GCodeDriverCreationTest, printer_cannot_create_without_memory)
+{
+    DriverConfig cfg = { 0, m_storage.get(), m_motors.data(), m_trs.data(), &m_port, 0, 0, PRINTER_ACCELERATION_DISABLE };
 
     ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
 }
 
-TEST(GCodeDriverBasicTest, printer_cannot_create_without_area_settings)
+TEST_F(GCodeDriverCreationTest, printer_cannot_create_without_area_settings)
 {
-    DeviceSettings ds;
-    Device device(ds);
-    AttachDevice(device);
-
-    GPIO_TypeDef port = 0;
-    TermalRegulatorConfig ts = { &port, 0, GPIO_PIN_SET, GPIO_PIN_RESET };
-    MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
-    SDcardMock storage(1024);
-    MemoryManager mem;
-    PrinterConfig cfg = { &mem, &storage, &motor, &motor, &motor, &motor, PRINTER_ACCELERATION_DISABLE, &ts, &ts, &port, 0, 0 };
+    DriverConfig cfg = { &m_mem, m_storage.get(), m_motors.data(), m_trs.data(), &m_port, 0, 0, PRINTER_ACCELERATION_DISABLE };
 
     ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
 }
 
-TEST(GCodeDriverBasicTest, printer_cannot_create_without_motor)
+TEST_F(GCodeDriverCreationTest, printer_cannot_create_without_motor)
 {
-    DeviceSettings ds;
-    Device device(ds);
-    AttachDevice(device);
-
-    GPIO_TypeDef port = 0;
-    TermalRegulatorConfig ts = { &port, 0, GPIO_PIN_SET, GPIO_PIN_RESET };
-    MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
-    SDcardMock storage(1024);
-    GCodeAxisConfig axis_cfg = { 1,1,1,1 };
-    MemoryManager mem;
-    PrinterConfig cfg = { &mem, &storage, 0, 0, 0, 0, PRINTER_ACCELERATION_DISABLE, &ts, &ts, &port, 0, &axis_cfg };
+    DriverConfig cfg = { &m_mem, m_storage.get(), 0, m_trs.data(), &m_port, 0, &m_axis_cfg, PRINTER_ACCELERATION_DISABLE };
 
     ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
 }
 
-TEST(GCodeDriverBasicTest, printer_cannot_create_without_sensor)
+TEST_F(GCodeDriverCreationTest, printer_cannot_create_without_sensor)
 {
-    DeviceSettings ds;
-    Device device(ds);
-    AttachDevice(device);
-
-    GPIO_TypeDef port = 0;
-    MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
-    SDcardMock storage(1024);
-    GCodeAxisConfig axis_cfg = { 1,1,1,1 };
-    MemoryManager mem;
-    PrinterConfig cfg = { &mem, &storage, &motor, &motor, &motor, &motor, PRINTER_ACCELERATION_DISABLE, 0, 0, &port, 0, &axis_cfg };
+    DriverConfig cfg = { &m_mem,  m_storage.get(), m_motors.data(), 0, &m_port, 0, &m_axis_cfg, PRINTER_ACCELERATION_DISABLE };
 
     ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
 }
 
-TEST(GCodeDriverBasicTest, printer_cannot_create_without_cooler)
+TEST_F(GCodeDriverCreationTest, printer_cannot_create_without_cooler)
 {
-    DeviceSettings ds;
-    Device device(ds);
-    AttachDevice(device);
-
-    GPIO_TypeDef port = 0;
-    MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
-    SDcardMock storage(1024);
-    GCodeAxisConfig axis_cfg = { 1,1,1,1 };
-    MemoryManager mem;
-    PrinterConfig cfg = { &mem, &storage, &motor, &motor, &motor, &motor, PRINTER_ACCELERATION_DISABLE, 0, 0, 0, 0, &axis_cfg };
+     DriverConfig cfg = { &m_mem,  m_storage.get(), m_motors.data(), m_trs.data(), 0, 0, &m_axis_cfg, PRINTER_ACCELERATION_DISABLE };
 
     ASSERT_TRUE(nullptr == PrinterConfigure(&cfg));
 }
 
-TEST(GCodeDriverBasicTest, printer_can_create_with_storage)
+TEST_F(GCodeDriverCreationTest, printer_can_create_with_storage)
 {
-    DeviceSettings ds;
-    Device device(ds);
-    AttachDevice(device);
-
-    GPIO_TypeDef port = 0;
-    TermalRegulatorConfig ts = { &port, 0, GPIO_PIN_SET, GPIO_PIN_RESET, 1.f, 0.f };
-    MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0,};
-    SDcardMock storage(1024);
-    GCodeAxisConfig axis_cfg = { 1,1,1,1 };
-    MemoryManager mem;
-    PrinterConfig cfg = { &mem, &storage, &motor, &motor, &motor, &motor, PRINTER_ACCELERATION_DISABLE, &ts, &ts, &port, 0, &axis_cfg};
+    DriverConfig cfg = { &m_mem,  m_storage.get(), m_motors.data(), m_trs.data(), &m_port, 0, &m_axis_cfg, PRINTER_ACCELERATION_DISABLE };
 
     ASSERT_TRUE(nullptr != PrinterConfigure(&cfg));
 }
@@ -132,6 +117,8 @@ public:
 protected:
     GPIO_TypeDef port = 0;
     GCodeAxisConfig axis_cfg = { 1,1,1,1 };
+    std::vector<HMOTOR> m_motors;
+    std::vector<HTERMALREGULATOR> m_regulators;
 
     virtual void SetUp()
     {
@@ -142,10 +129,16 @@ protected:
         m_storage = std::make_unique<SDcardMock>(1024);
         m_sdcard = std::make_unique<SDcardMock>(1024);
         MemoryManagerConfigure(&m_memory);
+
+        MotorConfig motor_cfg = { PULSE_LOWER, &port, 0, &port, 0 };
+        HMOTOR motor = MOTOR_Configure(&motor_cfg);
         
+        m_motors = { motor, motor, motor, motor };
+
         TermalRegulatorConfig ts = { &port, 0, GPIO_PIN_SET, GPIO_PIN_RESET, 1.f, 0.f };
-        MotorConfig motor = { PULSE_LOWER, &port, 0, &port, 0 };
-        PrinterConfig cfg = { &m_memory, m_storage.get(), &motor, &motor, &motor, &motor, PRINTER_ACCELERATION_DISABLE, &ts, &ts, &port, 0, &axis_cfg };
+        HTERMALREGULATOR regulator = TR_Configure(&ts);
+        m_regulators = { regulator, regulator };
+        DriverConfig cfg = { &m_memory, m_storage.get(), m_motors.data(), m_regulators.data(), &port, 0, &axis_cfg, PRINTER_ACCELERATION_DISABLE };
 
         printer_driver = PrinterConfigure(&cfg);
         RegisterSDCard();
@@ -181,7 +174,7 @@ TEST_F(GCodeDriverTest, printer_initialize_after_start)
     PrinterInitialize(printer_driver);
     PrinterPrintFromCache(printer_driver, nullptr, PRINTER_START);
     uint32_t remainder = PrinterGetRemainingCommandsCount(printer_driver);
-    ASSERT_EQ(PRINTER_ALREADY_STARTED, PrinterInitialize(printer_driver));
+    ASSERT_EQ(PRINTER_OK, PrinterInitialize(printer_driver));
     ASSERT_EQ(remainder, PrinterGetRemainingCommandsCount(printer_driver)) << "state was spoiled by double init";
 }
 
@@ -706,6 +699,7 @@ TEST_F(GCodeDriverMemoryTest, printer_command_list_no_errors)
     size_t i = 0;
     for (; i < commands_count; ++i)
     {
+        PrinterLoadData(printer_driver);
         PRINTER_STATUS status = PrinterNextCommand(printer_driver);
         ASSERT_TRUE(GCODE_OK == status || GCODE_INCOMPLETE == status) << "current status: " << status << " on iteration: " << i;
         CompleteCommand(status);
@@ -717,6 +711,7 @@ TEST_F(GCodeDriverMemoryTest, printer_command_list_finished)
     size_t i = 0;
     for (; i < commands_count + 1; ++i)
     {
+        PrinterLoadData(printer_driver);
         PRINTER_STATUS status = PrinterNextCommand(printer_driver);
         if (PRINTER_FINISHED == status)
         {
@@ -732,6 +727,7 @@ TEST_F(GCodeDriverMemoryTest, printer_command_list_commands_count)
     size_t i = 0;
     for (; i < commands_count + 1; ++i)
     {
+        PrinterLoadData(printer_driver);
         PRINTER_STATUS status = PrinterNextCommand(printer_driver);
         if (PRINTER_FINISHED == status)
         {
@@ -861,7 +857,7 @@ TEST_F(GCodeDriverCommandsTest, printer_commands_print)
     ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
 }
 
-TEST_F(GCodeDriverCommandsTest, printer_coordinates_mode_absolute)
+TEST_F(GCodeDriverCommandsTest, printer_coordinates_mode_absolute_no_command)
 {
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
@@ -869,10 +865,10 @@ TEST_F(GCodeDriverCommandsTest, printer_coordinates_mode_absolute)
     };
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver));
-    ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
+    ASSERT_EQ(PRINTER_FINISHED, PrinterNextCommand(printer_driver));
 }
 
-TEST_F(GCodeDriverCommandsTest, printer_coordinates_mode_relative)
+TEST_F(GCodeDriverCommandsTest, printer_coordinates_mode_relative_no_command)
 {
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
@@ -880,7 +876,7 @@ TEST_F(GCodeDriverCommandsTest, printer_coordinates_mode_relative)
     };
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver));
-    ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
+    ASSERT_EQ(PRINTER_FINISHED, PrinterNextCommand(printer_driver));
 }
 
 TEST_F(GCodeDriverCommandsTest, printer_absolute_positioning)
@@ -892,7 +888,6 @@ TEST_F(GCodeDriverCommandsTest, printer_absolute_positioning)
         "G0 F1800 X50 Y0 Z0 E0",
     };
     StartPrinting(commands, nullptr);
-    CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
     PrinterNextCommand(printer_driver);
@@ -911,10 +906,26 @@ TEST_F(GCodeDriverCommandsTest, printer_relative_positioning)
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
-    CompleteCommand(PrinterNextCommand(printer_driver));
     PrinterNextCommand(printer_driver);
     GCodeCommandParams path = *PrinterGetCurrentPath(printer_driver);
     ASSERT_EQ(50, path.x);
+}
+
+TEST_F(GCodeDriverCommandsTest, printer_relative_positioning_xy)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G91",
+        "G0 F1800 X30",
+        "G0 F1800 Y20",
+    };
+    StartPrinting(commands, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterNextCommand(printer_driver);
+    GCodeCommandParams path = *PrinterGetCurrentPosition(printer_driver);
+    ASSERT_EQ(30, path.x);
+    ASSERT_EQ(20, path.y);
 }
 
 TEST_F(GCodeDriverCommandsTest, printer_relative_to_absolute_positioning)
@@ -929,13 +940,54 @@ TEST_F(GCodeDriverCommandsTest, printer_relative_to_absolute_positioning)
     };
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0
-    CompleteCommand(PrinterNextCommand(printer_driver)); // G91
+    // G91
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0 30
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0 80
-    CompleteCommand(PrinterNextCommand(printer_driver)); // G90 
+    // G90 
     PrinterNextCommand(printer_driver); // back from 80 to 50. should be -30
     GCodeCommandParams path = *PrinterGetCurrentPath(printer_driver);
     ASSERT_EQ(-30, path.x);
+}
+
+TEST_F(GCodeDriverCommandsTest, printer_home_in_absolute)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G0 F1800 X50 Y60 Z30 E10",
+        "G90",
+        "G28 X0 Y0 Z0",
+    };
+    StartPrinting(commands, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0
+    // G90
+    PrinterNextCommand(printer_driver); // G0 30
+    GCodeCommandParams path = *PrinterGetCurrentPath(printer_driver);
+    ASSERT_EQ(-50, path.x);
+    ASSERT_EQ(-60, path.y);
+    ASSERT_EQ(-30, path.z);
+    ASSERT_EQ(0, path.e);
+}
+
+TEST_F(GCodeDriverCommandsTest, printer_home_in_relative)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G0 F1800 X50 Y60 Z30 E10",
+        "G91",
+        "G28 X0 Y0 Z0",
+    };
+    StartPrinting(commands, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0
+    CompleteCommand(PrinterNextCommand(printer_driver)); // G0
+    // G90
+    PrinterNextCommand(printer_driver); // G0 30
+    GCodeCommandParams path = *PrinterGetCurrentPath(printer_driver);
+    // abs/relative is not affecting G28
+    ASSERT_EQ(-50, path.x);
+    ASSERT_EQ(-60, path.y);
+    ASSERT_EQ(-30, path.z);
+    ASSERT_EQ(0, path.e);
 }
 
 TEST_F(GCodeDriverCommandsTest, printer_save_coordinates)
@@ -987,6 +1039,18 @@ TEST_F(GCodeDriverCommandsTest, printer_save_coordinates_value)
     ASSERT_EQ(-60, params.z);
 }
 
+TEST_F(GCodeDriverCommandsTest, printer_set_speed)
+{
+    std::vector<std::string> commands = {
+        "G0 F150",
+        "G0 X210 Y0 Z330 E10",
+        "G1 X110 Y10 Z360 E15",
+    };
+    StartPrinting(commands, nullptr);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    CompleteCommand(PrinterNextCommand(printer_driver));
+}
+
 class GCodeDriverSubcommandsTest : public ::testing::Test, public PrinterEmulator
 {
 public:
@@ -1008,7 +1072,7 @@ protected:
         {
             ++nozzle_value;
         }
-        else
+        else if (nozzle_value > 10)
         {
             --nozzle_value;
         }
@@ -1020,9 +1084,12 @@ protected:
         GPIO_PinState state = device->GetPinState(port_table, 0).state;
         if (GPIO_PIN_SET == state)
         {
-            --table_value;
+            if (table_value > 10)
+            {
+                --table_value;
+            }
         }
-        else
+        else 
         {
             ++table_value;
         }
@@ -1032,7 +1099,7 @@ protected:
     uint16_t table_value = 20;
 };
 
-TEST_F(GCodeDriverSubcommandsTest, printer_extrusion_mode_absolute)
+TEST_F(GCodeDriverSubcommandsTest, printer_extrusion_mode_absolute_no_command)
 {
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
@@ -1040,10 +1107,10 @@ TEST_F(GCodeDriverSubcommandsTest, printer_extrusion_mode_absolute)
     };
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver));
-    ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
+    ASSERT_EQ(PRINTER_FINISHED, PrinterNextCommand(printer_driver));
 }
 
-TEST_F(GCodeDriverSubcommandsTest, printer_extrusion_mode_relative)
+TEST_F(GCodeDriverSubcommandsTest, printer_extrusion_mode_relative_no_command)
 {
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
@@ -1051,7 +1118,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_extrusion_mode_relative)
     };
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver));
-    ASSERT_EQ(GCODE_OK, PrinterNextCommand(printer_driver));
+    ASSERT_EQ(PRINTER_FINISHED, PrinterNextCommand(printer_driver));
 }
 
 TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_hotend_temp)
@@ -1105,15 +1172,40 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_hotend_temp_target_v
     ASSERT_EQ(210, PrinterGetTargetT(printer_driver, TERMO_NOZZLE));
 }
 
+
 TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_hotend_temp_current_value)
 {
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
-        "M109 S210"
+        "M109 S235"
     };
     StartPrinting(commands, nullptr);
 
     CompleteCommand(PrinterNextCommand(printer_driver));
+    PRINTER_STATUS status = PrinterNextCommand(printer_driver);
+    size_t tick_index = 0;
+    while (status != PRINTER_OK)
+    {
+        if (0 == tick_index % 1000)
+        {
+            HandleNozzleEnvironmentTick();
+        }
+        ++tick_index;
+        status = PrinterExecuteCommand(printer_driver);
+    }
+    ASSERT_TRUE(abs(235.0 - PrinterGetCurrentT(printer_driver, TERMO_NOZZLE)) < 5);
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_hotend_temp_current_value_unsynced)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "M109 S235"
+    };
+    StartPrinting(commands, nullptr);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterExecuteCommand(printer_driver); // force timer increment
     PRINTER_STATUS status = PrinterNextCommand(printer_driver);
     size_t tick_index = 0;
     while(status != PRINTER_OK)
@@ -1125,8 +1217,7 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_hotend_temp_current_
         ++tick_index;
         status = PrinterExecuteCommand(printer_driver);
     }
-
-    ASSERT_TRUE(abs(210.0 - PrinterGetCurrentT(printer_driver, TERMO_NOZZLE)) < 5);
+    ASSERT_TRUE(abs(235.0 - PrinterGetCurrentT(printer_driver, TERMO_NOZZLE)) < 5);
 }
 
 TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_table_temp)
@@ -1201,7 +1292,32 @@ TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_table_temp_current_v
         status = PrinterExecuteCommand(printer_driver);
     }
 
-    ASSERT_TRUE(abs(110.0 - PrinterGetCurrentT(printer_driver, TERMO_TABLE)) < 5);
+    ASSERT_TRUE(abs(110.0 - PrinterGetCurrentT(printer_driver, TERMO_TABLE)) < 10);
+}
+
+TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_wait_table_temp_current_value_unsynced)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "M190 S110"
+    };
+    StartPrinting(commands, nullptr);
+
+    CompleteCommand(PrinterNextCommand(printer_driver));
+    PrinterExecuteCommand(printer_driver); // force timer increment
+    PRINTER_STATUS status = PrinterNextCommand(printer_driver);
+    size_t tick_index = 0;
+    while (status != PRINTER_OK)
+    {
+        if (0 == tick_index % 1000)
+        {
+            HandleTableEnvironmentTick();
+        }
+        ++tick_index;
+        status = PrinterExecuteCommand(printer_driver);
+    }
+
+    ASSERT_TRUE(abs(110.0 - PrinterGetCurrentT(printer_driver, TERMO_TABLE)) < 10);
 }
 
 TEST_F(GCodeDriverSubcommandsTest, printer_subcommands_disbale_cooler)
@@ -1506,11 +1622,11 @@ TEST_F(GCodeDriverSubcommandsTest, printer_positioning_abs_extrusion_rel)
     };
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0
-    CompleteCommand(PrinterNextCommand(printer_driver)); // G90
-    CompleteCommand(PrinterNextCommand(printer_driver)); // M83
+    // G90
+    // M83
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0 30
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0 80
-    CompleteCommand(PrinterNextCommand(printer_driver)); // G90 
+    // G90 
     PrinterNextCommand(printer_driver); // E back from 80 to 50. should be -30, X from 50 to 60
     GCodeCommandParams path = *PrinterGetCurrentPath(printer_driver);
     ASSERT_EQ(-30, path.e);
@@ -1530,11 +1646,11 @@ TEST_F(GCodeDriverSubcommandsTest, printer_positioning_rel_extrusion_abs)
     };
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0
-    CompleteCommand(PrinterNextCommand(printer_driver)); // G91
-    CompleteCommand(PrinterNextCommand(printer_driver)); // M82
+    // G91
+    // M82
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0 30
     CompleteCommand(PrinterNextCommand(printer_driver)); // G0 80
-    CompleteCommand(PrinterNextCommand(printer_driver)); // G90 
+    // G90 
     PrinterNextCommand(printer_driver); // X back from 80 to 50. should be -30, E from 50 to 60
     GCodeCommandParams path = *PrinterGetCurrentPath(printer_driver);
     ASSERT_EQ(10, path.e);
@@ -1706,6 +1822,30 @@ TEST_F(GCodeDriverStateTest, consequent_prints)
     ASSERT_EQ(0, params->e);
 }
 
+TEST_F(GCodeDriverStateTest, manual_save_state)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X0 Y0 Z0 E0",
+        "G0 F1800 X30 Y0 Z0 E30",
+        "G0 F1800 X50 Y0 Z0 E50",
+    };
+    StartPrinting(commands, nullptr);
+    for (const auto& cmd : commands)
+    {
+        CompleteCommand(PrinterNextCommand(printer_driver));
+    }
+    ASSERT_EQ(PRINTER_FINISHED, PrinterNextCommand(printer_driver));
+
+    ASSERT_EQ(PRINTER_OK, PrinterSaveState(printer_driver));
+
+    //start new printing
+    StartPrinting(commands, nullptr);
+    ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
+    GCodeCommandParams* params = PrinterGetCurrentPath(printer_driver);
+    ASSERT_EQ(-50, params->x);
+    ASSERT_EQ(0, params->e);
+}
+
 TEST_F(GCodeDriverStateTest, nozzle_temperature)
 {
     std::vector<std::string> commands = {
@@ -1777,7 +1917,7 @@ TEST_F(GCodeDriverStateTest, extrusion_mode)
     std::vector<std::string> commands = {
         "G0 F1800 X0 Y0 Z0 E0",
         "G0 F1800 X30 Y0 Z0 E30",
-        "M83",
+        "M83", // relative extrusion...
         "G0 F1800 X30 Y0 Z0 E30",
         "G99",
         "G0 F1800 X30 Y0 Z0 E30",
@@ -1785,7 +1925,7 @@ TEST_F(GCodeDriverStateTest, extrusion_mode)
     StartPrinting(commands, nullptr);
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver));
-    CompleteCommand(PrinterNextCommand(printer_driver));
+    //M83
     CompleteCommand(PrinterNextCommand(printer_driver));
     CompleteCommand(PrinterNextCommand(printer_driver)); // save
 
@@ -1794,6 +1934,7 @@ TEST_F(GCodeDriverStateTest, extrusion_mode)
     //should set position to the 3rd comand and continue printing from the save point
     PrinterInitialize(printer_driver);
     PrinterPrintFromCache(printer_driver, nullptr, PRINTER_RESUME);
+    
     CompleteCommand(PrinterNextCommand(printer_driver)); // resume add restoration command
     PrinterNextCommand(printer_driver); // save command will be repeated
 
@@ -1832,4 +1973,101 @@ TEST_F(GCodeDriverStateTest, coordinates_mode)
     GCodeCommandParams* params = PrinterGetCurrentPath(printer_driver);
     ASSERT_EQ(30, params->x);
     ASSERT_EQ(30, params->e);
+}
+
+class GCodeDriverDistributedLoadingTest : public ::testing::Test, public PrinterEmulator
+{
+public:
+
+    // use real frequency this time
+    GCodeDriverDistributedLoadingTest()
+        : PrinterEmulator(10000)
+    {}
+protected:
+    const size_t steps_per_block = 100; // 1 mm per region
+    const size_t fetch_speed = 1800; // 1 mm per region
+
+    size_t commands_count = 0;
+    std::vector<std::string> commands;
+    virtual void SetUp()
+    {
+        SetupPrinter(axis_configuration, PRINTER_ACCELERATION_DISABLE);
+
+        for (size_t i = 0; i < SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE * 3; ++i)
+        {
+            std::ostringstream command;
+            command << "G0 F" << fetch_speed << " X" << i * steps_per_block << " Y0";
+            commands.push_back(command.str());
+        }
+        commands_count = commands.size();
+
+        StartPrinting(commands, nullptr);
+    }
+};
+
+TEST_F(GCodeDriverDistributedLoadingTest, printer_can_preload)
+{
+    ASSERT_EQ(PRINTER_OK, PrinterLoadData(printer_driver));
+}
+
+TEST_F(GCodeDriverDistributedLoadingTest, printer_preload_required)
+{
+    for (size_t i = 0; i < SDCARD_BLOCK_SIZE/GCODE_CHUNK_SIZE; ++i)
+    { 
+        CompleteCommand(PrinterNextCommand(printer_driver));
+    }
+    ASSERT_EQ(PRINTER_PRELOAD_REQUIRED, PrinterNextCommand(printer_driver));
+}
+
+TEST_F(GCodeDriverDistributedLoadingTest, printer_preload_resumes_execution)
+{
+    for (size_t i = 0; i < SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE; ++i)
+    {
+        CompleteCommand(PrinterNextCommand(printer_driver));
+    }
+    PrinterLoadData(printer_driver);
+    ASSERT_EQ(GCODE_INCOMPLETE, PrinterNextCommand(printer_driver));
+}
+
+TEST_F(GCodeDriverDistributedLoadingTest, printer_no_advance_without_data)
+{
+    for (size_t i = 0; i < SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE; ++i)
+    {
+        CompleteCommand(PrinterNextCommand(printer_driver));
+    }
+    uint32_t count = PrinterGetRemainingCommandsCount(printer_driver);
+    PrinterNextCommand(printer_driver);
+
+    ASSERT_EQ(count, PrinterGetRemainingCommandsCount(printer_driver));
+}
+
+TEST_F(GCodeDriverDistributedLoadingTest, printer_no_command_completion_without_data)
+{
+    for (size_t i = 0; i < SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE; ++i)
+    {
+        CompleteCommand(PrinterNextCommand(printer_driver));
+    }
+    
+    PrinterNextCommand(printer_driver);
+    ASSERT_EQ(PRINTER_OK, PrinterExecuteCommand(printer_driver));
+}
+
+TEST_F(GCodeDriverDistributedLoadingTest, printer_data_loading_advances_commands)
+{
+    for (size_t i = 0; i < SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE; ++i)
+    {
+        CompleteCommand(PrinterNextCommand(printer_driver));
+    }
+
+    uint32_t count = PrinterGetRemainingCommandsCount(printer_driver);
+    for (size_t i = 0; i < 100; ++i)
+    {
+        PrinterNextCommand(printer_driver);
+    }
+    ASSERT_EQ(count, PrinterGetRemainingCommandsCount(printer_driver));
+
+    PrinterLoadData(printer_driver);
+    CompleteCommand(PrinterNextCommand(printer_driver));
+
+    ASSERT_EQ(count - 1, PrinterGetRemainingCommandsCount(printer_driver));
 }

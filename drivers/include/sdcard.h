@@ -17,11 +17,10 @@ extern "C" {
 */
 
 #define SDCARD_BLOCK_SIZE 512
-struct SDCARD_type
+typedef struct
 {
 	uint32_t id;
-};
-typedef struct SDCARD_type * HSDCARD;
+} *HSDCARD;
 
 HSDCARD SDCARD_Configure(HSPIBUS hspi, GPIO_TypeDef* cs_port_array, uint16_t sc_port);
 

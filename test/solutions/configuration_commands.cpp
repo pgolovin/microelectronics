@@ -22,7 +22,7 @@ protected:
     void compileCommand(const std::vector<std::string>& gcode_commands)
     {
         GCodeAxisConfig axis = { 1,1,1,1 };
-        HGCODE hgcode = GC_Configure(&axis);
+        HGCODE hgcode = GC_Configure(&axis, 0);
         m_compiled_commands.resize(gcode_commands.size() * GCODE_CHUNK_SIZE);
         uint8_t* caret = m_compiled_commands.data();
 

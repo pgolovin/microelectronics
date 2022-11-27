@@ -8,7 +8,8 @@
 
 struct DeviceSettings
 {
-    size_t available_heap       = 0xfff;
+    // available heap size (L3 cache): ~64K of 0xf000 Bytes
+    size_t available_heap       = 0x5000;
     size_t ports_count          = 0x10;
     bool   throw_out_of_memory  = false;
 };

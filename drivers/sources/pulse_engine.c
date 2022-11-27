@@ -7,7 +7,7 @@ typedef struct PulseInternal_type
 {
 	uint32_t period;
 	uint32_t power;
-	PULSE_SINGAL signal_type;
+	uint32_t signal_type;
 
 	uint32_t signal_tick;
 	uint32_t tick;
@@ -61,9 +61,18 @@ bool PULSE_HandleTick(HPULSE pulse)
 
 	++internal_pulse->tick;
 	
-	// higher signal produces 'on' signal as a 1st signal, if power permits :)
-	uint32_t signal_tick = internal_pulse->signal_type * internal_pulse->power + 
-		((internal_pulse->tick - internal_pulse->signal_type) * internal_pulse->power) / internal_pulse->period;
+	// HIGH signal produces 'on' signal as a 1st signal, if power permits
+	uint32_t signal_tick = 0;
+	if (internal_pulse->period < 0xFFFF)
+	{
+		signal_tick = internal_pulse->signal_type* internal_pulse->power +
+			((internal_pulse->tick - internal_pulse->signal_type) * internal_pulse->power) / internal_pulse->period;
+	}
+	else
+	{
+		signal_tick = internal_pulse->signal_type * internal_pulse->power +
+			((uint64_t)(internal_pulse->tick - internal_pulse->signal_type) * (uint64_t)internal_pulse->power) / (uint64_t)internal_pulse->period;
+	}
 	
 	bool result = signal_tick > internal_pulse->signal_tick;
 	if (result)
@@ -71,7 +80,7 @@ bool PULSE_HandleTick(HPULSE pulse)
 		internal_pulse->signal_tick = signal_tick;
 	}
 	
-	// Zeroing valuese is not necessary here
+	// Zeroing values is not necessary here
 	// doing it to avoid any potential overflows.
 	if (internal_pulse->tick == internal_pulse->period)
 	{

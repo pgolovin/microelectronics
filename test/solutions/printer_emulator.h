@@ -19,13 +19,16 @@ public:
     std::unique_ptr<Device> device;
     std::unique_ptr<SDcardMock> m_storage;
     std::unique_ptr<SDcardMock> m_sdcard;
-    HPRINTER printer_driver = nullptr;
+    HDRIVER printer_driver = nullptr;
     std::vector<uint8_t> buffer;
     GCodeAxisConfig external_config;
     MemoryManager m_memory;
     HFILEMANAGER m_file_manager;
     GCodeAxisConfig axis = { 1,1,1,1 };
+    HMOTOR m_motors[MOTOR_COUNT];
+    HTERMALREGULATOR m_regulators[TERMO_REGULATOR_COUNT];
     FIL m_f;
+    HGCODE m_gc;
 
     GPIO_TypeDef port_x_step = 0;
     GPIO_TypeDef port_x_dir = 1;
@@ -41,6 +44,8 @@ public:
 
     PrinterEmulator(uint16_t frequency) : main_frequency(frequency) {};
     virtual ~PrinterEmulator() {};
+
+    void SetupAxisRestrictions(const GCodeAxisConfig& axis_settings);
 
     void SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERATION enable_acceleration);
 
@@ -59,5 +64,7 @@ public:
     void WriteControlBlock(uint32_t sec_code, uint32_t commands_count);
 
     void RegisterSDCard();
+
+    static void InsertSDCARD(SDcardMock* card);
 };
 

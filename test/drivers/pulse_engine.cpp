@@ -198,6 +198,21 @@ TEST_F(PULSETest, power_200_percent_truncated_to_100)
     ASSERT_EQ(on, ticks);
 }
 
+TEST_F(PULSETest, uint32_limits)
+{
+    size_t subperiod = 0x00FFFFFF;
+    const size_t ticks = subperiod * 2;
+
+    PULSE_SetPeriod(pulse, ticks);
+    PULSE_SetPower(pulse, subperiod); // 100% power = period
+    for (size_t i = 0; i < ticks; ++i)
+    {
+        HandlePulseTick();
+    }
+    EXPECT_EQ(off, subperiod);
+    EXPECT_EQ(on, subperiod);
+}
+
 TEST_F(PULSETest, change_power)
 {
     const size_t ticks = period * 10;

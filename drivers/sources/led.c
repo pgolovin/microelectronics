@@ -5,7 +5,7 @@
 
 // internal LED structure to hide led implementation from end user
 // doh we cannot use classes, so will work with this
-typedef struct PED_Internal_type
+typedef struct
 {
 	GPIO_TypeDef* pin_array;
 	uint16_t pin;
@@ -13,12 +13,12 @@ typedef struct PED_Internal_type
 	HPULSE pulse_engine;
 	
 	GPIO_PinState led_state;
-} LED_Internal;
+} LEDInternal;
 
 // LED_ body
-LED* LED_Configure(GPIO_TypeDef* pin_array, uint16_t pin)
+HLED LED_Configure(GPIO_TypeDef* pin_array, uint16_t pin)
 {
-	LED_Internal* led = DeviceAlloc(sizeof(LED_Internal));
+	LEDInternal* led = DeviceAlloc(sizeof(LEDInternal));
 	
 	// configure pin settings for led
 	led->pin_array = pin_array;
@@ -30,18 +30,18 @@ LED* LED_Configure(GPIO_TypeDef* pin_array, uint16_t pin)
 	led->led_state = GPIO_PIN_RESET;
 	HAL_GPIO_WritePin(led->pin_array, led->pin, led->led_state);
 	
-	return (LED*)led;
+	return (HLED)led;
 }
 
-void LED_Release(LED* _led)
+void LED_Release(HLED _led)
 {
-	LED_Internal* led = (LED_Internal*)_led;
+	LEDInternal* led = (LEDInternal*)_led;
 	DeviceFree(led);
 }
 
-void LED_On(LED* _led)
+void LED_On(HLED _led)
 {
-	LED_Internal* led = (LED_Internal*)_led;
+	LEDInternal* led = (LEDInternal*)_led;
 	
 	//TODO: not sure that setting power slower than check state with if...
 	//      need to confirm it with device experiment
@@ -52,9 +52,9 @@ void LED_On(LED* _led)
 	HAL_GPIO_WritePin(led->pin_array, led->pin, led->led_state);
 }
 
-void LED_Off(LED* _led)
+void LED_Off(HLED _led)
 {
-	LED_Internal* led = (LED_Internal*)_led;
+	LEDInternal* led = (LEDInternal*)_led;
 	
 	//TODO: not sure that setting power slower than check state with if...
 	//      need to confirm it with device experiment
@@ -65,29 +65,29 @@ void LED_Off(LED* _led)
 	HAL_GPIO_WritePin(led->pin_array, led->pin, led->led_state);
 }
 
-void LED_Toggle(LED* _led)
+void LED_Toggle(HLED _led)
 {
-	LED_Internal* led = (LED_Internal*)_led;
+	LEDInternal* led = (LEDInternal*)_led;
 	
 	led->led_state = led->led_state == GPIO_PIN_RESET ? GPIO_PIN_SET : GPIO_PIN_RESET;
 	HAL_GPIO_TogglePin(led->pin_array, led->pin);
 }
 
-GPIO_PinState LED_GetState(LED* _led)
+GPIO_PinState LED_GetState(HLED _led)
 {
-	return ((LED_Internal*)_led)->led_state;
+	return ((LEDInternal*)_led)->led_state;
 }
 
-void LED_SetPower(LED* _led, int power)
+void LED_SetPower(HLED _led, int power)
 {
-	LED_Internal* led = (LED_Internal*)_led;
+	LEDInternal* led = (LEDInternal*)_led;
 	PULSE_SetPower(led->pulse_engine, power);
 }
 
 // manage blinks period to emulate light period
-void LED_HandleTick(LED* _led)
+void LED_HandleTick(HLED _led)
 {
-	LED_Internal* led = (LED_Internal*)_led;
+	LEDInternal* led = (LEDInternal*)_led;
 	if (PULSE_HandleTick(led->pulse_engine))
 	{
 		LED_On(_led);

@@ -14,6 +14,8 @@ set(SOURCES
     "device/sdcard.cpp"
     "device/file_system.cpp"
     "libraries/gcode.cpp"
+    "libraries/user_interface.cpp"
+    "solutions/printer.cpp"
     "solutions/printer_memory_manager.cpp"
     "solutions/gcode_driver.cpp"
     "solutions/gcode_driver_acceleration.cpp"
@@ -24,6 +26,7 @@ set(SOURCES
 # add sub-project
 add_executable(driver_tests ${SOURCES})
 
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/resources/model.gcode" "${CMAKE_BINARY_DIR}/bin/model.gcode" COPYONLY)
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/resources/wanhao.gcode" "${CMAKE_BINARY_DIR}/bin/wanhao.gcode" COPYONLY)
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/resources/pla.mtl" "${CMAKE_BINARY_DIR}/bin/pla.mtl" COPYONLY)
 

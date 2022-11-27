@@ -3,6 +3,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Commandhome is a special case it is G0 that ignores all navigation settings
+
+#define CMD_HOME 28
+
 typedef struct
 {
     parameterType           code;
@@ -13,12 +17,15 @@ typedef struct
 typedef struct
 {
     GCodeAxisConfig         cfg;
+    uint16_t                max_fetch_speed;
     GCodeCommand            command;
+    GCODE_COODRINATES_MODE  motion_mode;
+    GCODE_COODRINATES_MODE  extrusion_mode;
 } GCode;
 
 static const char* trimSpaces(const char* command_line)
 {
-    while (*command_line == ' ')
+    while (*command_line == ' ' || *command_line == '\n' || *command_line == '\r')
     {
         ++command_line;
     }
@@ -40,7 +47,7 @@ static const char* parseValue(const char* command_line, parameterType multiplier
         ++command_line;
     }
     
-    for (; (*command_line && *command_line != ' '); ++command_line)
+    for (; (*command_line && *command_line != ' ' && *command_line != '\r' && *command_line != '\n'); ++command_line)
     {
         if (*command_line == '.')
         {
@@ -51,7 +58,7 @@ static const char* parseValue(const char* command_line, parameterType multiplier
     }
 
     float divider = 10.f;
-    for (; (*command_line && *command_line != ' '); ++command_line)
+    for (; (*command_line && *command_line != ' ' && *command_line != '\r' && *command_line != '\n'); ++command_line)
     {
         result = result + (*command_line - '0') / divider;
         divider *= 10;
@@ -147,19 +154,38 @@ static GCODE_ERROR parseSubCommandParams(GCodeSubCommandParams* params, const ch
     return GCODE_OK_COMMAND_CREATED;
 }
 
-HGCODE GC_Configure(const GCodeAxisConfig* config)
+HGCODE GC_Configure(const GCodeAxisConfig* config, uint16_t max_fetch_speed)
 {
+#ifndef FIRMWARE
     if (!config)
     {
         return 0;
     }
+#endif
 
     GCode* gcode = DeviceAlloc(sizeof(GCode));
 
     gcode->cfg = *config;
     gcode->command.code = GCODE_COMMAND_NOOP;
+    gcode->max_fetch_speed = max_fetch_speed;
+
+    GC_Reset((HGCODE)gcode, 0);
 
     return (HGCODE)gcode;
+}
+
+static const GCodeCommandParams zero_command = { 0 };
+static const GCodeSubCommandParams m = { 0 };
+
+void GC_Reset(HGCODE hcode, const GCodeCommandParams* initial_state)
+{
+    GCode* gcode = (GCode*)hcode;
+    
+    // relative commands from non-zero point
+    gcode->command.g = initial_state ? *initial_state : zero_command;
+    gcode->command.m = m;
+    gcode->motion_mode      = GCODE_ABSOLUTE;
+    gcode->extrusion_mode   = GCODE_ABSOLUTE;
 }
 
 GCODE_ERROR GC_ParseCommand(HGCODE hcode, const char* command_line)
@@ -167,7 +193,6 @@ GCODE_ERROR GC_ParseCommand(HGCODE hcode, const char* command_line)
     GCode* gcode = (GCode*)hcode;
     
     GCODE_ERROR result = GCODE_OK_NO_COMMAND;
-    GCodeCommand cmd = gcode->command;
 
     command_line = trimSpaces(command_line);
 
@@ -175,18 +200,59 @@ GCODE_ERROR GC_ParseCommand(HGCODE hcode, const char* command_line)
     {
     case 'G':
         command_line = parseCommand(&gcode->command, GCODE_COMMAND, command_line + 1);
-        result = parseCommandParams(&cmd.g, &gcode->cfg, command_line);
-        if (GCODE_OK_COMMAND_CREATED == result)
         {
-            gcode->command.g = cmd.g;
+            // HOME command is always absolute motion and relative extrusion. 
+            // It disregards motion and extrusion settings
+            bool absolute_motion    = (GCODE_ABSOLUTE == gcode->motion_mode)    || CMD_HOME == (gcode->command.code & 0xFF);
+            bool relative_extrusion = (GCODE_RELATIVE == gcode->extrusion_mode) || CMD_HOME == (gcode->command.code & 0xFF);
+
+            GCodeCommandParams g_param = (absolute_motion) ? gcode->command.g : zero_command;
+
+            if (relative_extrusion)
+            {
+                g_param.e = 0;
+            }
+
+            result = parseCommandParams(&g_param, &gcode->cfg, command_line);
+            if (GCODE_OK_COMMAND_CREATED != result)
+            {
+                break;
+            }
+            
+            gcode->command.g.fetch_speed = g_param.fetch_speed;
+
+            if (absolute_motion)
+            {
+                gcode->command.g.x = g_param.x;
+                gcode->command.g.y = g_param.y;
+                gcode->command.g.z = g_param.z;
+            }
+            else
+            {
+                gcode->command.g.x += g_param.x;
+                gcode->command.g.y += g_param.y;
+                gcode->command.g.z += g_param.z;
+            }
+
+            if (relative_extrusion)
+            {
+                gcode->command.g.e += g_param.e;
+            }
+            else
+            {
+                gcode->command.g.e = g_param.e;
+            }
         }
         break;
     case 'M':
         command_line = parseCommand(&gcode->command, GCODE_SUBCOMMAND, command_line + 1);
-        result = parseSubCommandParams(&cmd.m, command_line);
-        if (GCODE_OK_COMMAND_CREATED == result)
         {
-            gcode->command.m = cmd.m;
+            GCodeSubCommandParams m_param = gcode->command.m;
+            result = parseSubCommandParams(&m_param, command_line);
+            if (GCODE_OK_COMMAND_CREATED == result)
+            {
+                gcode->command.m = m_param;
+            }
         }
         break;
     case ';':
@@ -258,14 +324,17 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
         case 60:
             index = GCODE_SAVE_POSITION;
             break;
-        case 90:
-            index = GCODE_SET_COORDINATES_MODE;
-            gcode->command.g.x = GCODE_ABSOLUTE;
-            break;
+    // G90 and G91 are options for code interpreter.
+    // they are not produce actual commands, just change state of interpreter
+    // to simplify processing printer works in absolute coordinates only;
+        case 90: 
+            gcode->motion_mode = GCODE_ABSOLUTE;
+            gcode->extrusion_mode = GCODE_ABSOLUTE;
+            return 0;
         case 91:
-            index = GCODE_SET_COORDINATES_MODE;
-            gcode->command.g.x = GCODE_RELATIVE;
-            break;
+            gcode->motion_mode = GCODE_RELATIVE;
+            gcode->extrusion_mode = GCODE_RELATIVE;
+            return 0;
         case 92:
             index = GCODE_SET;
             break;
@@ -276,6 +345,13 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
             //the rest of commands is ignored
             return 0;
         }
+
+        //override fetch speed
+        if (gcode->max_fetch_speed && gcode->command.g.fetch_speed > gcode->max_fetch_speed)
+        {
+            gcode->command.g.fetch_speed = gcode->max_fetch_speed;
+        }
+
         *(GCodeCommandParams*)(buffer + sizeof(parameterType)) = gcode->command.g;
         *(uint32_t*)buffer = GCODE_COMMAND | index;
     }
@@ -287,14 +363,16 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
         case 24:
             index = GCODE_START_RESUME;
             break;
+
+        // M82 and M83 are options for code interpreter.
+        // they are not produce actual commands, just change state of interpreter
+        // to simplify processing printer works in absolute coordinates only;
         case 82:
-            index = GCODE_SET_EXTRUSION_MODE;
-            gcode->command.m.s = GCODE_ABSOLUTE;
-            break;
+            gcode->extrusion_mode = GCODE_ABSOLUTE;
+            return 0;
         case 83:
-            index = GCODE_SET_EXTRUSION_MODE;
-            gcode->command.m.s = GCODE_RELATIVE;
-            break;
+            gcode->extrusion_mode = GCODE_RELATIVE;
+            return 0;
         case 104:
             index = GCODE_SET_NOZZLE_TEMPERATURE;
             break;
@@ -341,6 +419,7 @@ GCodeCommandParams* GC_DecompileFromBuffer(uint8_t* buffer, GCODE_COMMAND_LIST* 
 
 GCODE_COMMAND_STATE GC_ExecuteFromBuffer(GCodeFunctionList* functions, void* additional_parameter, const uint8_t* buffer)
 {
+#ifndef FIRMAWARE
     if (!functions)
     {
         return GCODE_FATAL_ERROR_NO_COMMAND;
@@ -349,6 +428,7 @@ GCODE_COMMAND_STATE GC_ExecuteFromBuffer(GCodeFunctionList* functions, void* add
     {
         return GCODE_FATAL_ERROR_NO_DATA;
     }
+#endif
     parameterType code = *(parameterType*)buffer;
     if (code & GCODE_COMMAND)
     {

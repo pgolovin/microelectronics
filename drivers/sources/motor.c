@@ -1,7 +1,7 @@
 #include "include/motor.h"
 
 // private members part
-typedef struct Motor_type
+typedef struct
 {
     MotorConfig port_config;
     HPULSE pulse_engine;

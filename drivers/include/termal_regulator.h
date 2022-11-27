@@ -8,15 +8,15 @@
 extern "C" {
 #endif
 
-#define TERMAL_REGULATOR_BACKET_SIZE 15
+#define TERMAL_REGULATOR_BACKET_SIZE 30
 #define TERMAL_REGULATOR_HEAT_PERIOD 10
 
-typedef struct TermalSensor_type
+typedef struct
 {
     uint32_t id;
 } *HTERMALREGULATOR;
 
-typedef struct TermalRegulatorConfig_type
+typedef struct
 {
     GPIO_TypeDef* port;
     uint16_t      pin;

@@ -12,7 +12,7 @@ TEST(GCodeBasicTest, cannot_create_without_config)
     AttachDevice(*device);
 
     HGCODE code = nullptr;
-    code = GC_Configure(nullptr);
+    code = GC_Configure(nullptr, 0);
     ASSERT_TRUE(nullptr == code);
 
     DetachDevice();
@@ -28,7 +28,7 @@ TEST(GCodeBasicTest, can_create)
     GCodeAxisConfig cfg = { 1, 1, 1, 100 };
 
     HGCODE code = nullptr;
-    code = GC_Configure(&cfg);
+    code = GC_Configure(&cfg, 0);
     ASSERT_FALSE(nullptr == code);
 
     DetachDevice();
@@ -48,7 +48,7 @@ protected:
         AttachDevice(*device);
 
         GCodeAxisConfig cfg = { 1, 1, 1, 100 };
-        code = GC_Configure(&cfg);
+        code = GC_Configure(&cfg, 0);
     }
 
     virtual void TearDown()
@@ -122,6 +122,22 @@ TEST_F(GCodeParserTest, invalid_command)
     ASSERT_EQ((int)GCODE_ERROR_UNKNOWN_COMMAND, (int)GC_ParseCommand(code, const_cast<char*>(command.c_str())));
 }
 
+TEST_F(GCodeParserTest, caret_return)
+{
+    std::string command = "G0 F6200 X0\r";
+    ASSERT_EQ((int)GCODE_OK_COMMAND_CREATED, (int)GC_ParseCommand(code, const_cast<char*>(command.c_str())));
+    GCodeCommandParams* params = GC_GetCurrentCommand(code);
+    ASSERT_EQ(0, params->x);
+}
+
+TEST_F(GCodeParserTest, caret_return_with_space)
+{
+    std::string command = "G0 F6200 X0 \r";
+    ASSERT_EQ((int)GCODE_OK_COMMAND_CREATED, (int)GC_ParseCommand(code, const_cast<char*>(command.c_str())));
+    GCodeCommandParams* params = GC_GetCurrentCommand(code);
+    ASSERT_EQ(0, params->x);
+}
+
 TEST_F(GCodeParserTest, short_command)
 {
     std::string command = "G92";
@@ -181,7 +197,7 @@ protected:
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
 
-        code = GC_Configure(&cfg);
+        code = GC_Configure(&cfg, 0);
 
         std::string command = "G0 F6200 X2.45 Y1.00 Z0.1 E1.764";
         GC_ParseCommand(code, const_cast<char*>(command.c_str()));
@@ -360,7 +376,7 @@ protected:
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
 
-        code = GC_Configure(&cfg);
+        code = GC_Configure(&cfg, 0);
 
         std::string command = "M140 I22 R4 S110 P1";
         GC_ParseCommand(code, const_cast<char*>(command.c_str()));
@@ -452,7 +468,7 @@ protected:
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
 
-        code = GC_Configure(&cfg);
+        code = GC_Configure(&cfg, 0);
 
         std::string command = "G1 F6200 X2.45 Y1.00 Z0.1 E1.764";
         GC_ParseCommand(code, const_cast<char*>(command.c_str()));
@@ -509,7 +525,7 @@ protected:
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
 
-        code = GC_Configure(&cfg);
+        code = GC_Configure(&cfg, 0);
 
         data.resize(GCODE_CHUNK_SIZE);
     }
@@ -539,8 +555,6 @@ INSTANTIATE_TEST_SUITE_P(
         CompilerCommand{ "working_move",                "G1 F6200 X2.45 Y1.00 Z0.1 E1.764", GCODE_COMMAND,      GCODE_MOVE },
         CompilerCommand{ "homing_move",                 "G28 X2.45 Y1.00",                  GCODE_COMMAND,      GCODE_HOME },
         CompilerCommand{ "save_coordinates",            "G60",                              GCODE_COMMAND,      GCODE_SAVE_POSITION },
-        CompilerCommand{ "set_absolute_coordinates",    "G90",                              GCODE_COMMAND,      GCODE_SET_COORDINATES_MODE },
-        CompilerCommand{ "set_relative_coordinates",    "G91",                              GCODE_COMMAND,      GCODE_SET_COORDINATES_MODE },
         CompilerCommand{ "set_value",                   "G92 X0 Y0",                        GCODE_COMMAND,      GCODE_SET },
         CompilerCommand{ "save_printer_state",          "G99",                              GCODE_COMMAND,      GCODE_SAVE_STATE },
         CompilerCommand{ "restart",                     "M24",                              GCODE_SUBCOMMAND,   GCODE_START_RESUME },
@@ -549,9 +563,7 @@ INSTANTIATE_TEST_SUITE_P(
         CompilerCommand{ "enable_cooler",               "M106 S256",                        GCODE_SUBCOMMAND,   GCODE_SET_COOLER_SPEED },
         CompilerCommand{ "disable_cooler",              "M107",                             GCODE_SUBCOMMAND,   GCODE_SET_COOLER_SPEED },
         CompilerCommand{ "wait_nozzle_to_heat",         "M109 S256",                        GCODE_SUBCOMMAND,   GCODE_WAIT_NOZZLE },
-        CompilerCommand{ "wait_table_to_heat",          "M190 S256",                        GCODE_SUBCOMMAND,   GCODE_WAIT_TABLE },
-        CompilerCommand{ "absolute_extrusion_mode",     "M82",                              GCODE_SUBCOMMAND,   GCODE_SET_EXTRUSION_MODE },
-        CompilerCommand{ "relative_extrusion_mode",     "M83",                              GCODE_SUBCOMMAND,   GCODE_SET_EXTRUSION_MODE }
+        CompilerCommand{ "wait_table_to_heat",          "M190 S256",                        GCODE_SUBCOMMAND,   GCODE_WAIT_TABLE }
     ),
     [](const ::testing::TestParamInfo<GCodeCommandCompilerTest::ParamType>& info)
     {
@@ -578,7 +590,7 @@ protected:
         DeviceSettings ds;
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
-        code = GC_Configure(&cfg);
+        code = GC_Configure(&cfg, 0);
     }
 };
 
@@ -666,7 +678,7 @@ protected:
         device = std::make_unique<Device>(ds);
         AttachDevice(*device);
 
-        code = GC_Configure(&cfg);
+        code = GC_Configure(&cfg, 0);
 
         results_list.clear();
         functions.commands[GCODE_MOVE] = GCodeExecutorTest::move;
@@ -853,6 +865,157 @@ TEST_F(GCodeExecutorTest, execute_forward_return_value)
     ASSERT_EQ((int)GCODE_INCOMPLETE, GC_ExecuteFromBuffer(&functions, (void*)&check_parameter, data.data()));
 }
 
+class GCodeParserStateTest : public ::testing::Test
+{
+protected:
+    std::unique_ptr<Device> device;
+    HGCODE code = nullptr;
+
+    virtual void SetUp()
+    {
+        DeviceSettings ds;
+        device = std::make_unique<Device>(ds);
+        AttachDevice(*device);
+
+        GCodeAxisConfig cfg = { 1, 1, 1, 1 };
+        code = GC_Configure(&cfg, 0);
+    }
+
+    virtual void TearDown()
+    {
+        DetachDevice();
+        device = nullptr;
+    }
+};
+
+TEST_F(GCodeParserStateTest, parser_reset_state_with_zero)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X30",
+    };
+    uint8_t buffer[GCODE_CHUNK_SIZE];
+
+    GC_Reset(code, 0);
+    GC_ParseCommand(code, "G0 F1800 Z10"); // should be at position 30,20,10
+    GC_CompressCommand(code, buffer);
+
+    auto params = GC_GetCurrentCommand(code);
+    ASSERT_EQ(0, params->x);
+    ASSERT_EQ(0, params->y);
+    ASSERT_EQ(10, params->z);
+    ASSERT_EQ(0, params->e);
+}
+
+
+TEST_F(GCodeParserStateTest, parser_reset_state_with_initial_position)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X30",
+    };
+    uint8_t buffer[GCODE_CHUNK_SIZE];
+
+    GCodeCommandParams initial_params = { 100, 20, 10, 5, 1800 };
+
+    GC_Reset(code, &initial_params);
+    GC_ParseCommand(code, "G0 F1800 Z30"); // should be at position 30,20,10
+    GC_CompressCommand(code, buffer);
+
+    auto params = GC_GetCurrentCommand(code);
+    ASSERT_EQ(100, params->x);
+    ASSERT_EQ(20, params->y);
+    ASSERT_EQ(30, params->z);
+    ASSERT_EQ(5, params->e);
+}
+
+TEST_F(GCodeParserStateTest, relative_unspecified_assume_zero_increment)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X30",
+        "G91",
+    };
+    uint8_t buffer[GCODE_CHUNK_SIZE];
+
+    for (const auto& command : commands)
+    {
+        GC_ParseCommand(code, const_cast<char*>(command.c_str()));
+        GC_CompressCommand(code, buffer);
+    }
+
+    GC_ParseCommand(code, "G0 F1800 Y10");
+    GC_CompressCommand(code, buffer);
+
+    auto params = GC_GetCurrentCommand(code);
+    ASSERT_EQ(30, params->x);
+}
+
+TEST_F(GCodeParserStateTest, absolut_unspecified_remains_after_relative_zero)
+{
+    std::vector<std::string> commands = {
+        "G0 F1800 X30",
+        "G91",
+        "G0 F1800 Y20",
+        "G90",
+    };
+    uint8_t buffer[GCODE_CHUNK_SIZE];
+
+    for (const auto& command : commands)
+    {
+        GC_ParseCommand(code, const_cast<char*>(command.c_str()));
+        GC_CompressCommand(code, buffer);
+    }
+
+    GC_ParseCommand(code, "G0 F1800 Z10"); // should be at position 30,20,10
+    GC_CompressCommand(code, buffer);
+
+    auto params = GC_GetCurrentCommand(code);
+    ASSERT_EQ(30, params->x);
+    ASSERT_EQ(20, params->y);
+    ASSERT_EQ(10, params->z);
+}
+
+TEST(GCodeParserSpeedLimitTest, zero_is_not_affect_fetch_speed)
+{
+    std::unique_ptr<Device> device;
+    DeviceSettings ds;
+    device = std::make_unique<Device>(ds);
+    AttachDevice(*device);
+
+    GCodeAxisConfig cfg = { 1, 1, 1, 100 };
+    HGCODE code = GC_Configure(&cfg, 0);
+
+    uint8_t buffer[GCODE_CHUNK_SIZE];
+    GC_ParseCommand(code, "G0 F7200 Z10"); 
+    GC_CompressCommand(code, buffer);
+    GCODE_COMMAND_LIST cmd_id;
+    GCodeCommandParams params = *GC_DecompileFromBuffer(buffer, &cmd_id);
+    ASSERT_EQ(params.fetch_speed, 7200);
+
+    DetachDevice();
+    device = nullptr;
+}
+
+TEST(GCodeParserSpeedLimitTest, fetch_speed_limited)
+{
+    const uint32_t fetch_speed_max = 4200;
+    std::unique_ptr<Device> device;
+    DeviceSettings ds;
+    device = std::make_unique<Device>(ds);
+    AttachDevice(*device);
+
+    GCodeAxisConfig cfg = { 1, 1, 1, 100 };
+    HGCODE code = GC_Configure(&cfg, fetch_speed_max);
+
+    uint8_t buffer[GCODE_CHUNK_SIZE];
+    GC_ParseCommand(code, "G0 F7200 Z10");
+    GC_CompressCommand(code, buffer);
+    GCODE_COMMAND_LIST cmd_id;
+    GCodeCommandParams params = *GC_DecompileFromBuffer(buffer, &cmd_id);
+    ASSERT_EQ(params.fetch_speed, fetch_speed_max);
+
+    DetachDevice();
+    device = nullptr;
+}
+
 class GCodeParserDialectTest : public ::testing::Test
 {
 protected:
@@ -866,7 +1029,7 @@ protected:
         AttachDevice(*device);
 
         GCodeAxisConfig cfg = { 1, 1, 1, 100 };
-        code = GC_Configure(&cfg);
+        code = GC_Configure(&cfg, 0);
     }
 
     virtual void TearDown()

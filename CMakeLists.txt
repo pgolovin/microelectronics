@@ -25,6 +25,12 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 string(REGEX REPLACE "/W[3|4]" "/w" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /WX")
 
+set(VERSION_MAJOR 0)
+set(VERSION_MINOR 0)
+
+
+add_compile_definitions(PRODUCT_VERSION="${VERSION_MAJOR}.${VERSION_MINOR}")
+
 # add sub-project
 add_subdirectory(${PROJECT_SOURCE_DIR}/device_mock)
 add_subdirectory(${PROJECT_SOURCE_DIR}/drivers)

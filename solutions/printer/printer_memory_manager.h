@@ -1,6 +1,10 @@
 #include "main.h"
 #include "stm32f7xx_hal_spi.h"
+#ifndef _WIN32
+#include "include/sdcard.h"
+#else
 #include "sdcard.h"
+#endif
 #include "printer/printer_entities.h"
 
 #ifndef __PRINTER_MEMORY_MANAGER__
@@ -10,16 +14,16 @@
 extern "C" {
 #endif
 
-#define MEMORY_PAGES_COUNT 4
+#define MEMORY_PAGES_COUNT 6
 
 typedef struct
 {
-    char* memory_pool;
-    char* pages[MEMORY_PAGES_COUNT];
-} MemoryManager, *HMemoryManager;
+    uint8_t* memory_pool;
+    uint8_t* pages[MEMORY_PAGES_COUNT];
+} MemoryManager;
 
 
-void MemoryManagerConfigure(HMemoryManager memory_manager);
+void MemoryManagerConfigure(MemoryManager* memory_manager);
 
 #ifdef __cplusplus
 }

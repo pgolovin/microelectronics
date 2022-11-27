@@ -4,7 +4,7 @@
 
 // internal LED structure to hide led implementation from end user
 // doh we cannot use classes, so will work with this
-typedef struct AcousticSensor_Internal_type
+typedef struct
 {
 	GPIO_TypeDef* trigger_pin_array;
 	uint16_t trigger_pin;
@@ -26,7 +26,7 @@ typedef struct AcousticSensor_Internal_type
 } AcousticSensorInternal;
 
 // Create and configure acoustic distance sensor
-AcousticSensor* ADSConfigure(GPIO_TypeDef* trigger_pin_array, uint16_t trigger_pin, 
+HACOUSTICSENSOR ADSConfigure(GPIO_TypeDef* trigger_pin_array, uint16_t trigger_pin, 
 														 GPIO_TypeDef* echo_pin_array, uint16_t echo_pin)
 {
 	AcousticSensorInternal* ads = malloc(sizeof(AcousticSensorInternal));
@@ -43,21 +43,21 @@ AcousticSensor* ADSConfigure(GPIO_TypeDef* trigger_pin_array, uint16_t trigger_p
 	ads->signal_ticks	    = 0;
 	ads->values_count		= 0;
 	
-	return (AcousticSensor*)ads;
+	return (HACOUSTICSENSOR)ads;
 }
-void ADSRelease(AcousticSensor* _ads)
+void ADSRelease(HACOUSTICSENSOR _ads)
 {
 	AcousticSensorInternal* ads = (AcousticSensorInternal*)_ads;
 	free(ads);
 }
 
-void ADSSetAveragingInterval(AcousticSensor* _ads, uint32_t averaging_interval)
+void ADSSetAveragingInterval(HACOUSTICSENSOR _ads, uint32_t averaging_interval)
 {
 	AcousticSensorInternal* ads = (AcousticSensorInternal*)_ads;
 	ads->averaging_interval = averaging_interval;
 }
 
-void ADSSetImpulseLength(AcousticSensor* _ads, uint32_t impulse_length)
+void ADSSetImpulseLength(HACOUSTICSENSOR _ads, uint32_t impulse_length)
 {
 	AcousticSensorInternal* ads = (AcousticSensorInternal*)_ads;
 	if (impulse_length < 1)
@@ -68,7 +68,7 @@ void ADSSetImpulseLength(AcousticSensor* _ads, uint32_t impulse_length)
 	ads->impulse_length = impulse_length;
 }
 	
-void ADSSendSignal(AcousticSensor* _ads, OnMeasurementComplete callback, void* private_data)
+void ADSSendSignal(HACOUSTICSENSOR _ads, OnMeasurementComplete callback, void* private_data)
 {
 	AcousticSensorInternal* ads = (AcousticSensorInternal*)_ads;
 	
@@ -80,7 +80,7 @@ void ADSSendSignal(AcousticSensor* _ads, OnMeasurementComplete callback, void* p
     ads->tick = 1;
 }
 
-void ADSHandleTick(AcousticSensor* _ads)
+void ADSHandleTick(HACOUSTICSENSOR _ads)
 {
 	AcousticSensorInternal* ads = (AcousticSensorInternal*)_ads;
 	

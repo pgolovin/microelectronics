@@ -2,14 +2,15 @@
 #include "printer/printer_entities.h"
 #include "include/motor.h"
 #include <math.h>
-
-#define COS_15_GRAD 0.966
+#include <stdio.h>
 
 typedef enum
 {
     MAIN_COMMANDS_PAGE = 0,
+    PRELOAD_COMMANDS_PAGE,
     LOOKUP_COMMANDS_PAGE,
     STATE_PAGE,
+    
 } MEMORY_PAGES;
 
 typedef enum
@@ -22,17 +23,15 @@ typedef enum
 
 typedef struct
 {
-    uint32_t            sec_code;
-    GCodeCommandParams  position;
-    GCodeCommandParams  actual_position; // G60 head position may differs from saved position.
+    uint32_t                sec_code;
+    GCodeCommandParams      position;
+    GCodeCommandParams      actual_position; // G60 head position may differs from saved position.
 
     // for printing resuming;
-    uint8_t             coordinates_mode;
-    uint8_t             extrusion_mode;
-    uint16_t            temperature[TERMO_REGULATORS_COUNT];
-    uint32_t            current_command;
-    uint32_t            current_sector;
-    uint8_t             caret_position;
+    uint16_t                temperature[TERMO_REGULATOR_COUNT];
+    uint32_t                current_command;
+    uint32_t                current_sector;
+    uint8_t                 caret_position;
 } PrinterState;
 
 #ifdef _WIN32
@@ -47,12 +46,19 @@ typedef struct
     // SDCARD storage for internal data, aka RAM
     HSDCARD  storage;
     
-    HMemoryManager memory;
+    MemoryManager* memory;
 
     // General gcode settings, interpreter and code execution
     GCodeFunctionList  setup_calls;
     GCodeCommandParams current_segment;
     bool               resume; // marker that before printing we should return to position of pause
+    
+    // to create seamless data loading for the printer, loading will be made in 2 steps: load actual data and preload the next chunk,
+    // preloading and loading will be performed in a different threads to avoid glitches during printing
+    bool               pre_load_required;
+    MEMORY_PAGES       main_load_page;
+    MEMORY_PAGES       secondary_load_page;
+
     const uint8_t*     data_pointer;
     uint32_t           commands_count;
 
@@ -65,31 +71,33 @@ typedef struct
     PRINTER_STATUS last_command_status;
 
     // Motors configuration and acceleration settings
-    HMOTOR motors[MOTOR_COUNT];
-    GCodeAxisConfig* axis_cfg;
+    HMOTOR *motors;
+    const GCodeAxisConfig* axis_cfg;
 
     PRINTER_ACCELERATION acceleration_enabled; // TO BE CONSTANT
-    HPULSE   accelerator;
-    uint8_t  acceleration_tick;
-    uint8_t  acceleration_region;
-    uint8_t  acceleration_segments; // not sure that it is possible to have more than 256 acceleration segments
-    int8_t   acceleration_region_increment;
-    uint16_t acceleration_distance;
-    uint8_t  acceleration_distance_increment;
-    uint32_t acceleration_subsequent_region_length;
+    HPULSE    accelerator;
+    uint8_t   acceleration_tick;
+    uint8_t   acceleration_region;
+    uint32_t  acceleration_segments; // not sure that it is possible to have more than 256 acceleration segments
+    int8_t    acceleration_region_increment;
+    uint32_t  acceleration_distance;
+    uint8_t   acceleration_distance_increment;
+    uint32_t  acceleration_subsequent_region_length;
 
     MaterialFile *material_override;
     // Heaters: nozzle and table
-    HTERMALREGULATOR regulators[TERMO_REGULATORS_COUNT];
+    HTERMALREGULATOR* regulators;
     uint8_t termo_regulators_state;
 
     //Cooler pulse engine and connection ports
     HPULSE cooler;
     GPIO_TypeDef* cooler_port;
     uint16_t      cooler_pin;
-} PrinterDriver;
 
-static inline uint32_t compareTimeWithSpeedLimit(int32_t signed_segment, uint32_t time, uint16_t resolution, PrinterDriver* printer)
+    FIL* log_file;
+} Driver;
+
+static inline uint32_t compareTimeWithSpeedLimit(int32_t signed_segment, uint32_t time, uint16_t resolution, Driver* driver)
 {
     uint32_t segment = signed_segment;
     // distance in time is alweys positive
@@ -99,19 +107,19 @@ static inline uint32_t compareTimeWithSpeedLimit(int32_t signed_segment, uint32_
     }
 
     // check if we reached speed limit: amount of steps required to reach destination lower than amount of requested steps 
-    if (MAIN_TIMER_FREQUENCY * SECONDS_IN_MINUTE / (resolution * printer->current_segment.fetch_speed) > 1)
+    if ((MAIN_TIMER_FREQUENCY * SECONDS_IN_MINUTE) / (resolution * driver->current_segment.fetch_speed) > 1)
     {
-        segment = segment * MAIN_TIMER_FREQUENCY * SECONDS_IN_MINUTE / (resolution * printer->current_segment.fetch_speed);
+        segment = segment * ((float)(MAIN_TIMER_FREQUENCY * SECONDS_IN_MINUTE) / (float)(resolution * driver->current_segment.fetch_speed));
     }
     // return the longest distance
     return segment > time ? segment : time;
 }
 
-static inline uint32_t calculateTime(PrinterDriver* printer, GCodeCommandParams* segment)
+static inline uint32_t calculateTime(Driver* driver, GCodeCommandParams* segment)
 {
-    uint32_t time = compareTimeWithSpeedLimit((int32_t)(sqrt((double)segment->x * segment->x + (double)segment->y * segment->y) + 0.5), 0U, printer->axis_cfg->x_steps_per_mm, printer);
-    time = compareTimeWithSpeedLimit(segment->z, time, printer->axis_cfg->z_steps_per_mm, printer);
-    time = compareTimeWithSpeedLimit(segment->e, time, printer->axis_cfg->e_steps_per_mm, printer);
+    uint32_t time = compareTimeWithSpeedLimit((int32_t)(sqrt((double)segment->x * segment->x + (double)segment->y * segment->y) + 0.5), 0U, driver->axis_cfg->x_steps_per_mm, driver);
+    time = compareTimeWithSpeedLimit(segment->z, time, driver->axis_cfg->z_steps_per_mm, driver);
+    time = compareTimeWithSpeedLimit(segment->e, time, driver->axis_cfg->e_steps_per_mm, driver);
     return time;
 }
 
@@ -120,47 +128,47 @@ static inline double dot(const GCodeCommandParams* vector1, const GCodeCommandPa
     return (double)vector1->x * vector2->x + (double)vector1->y * vector2->y + (double)vector1->z * vector2->z;
 }
 
-static PRINTER_STATUS restoreState(PrinterDriver* printer)
+static PRINTER_STATUS restoreState(Driver* driver)
 {
-    SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[STATE_PAGE], STATE_BLOCK_POSITION);
+    SDCARD_ReadSingleBlock(driver->storage, driver->memory->pages[STATE_PAGE], STATE_BLOCK_POSITION);
     PrinterState tmp = { STATE_BLOCK_SEC_CODE, 0 };
-    printer->state = tmp;
+    driver->state = tmp;
 
-    if (STATE_BLOCK_SEC_CODE == ((PrinterState*)printer->memory->pages[STATE_PAGE])->sec_code)
+    if (STATE_BLOCK_SEC_CODE == ((PrinterState*)driver->memory->pages[STATE_PAGE])->sec_code)
     {
-        printer->state = *(PrinterState*)printer->memory->pages[STATE_PAGE];
+        driver->state = *(PrinterState*)driver->memory->pages[STATE_PAGE];
     }
     
     return PRINTER_OK;
 }
 
 /// <summary>
-/// Calculate the length of the segment that printer will do with a constant speed
+/// Calculate the length of the segment that driver will do with a constant speed
 /// On the beginning and the end of the region head will accelerate to prevent nozzle oscillations
 /// </summary>
-/// <param name="printer">Pointer to printer data</param>
+/// <param name="driver">Pointer to driver data</param>
 /// <param name="initial_region">Length of the current printing region</param>
 
-static void calculateAccelRegion(PrinterDriver* printer, uint32_t initial_region)
+static void calculateAccelRegion(Driver* driver, uint32_t initial_region)
 {
-    printer->acceleration_subsequent_region_length = initial_region;
+    driver->acceleration_subsequent_region_length = initial_region;
 
-    uint32_t current_caret = printer->active_state->caret_position + 1;
+    uint32_t current_caret = driver->active_state->caret_position + 1;
     GCODE_COMMAND_LIST command_id = GCODE_MOVE;
-    uint8_t* data_block = printer->memory->pages[MAIN_COMMANDS_PAGE];
+    uint8_t* data_block = driver->memory->pages[driver->main_load_page];
 
-    GCodeCommandParams last_segment = printer->current_segment;
-    GCodeCommandParams last_position = printer->active_state->position;
+    GCodeCommandParams last_segment = driver->current_segment;
+    GCodeCommandParams last_position = driver->active_state->position;
 
     const uint32_t commands_per_block = SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE;
-    uint32_t sector = printer->active_state->current_sector;
+    uint32_t sector = driver->active_state->current_sector;
 
-    for (uint32_t i = 0; i < printer->commands_count; ++i)
+    for (uint32_t i = 0; i < driver->commands_count; ++i)
     {
         if (current_caret == commands_per_block)
         {
-            SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[LOOKUP_COMMANDS_PAGE], ++sector);
-            data_block = printer->memory->pages[LOOKUP_COMMANDS_PAGE];
+            SDCARD_ReadSingleBlock(driver->storage, driver->memory->pages[LOOKUP_COMMANDS_PAGE], ++sector);
+            data_block = driver->memory->pages[LOOKUP_COMMANDS_PAGE];
             current_caret = 0;
         }
 
@@ -169,7 +177,7 @@ static void calculateAccelRegion(PrinterDriver* printer, uint32_t initial_region
         // get the next chunk of commands to continue calculation of accelerated sector size;
 
         if (!parameters ||
-            printer->current_segment.fetch_speed != parameters->fetch_speed ||
+            driver->current_segment.fetch_speed != parameters->fetch_speed ||
             command_id != GCODE_MOVE)
         {
             return;
@@ -187,7 +195,7 @@ static void calculateAccelRegion(PrinterDriver* printer, uint32_t initial_region
             return;
         }
 
-        if (scalar_mul / sqrt(last_length * length) < COS_15_GRAD)
+        if (scalar_mul / sqrt(last_length * length) < CONTINUOUS_SEGMENT_COS)
         {
             return;
         }
@@ -196,282 +204,257 @@ static void calculateAccelRegion(PrinterDriver* printer, uint32_t initial_region
         last_segment.y = segment.y;
         last_segment.z = segment.z;
 
-        printer->acceleration_subsequent_region_length += calculateTime(printer, &segment);
+        driver->acceleration_subsequent_region_length += calculateTime(driver, &segment);
 
         last_position = *parameters;
     }
 }
 
 // setup commands
-static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hprinter)
+static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hdriver)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    Driver* driver = (Driver*)hdriver;
     if (params->fetch_speed <= 0)
     {
         return GCODE_ERROR_INVALID_PARAM;
     }
 
-    printer->current_segment.fetch_speed = params->fetch_speed;
-    if (GCODE_ABSOLUTE == printer->active_state->coordinates_mode)
-    {
-        printer->current_segment.x = params->x - printer->active_state->position.x;
-        printer->current_segment.y = params->y - printer->active_state->position.y;
-        printer->current_segment.z = params->z - printer->active_state->position.z;
-    }
-    else
-    {
-        printer->current_segment = *params;
-    }
+    driver->current_segment.fetch_speed = params->fetch_speed;
+    driver->current_segment.x = params->x - driver->active_state->position.x;
+    driver->current_segment.y = params->y - driver->active_state->position.y;
+    driver->current_segment.z = params->z - driver->active_state->position.z;
+    driver->current_segment.e = params->e - driver->active_state->position.e;
 
-    if (GCODE_ABSOLUTE == printer->active_state->extrusion_mode)
-    {
-        printer->current_segment.e = params->e - printer->active_state->position.e;
-    }
-    else
-    {
-        printer->current_segment.e = params->e;
-    }
+    driver->active_state->position.fetch_speed = driver->current_segment.fetch_speed;
+    driver->active_state->position.x += driver->current_segment.x;
+    driver->active_state->position.y += driver->current_segment.y;
+    driver->active_state->position.z += driver->current_segment.z;
+    driver->active_state->position.e += driver->current_segment.e;
 
-    printer->active_state->position.fetch_speed = printer->current_segment.fetch_speed;
-    printer->active_state->position.x += printer->current_segment.x;
-    printer->active_state->position.y += printer->current_segment.y;
-    printer->active_state->position.z += printer->current_segment.z;
-    printer->active_state->position.e += printer->current_segment.e;
-    
-    printer->last_command_status = GCODE_OK;
+    driver->last_command_status = GCODE_OK;
 
     // basic fetch speed is calculated as velocity of the head, without velocity of the table, it is calculated independently.
-    uint32_t time = calculateTime(printer, &printer->current_segment);
-    MOTOR_SetProgram(printer->motors[MOTOR_X], time, printer->current_segment.x);
-    MOTOR_SetProgram(printer->motors[MOTOR_Y], time, printer->current_segment.y);
-    MOTOR_SetProgram(printer->motors[MOTOR_Z], time, printer->current_segment.z);
-    MOTOR_SetProgram(printer->motors[MOTOR_E], time, printer->current_segment.e);
+    uint32_t time = calculateTime(driver, &driver->current_segment);
+    MOTOR_SetProgram(driver->motors[MOTOR_X], time, driver->current_segment.x);
+    MOTOR_SetProgram(driver->motors[MOTOR_Y], time, driver->current_segment.y);
+    MOTOR_SetProgram(driver->motors[MOTOR_Z], time, driver->current_segment.z);
+    MOTOR_SetProgram(driver->motors[MOTOR_E], time, driver->current_segment.e);
     
     if (time)
     {
-        printer->last_command_status = GCODE_INCOMPLETE;
+        driver->last_command_status = GCODE_INCOMPLETE;
 
-        if (printer->acceleration_enabled && !printer->acceleration_subsequent_region_length)
+        if (driver->acceleration_enabled && !driver->acceleration_subsequent_region_length)
         {
-            calculateAccelRegion(printer, time);
+            calculateAccelRegion(driver, time);
 
-            parameterType fetch_speed = printer->current_segment.fetch_speed / SECONDS_IN_MINUTE;
+            parameterType fetch_speed = driver->current_segment.fetch_speed / SECONDS_IN_MINUTE;
             uint32_t acceleration_time = MAIN_TIMER_FREQUENCY * fetch_speed / STANDARD_ACCELERATION;
             
             // number of segments required to get full speed;
-            printer->acceleration_segments = acceleration_time / STANDARD_ACCELERATION_SEGMENT;
-            printer->acceleration_tick = 0;
+            driver->acceleration_segments = acceleration_time / STANDARD_ACCELERATION_SEGMENT;
+            driver->acceleration_tick = 0;
 
-            printer->acceleration_distance = 0;
-            printer->acceleration_distance_increment = 1;
+            driver->acceleration_distance = 0;
+            driver->acceleration_distance_increment = 1;
 
-            printer->acceleration_region = 1;
-            printer->acceleration_region_increment = 1;
+            driver->acceleration_region = 1;
+            driver->acceleration_region_increment = 1;
 
-            PULSE_SetPower(printer->accelerator, printer->acceleration_region);
+            PULSE_SetPower(driver->accelerator, driver->acceleration_region);
         }
     }
-    printer->mode = MODE_MOVE;
-    return printer->last_command_status;
+    driver->mode = MODE_MOVE;
+    return driver->last_command_status;
 };
 
-static GCODE_COMMAND_STATE setupSet(GCodeCommandParams* params, void* hprinter)
+static GCODE_COMMAND_STATE setupHome(GCodeCommandParams* params, void* hdriver)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-    printer->active_state->position = *params;
+    GCodeCommandParams home_params = *params;
+    home_params.fetch_speed = 1800;
+    GCODE_COMMAND_STATE state = setupMove(&home_params, hdriver);
+    return state;
+}
+
+static GCODE_COMMAND_STATE setupSet(GCodeCommandParams* params, void* hdriver)
+{
+    Driver* driver = (Driver*)hdriver;
+    driver->active_state->position = *params;
 
     return GCODE_OK;
 }
 
-static GCODE_COMMAND_STATE setCoordinatesMode(GCodeCommandParams* params, void* hprinter)
+static GCODE_COMMAND_STATE saveCoordinates(GCodeCommandParams* params, void* hdriver)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-    printer->active_state->coordinates_mode = params->x;
-    printer->active_state->extrusion_mode = params->x;
-    return GCODE_OK;
-}
-
-static GCODE_COMMAND_STATE saveCoordinates(GCodeCommandParams* params, void* hprinter)
-{
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    Driver* driver = (Driver*)hdriver;
     params = params;
-    PrinterState state = *printer->active_state;
-    restoreState(printer);
-    printer->state.position.x = state.position.x;
-    printer->state.position.y = state.position.y;
-    printer->state.position.z = state.position.z;
-    printer->state.position.e = printer->state.actual_position.e;
-    *(PrinterState*)printer->memory->pages[STATE_PAGE] = printer->state;
-    SDCARD_WriteSingleBlock(printer->storage, printer->memory->pages[STATE_PAGE], STATE_BLOCK_POSITION);
-    printer->state = state;
+    PrinterState state = *driver->active_state;
+    restoreState(driver);
+    driver->state.position.x = state.position.x;
+    driver->state.position.y = state.position.y;
+    driver->state.position.z = state.position.z;
+    driver->state.position.e = driver->state.actual_position.e;
+    *(PrinterState*)driver->memory->pages[STATE_PAGE] = driver->state;
+    SDCARD_WriteSingleBlock(driver->storage, driver->memory->pages[STATE_PAGE], STATE_BLOCK_POSITION);
+    driver->state = state;
     return GCODE_OK;
 }
 
-static GCODE_COMMAND_STATE saveState(GCodeCommandParams* params, void* hprinter)
+static GCODE_COMMAND_STATE saveState(GCodeCommandParams* params, void* hdriver)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    Driver* driver = (Driver*)hdriver;
     params = params;
 
-    printer->state.actual_position = printer->state.position;
-    printer->state.position = printer->active_state->position;
-    PrinterState* saved_state = (PrinterState*)printer->memory->pages[STATE_PAGE];
-    *saved_state = printer->state;
+    driver->state.actual_position = driver->state.position;
+    driver->state.position = driver->active_state->position;
+    PrinterState* saved_state = (PrinterState*)driver->memory->pages[STATE_PAGE];
+    *saved_state = driver->state;
     
-    SDCARD_WriteSingleBlock(printer->storage, printer->memory->pages[STATE_PAGE], STATE_BLOCK_POSITION);
+    SDCARD_WriteSingleBlock(driver->storage, driver->memory->pages[STATE_PAGE], STATE_BLOCK_POSITION);
 
     return PRINTER_OK;
 }
 
 // Subcommands list. M-commands
 
-static GCODE_COMMAND_STATE setExtruderMode(GCodeSubCommandParams* params, void* hprinter)
+static GCODE_COMMAND_STATE setNozzleTemperature(GCodeSubCommandParams* params, void* hdriver)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-    printer->active_state->extrusion_mode = params->s;
+    Driver* driver = (Driver*)hdriver;
+    PrinterSetTemperature(hdriver, TERMO_NOZZLE, params->s, driver->material_override);
     return GCODE_OK;
 }
 
-static GCODE_COMMAND_STATE setNozzleTemperature(GCodeSubCommandParams* params, void* hprinter)
+static GCODE_COMMAND_STATE setNozzleTemperatureBlocking(GCodeSubCommandParams* params, void* hdriver)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-    PrinterSetTemperature(hprinter, TERMO_NOZZLE, params->s, printer->material_override);
-    return GCODE_OK;
-}
-
-static GCODE_COMMAND_STATE setNozzleTemperatureBlocking(GCodeSubCommandParams* params, void* hprinter)
-{
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-    PrinterSetTemperature(hprinter, TERMO_NOZZLE, params->s, printer->material_override);
+    Driver* driver = (Driver*)hdriver;
+    PrinterSetTemperature(hdriver, TERMO_NOZZLE, params->s, driver->material_override);
 
     if (params->s > 0)
     {
-        printer->mode = MODE_WAIT_NOZZLE;
+        driver->mode = MODE_WAIT_NOZZLE;
+        driver->termo_regulators_state |= MODE_WAIT_NOZZLE;
         return GCODE_INCOMPLETE;
     }
     return PRINTER_OK;
 }
 
-static GCODE_COMMAND_STATE setTableTemperature(GCodeSubCommandParams* params, void* hprinter)
+static GCODE_COMMAND_STATE setTableTemperature(GCodeSubCommandParams* params, void* hdriver)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-    PrinterSetTemperature(hprinter, TERMO_TABLE, params->s, printer->material_override);
+    Driver* driver = (Driver*)hdriver;
+    PrinterSetTemperature(hdriver, TERMO_TABLE, params->s, driver->material_override);
 
     return GCODE_OK;
 }
 
-static GCODE_COMMAND_STATE setTableTemperatureBlocking(GCodeSubCommandParams* params, void* hprinter)
+static GCODE_COMMAND_STATE setTableTemperatureBlocking(GCodeSubCommandParams* params, void* hdriver)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-    PrinterSetTemperature(hprinter, TERMO_TABLE, params->s, printer->material_override);
+    Driver* driver = (Driver*)hdriver;
+    PrinterSetTemperature(hdriver, TERMO_TABLE, params->s, driver->material_override);
     if (params->s > 0)
     {
-        printer->mode = MODE_WAIT_TABLE;
+        driver->mode = MODE_WAIT_TABLE;
+        driver->termo_regulators_state |= MODE_WAIT_TABLE;
         return GCODE_INCOMPLETE;
     }
     return PRINTER_OK;
 }
 
-static GCODE_COMMAND_STATE setCoolerSpeed(GCodeSubCommandParams* params, void* hprinter)
+static GCODE_COMMAND_STATE setCoolerSpeed(GCodeSubCommandParams* params, void* hdriver)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    Driver* driver = (Driver*)hdriver;
     uint16_t speed = params->s;
-    if (printer->material_override && params->s)
+    if (driver->material_override && params->s)
     {
-        speed = printer->material_override->cooler_power;
+        speed = driver->material_override->cooler_power;
     }
-    PULSE_SetPower(printer->cooler, speed);
+    PULSE_SetPower(driver->cooler, speed);
     return GCODE_OK;
 }
 
-static GCODE_COMMAND_STATE resumePrint(GCodeSubCommandParams* params, void* hprinter)
+static GCODE_COMMAND_STATE resumePrint(GCodeSubCommandParams* params, void* hdriver)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-    printer->state.actual_position = printer->state.position;
-    printer->state.position = printer->active_state->position;
-    printer->state.position.e = printer->state.actual_position.e;
-    printer->active_state = &printer->state;
+#ifndef FIRMWARE
+    Driver* driver = (Driver*)hdriver;
+    driver->state.actual_position = driver->state.position;
+    driver->state.position = driver->active_state->position;
+    driver->state.position.e = driver->state.actual_position.e;
+    driver->active_state = &driver->state;
 
     GCodeSubCommandParams temperature;
-    temperature.s = printer->state.temperature[TERMO_NOZZLE];
-    printer->last_command_status = setNozzleTemperatureBlocking(&temperature, hprinter);
+    temperature.s = driver->state.temperature[TERMO_NOZZLE];
+    driver->last_command_status = setNozzleTemperatureBlocking(&temperature, hdriver);
 
-    temperature.s = printer->state.temperature[TERMO_TABLE];
-    printer->last_command_status = setTableTemperatureBlocking(&temperature, hprinter);
+    temperature.s = driver->state.temperature[TERMO_TABLE];
+    driver->last_command_status = setTableTemperatureBlocking(&temperature, hdriver);
 
-    printer->resume = true;
-
+    driver->resume = true;
+#endif 
     return GCODE_OK;
 }
 
-// main body of printer code
-HPRINTER PrinterConfigure(PrinterConfig* printer_cfg)
+// main body of driver code
+HDRIVER PrinterConfigure(DriverConfig* printer_cfg)
 {
-#ifndef PRINTER_FIRMWARE
+#ifndef FIRMWARE
 
     if (!printer_cfg || !printer_cfg->bytecode_storage || !printer_cfg->memory || !printer_cfg->axis_configuration ||
-        !printer_cfg->motors[MOTOR_X] || !printer_cfg->motors[MOTOR_Y] || !printer_cfg->motors[MOTOR_Z] || !printer_cfg->motors[MOTOR_E] ||
-        !printer_cfg->nozzle_config || !printer_cfg->table_config || !printer_cfg->cooler_port)
+        !printer_cfg->motors || !printer_cfg->motors[MOTOR_X] || !printer_cfg->motors[MOTOR_Y] || !printer_cfg->motors[MOTOR_Z] || !printer_cfg->motors[MOTOR_E] ||
+        !printer_cfg->termo_regulators || !printer_cfg->termo_regulators[TERMO_NOZZLE] || !printer_cfg->termo_regulators[TERMO_TABLE] || !printer_cfg->cooler_port)
     {
         return 0;
     }
 
 #endif
 
-    PrinterDriver* printer = DeviceAlloc(sizeof(PrinterDriver));
-    printer->storage = printer_cfg->bytecode_storage;
-    printer->memory = printer_cfg->memory;
+    Driver* driver = DeviceAlloc(sizeof(Driver));
+    driver->storage = printer_cfg->bytecode_storage;
+    driver->memory = printer_cfg->memory;
 
-    printer->state.sec_code         = STATE_BLOCK_SEC_CODE;
-    printer->service_state.sec_code = STATE_BLOCK_SEC_CODE;
+    driver->state.sec_code         = STATE_BLOCK_SEC_CODE;
+    driver->service_state.sec_code = STATE_BLOCK_SEC_CODE;
 
-    printer->setup_calls.commands[GCODE_MOVE]                       = setupMove;
-    printer->setup_calls.commands[GCODE_HOME]                       = setupMove; // the same command here
-    printer->setup_calls.commands[GCODE_SET]                        = setupSet;
-    printer->setup_calls.commands[GCODE_SAVE_POSITION]              = saveCoordinates;
-    printer->setup_calls.commands[GCODE_SET_COORDINATES_MODE]       = setCoordinatesMode;
-    printer->setup_calls.commands[GCODE_SAVE_STATE]                 = saveState;
+    driver->setup_calls.commands[GCODE_MOVE]                       = setupMove;
+    driver->setup_calls.commands[GCODE_HOME]                       = setupHome;
+    driver->setup_calls.commands[GCODE_SET]                        = setupSet;
+    driver->setup_calls.commands[GCODE_SAVE_POSITION]              = saveCoordinates;
+    driver->setup_calls.commands[GCODE_SAVE_STATE]                 = saveState;
 
-    printer->setup_calls.subcommands[GCODE_SET_NOZZLE_TEMPERATURE]  = setNozzleTemperature;
-    printer->setup_calls.subcommands[GCODE_WAIT_NOZZLE]             = setNozzleTemperatureBlocking;
-    printer->setup_calls.subcommands[GCODE_SET_TABLE_TEMPERATURE]   = setTableTemperature;
-    printer->setup_calls.subcommands[GCODE_WAIT_TABLE]              = setTableTemperatureBlocking;
-    printer->setup_calls.subcommands[GCODE_SET_COOLER_SPEED]        = setCoolerSpeed;
-    printer->setup_calls.subcommands[GCODE_SET_EXTRUSION_MODE]      = setExtruderMode;
-    printer->setup_calls.subcommands[GCODE_START_RESUME]            = resumePrint;
+    driver->setup_calls.subcommands[GCODE_SET_NOZZLE_TEMPERATURE]  = setNozzleTemperature;
+    driver->setup_calls.subcommands[GCODE_WAIT_NOZZLE]             = setNozzleTemperatureBlocking;
+    driver->setup_calls.subcommands[GCODE_SET_TABLE_TEMPERATURE]   = setTableTemperature;
+    driver->setup_calls.subcommands[GCODE_WAIT_TABLE]              = setTableTemperatureBlocking;
+    driver->setup_calls.subcommands[GCODE_SET_COOLER_SPEED]        = setCoolerSpeed;
+    driver->setup_calls.subcommands[GCODE_START_RESUME]            = resumePrint;
 
-    for (uint8_t i = 0; i < MOTOR_COUNT; ++i)
-    {
-        printer->motors[i] = MOTOR_Configure(printer_cfg->motors[i]);
-    }
+    driver->acceleration_enabled = printer_cfg->acceleration_enabled;
+    driver->accelerator = PULSE_Configure(PULSE_HIGHER);
 
-    printer->acceleration_enabled = printer_cfg->acceleration_enabled;
-    printer->accelerator = PULSE_Configure(PULSE_HIGHER);
+    driver->axis_cfg = printer_cfg->axis_configuration;
+    driver->acceleration_subsequent_region_length = 0;
 
-    printer->axis_cfg = printer_cfg->axis_configuration;
-    printer->acceleration_subsequent_region_length = 0;
+    driver->motors = printer_cfg->motors;
+    driver->regulators = printer_cfg->termo_regulators;
+    
+    driver->mode = MODE_IDLE;
+    driver->tick_index = 0;
+    driver->termo_regulators_state = 0;
 
-    printer->regulators[TERMO_NOZZLE] = TR_Configure(printer_cfg->nozzle_config);
-    printer->regulators[TERMO_TABLE]  = TR_Configure(printer_cfg->table_config);
+    driver->cooler = PULSE_Configure(PULSE_LOWER);
+    driver->cooler_port = printer_cfg->cooler_port;
+    driver->cooler_pin = printer_cfg->cooler_pin;
 
-    printer->mode = MODE_IDLE;
-    printer->tick_index = 0;
-    printer->termo_regulators_state = 0;
+    driver->active_state = &driver->state;
+    driver->pre_load_required = false;
 
-    printer->cooler = PULSE_Configure(PULSE_LOWER);
-    printer->cooler_port = printer_cfg->cooler_port;
-    printer->cooler_pin = printer_cfg->cooler_pin;
+    PULSE_SetPeriod(driver->accelerator, STANDARD_ACCELERATION_SEGMENT);
+    PULSE_SetPeriod(driver->cooler, COOLER_MAX_POWER);
 
-    printer->active_state = &printer->state;
-
-    PULSE_SetPeriod(printer->accelerator, STANDARD_ACCELERATION_SEGMENT);
-    PULSE_SetPeriod(printer->cooler, COOLER_MAX_POWER);
-
-    return (HPRINTER)printer;
+    return (HDRIVER)driver;
 }
 
-PRINTER_STATUS PrinterReadControlBlock(HPRINTER hprinter, PrinterControlBlock* control_block)
+PRINTER_STATUS PrinterReadControlBlock(HDRIVER hdriver, PrinterControlBlock* control_block)
 {
-#ifndef PRINTER_FIRMWARE
+#ifndef FIRMWARE
 
     if (!control_block)
     {
@@ -480,10 +463,10 @@ PRINTER_STATUS PrinterReadControlBlock(HPRINTER hprinter, PrinterControlBlock* c
 
 #endif
 
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    Driver* driver = (Driver*)hdriver;
 
-    SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[STATE_PAGE], CONTROL_BLOCK_POSITION);
-    *control_block = *(PrinterControlBlock*)printer->memory->pages[STATE_PAGE];
+    SDCARD_ReadSingleBlock(driver->storage, driver->memory->pages[STATE_PAGE], CONTROL_BLOCK_POSITION);
+    *control_block = *(PrinterControlBlock*)driver->memory->pages[STATE_PAGE];
     if (control_block->secure_id != CONTROL_BLOCK_SEC_CODE)
     {
         return PRINTER_INVALID_CONTROL_BLOCK;
@@ -491,73 +474,64 @@ PRINTER_STATUS PrinterReadControlBlock(HPRINTER hprinter, PrinterControlBlock* c
     return PRINTER_OK;
 }
 
-void PrinterSetTemperature(HPRINTER hprinter, TERMO_REGULATOR regulator, uint16_t value, MaterialFile* material_override)
+void PrinterSetTemperature(HDRIVER hdriver, TERMO_REGULATOR regulator, uint16_t value, MaterialFile* material_override)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    Driver* driver = (Driver*)hdriver;
 
     if (material_override && value > 0)
     {
         value = material_override->temperature[regulator];
     }
-    printer->active_state->temperature[regulator] = value;
-    TR_SetTargetTemperature(printer->regulators[regulator], value);
+    driver->active_state->temperature[regulator] = value;
+    TR_SetTargetTemperature(driver->regulators[regulator], value);
 }
 
-PRINTER_STATUS PrinterInitialize(HPRINTER hprinter)
+PRINTER_STATUS PrinterInitialize(HDRIVER hdriver)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    Driver* driver = (Driver*)hdriver;
 
-#ifndef FIRMWARE
+    driver->mode = MODE_IDLE;
+    driver->tick_index = 0;
+    driver->termo_regulators_state = 0;
+    driver->last_command_status = GCODE_OK;
+    driver->pre_load_required = false;
 
-    if (printer->commands_count - printer->active_state->current_command > 0)
-    {
-        return PRINTER_ALREADY_STARTED;
-    }
-
-#endif
-
-    printer->mode = MODE_IDLE;
-    printer->tick_index = 0;
-    printer->termo_regulators_state = 0;
-    printer->last_command_status = GCODE_OK;
-
-    return restoreState(printer);
+    return PRINTER_OK;
 }
 
-PRINTER_STATUS PrinterPrintFromBuffer(HPRINTER hprinter, const uint8_t* command_stream, uint32_t commands_count)
+PRINTER_STATUS PrinterPrintFromBuffer(HDRIVER hdriver, const uint8_t* command_stream, uint32_t commands_count)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-#ifndef FIRMWARE
+    Driver* driver = (Driver*)hdriver;
 
     if (!command_stream || !commands_count)
     {
         return PRINTER_INVALID_PARAMETER;
     }
 
-#endif 
-    printer->resume = false;
-    printer->material_override = 0;
-    printer->service_state = *printer->active_state;
-    printer->active_state = &printer->service_state;
+    driver->resume = false;
+    driver->material_override = 0;
+    driver->service_state = *driver->active_state;
+    driver->active_state = &driver->service_state;
 
-    printer->active_state->position.e = 0;
-    printer->active_state->current_command = 0;
-    printer->active_state->caret_position = 0;
-    printer->commands_count = commands_count;
-    printer->data_pointer = command_stream;
+    driver->active_state->position.e = 0;
+    driver->active_state->current_command = 0;
+    driver->active_state->caret_position = 0;
+    driver->commands_count = commands_count;
+    driver->data_pointer = command_stream;
+    driver->pre_load_required = false;
 
-    PULSE_SetPower(printer->accelerator, STANDARD_ACCELERATION_SEGMENT);
+    PULSE_SetPower(driver->accelerator, STANDARD_ACCELERATION_SEGMENT);
 
     return PRINTER_OK;
 }
 
-PRINTER_STATUS PrinterPrintFromCache(HPRINTER hprinter, MaterialFile * material_override, PRINTING_MODE mode)
+PRINTER_STATUS PrinterPrintFromCache(HDRIVER hdriver, MaterialFile * material_override, PRINTING_MODE mode)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    Driver* driver = (Driver*)hdriver;
 
 #ifndef FIRMWARE
 
-    if (printer->commands_count > 0 && printer->commands_count - printer->active_state->current_command > 0)
+    if (driver->commands_count > 0 && driver->commands_count - driver->active_state->current_command > 0)
     {
         return PRINTER_ALREADY_STARTED;
     }
@@ -565,212 +539,253 @@ PRINTER_STATUS PrinterPrintFromCache(HPRINTER hprinter, MaterialFile * material_
 #endif 
 
     PrinterControlBlock control_block;
-    PRINTER_STATUS status = PrinterReadControlBlock(hprinter, &control_block);
+    PRINTER_STATUS status = PrinterReadControlBlock(hdriver, &control_block);
     if (PRINTER_OK != status)
     {
         return status;
     }
 
-    printer->resume                         = (mode == PRINTER_RESUME);
-    printer->material_override              = material_override;
-    printer->active_state                   = &printer->state;
-    printer->active_state->position.e      *= mode;
-    printer->active_state->current_command *= mode;
-    printer->active_state->caret_position  *= mode;
-    printer->active_state->current_sector   = control_block.file_sector + mode * (printer->active_state->current_sector - control_block.file_sector);
-    printer->commands_count                 = control_block.commands_count - printer->active_state->current_command;
+    restoreState(driver);
+
+    driver->resume                         = (mode == PRINTER_RESUME);
+    driver->material_override              = material_override;
+    driver->active_state                   = &driver->state;
+    driver->active_state->position.e      *= mode;
+    driver->active_state->current_command *= mode;
+    driver->active_state->caret_position  *= mode;
+    driver->active_state->current_sector   = control_block.file_sector + mode * (driver->active_state->current_sector - control_block.file_sector);
+    driver->commands_count                 = control_block.commands_count - driver->active_state->current_command;
 
     if (mode)
     {
         GCodeSubCommandParams temperature;
-        temperature.s = printer->state.temperature[TERMO_NOZZLE];
-        printer->last_command_status = setNozzleTemperatureBlocking(&temperature, hprinter);
+        temperature.s = driver->state.temperature[TERMO_NOZZLE];
+        driver->last_command_status = setNozzleTemperatureBlocking(&temperature, hdriver);
 
-        temperature.s = printer->state.temperature[TERMO_TABLE];
-        printer->last_command_status = setTableTemperatureBlocking(&temperature, hprinter);
+        temperature.s = driver->state.temperature[TERMO_TABLE];
+        driver->last_command_status = setTableTemperatureBlocking(&temperature, hdriver);
     }
 
-    SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[MAIN_COMMANDS_PAGE], printer->active_state->current_sector);
-    printer->data_pointer = printer->memory->pages[MAIN_COMMANDS_PAGE];
+    driver->main_load_page = MAIN_COMMANDS_PAGE;
+    driver->secondary_load_page = PRELOAD_COMMANDS_PAGE;
 
-    PULSE_SetPower(printer->accelerator, STANDARD_ACCELERATION_SEGMENT);
+    SDCARD_ReadSingleBlock(driver->storage, driver->memory->pages[driver->main_load_page], driver->active_state->current_sector);
+    driver->data_pointer = driver->memory->pages[driver->main_load_page];
+    driver->pre_load_required = true;
+    PULSE_SetPower(driver->accelerator, STANDARD_ACCELERATION_SEGMENT);
 
     return status;
 }
 
-uint32_t PrinterGetRemainingCommandsCount(HPRINTER hprinter)
+PRINTER_STATUS PrinterLoadData(HDRIVER hdriver)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-    return printer->commands_count - printer->active_state->current_command;
-}
-
-PRINTER_STATUS PrinterGetStatus(HPRINTER hprinter)
-{
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-    return printer->last_command_status;
-}
-
-uint32_t PrinterGetAccelerationRegion(HPRINTER hprinter)
-{
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-    return printer->acceleration_subsequent_region_length;
-}
-
-GCodeCommandParams* PrinterGetCurrentPath(HPRINTER hprinter)
-{
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-    return &printer->current_segment;
-}
-
-PRINTER_STATUS PrinterNextCommand(HPRINTER hprinter)
-{
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-    if (printer->last_command_status != GCODE_OK)
+    Driver* driver = (Driver*)hdriver;
+    if (driver->pre_load_required)
     {
-        return  printer->last_command_status;
+        if (SDCARD_OK != SDCARD_ReadSingleBlock(driver->storage, driver->memory->pages[driver->secondary_load_page], driver->active_state->current_sector + 1))
+        {
+            return PRINTER_RAM_FAILURE;
+        }
+        driver->pre_load_required = false;
+    }
+    return PRINTER_OK;
+}
+
+PRINTER_STATUS PrinterSaveState(HDRIVER hdriver)
+{
+    return saveState(0, hdriver);
+}
+
+uint32_t PrinterGetRemainingCommandsCount(HDRIVER hdriver)
+{
+    Driver* driver = (Driver*)hdriver;
+    return driver->commands_count - driver->active_state->current_command;
+}
+
+PRINTER_STATUS PrinterGetStatus(HDRIVER hdriver)
+{
+    Driver* driver = (Driver*)hdriver;
+    return driver->last_command_status;
+}
+
+uint32_t PrinterGetAccelerationRegion(HDRIVER hdriver)
+{
+    Driver* driver = (Driver*)hdriver;
+    return driver->acceleration_subsequent_region_length;
+}
+
+GCodeCommandParams* PrinterGetCurrentPath(HDRIVER hdriver)
+{
+    Driver* driver = (Driver*)hdriver;
+    return &driver->current_segment;
+}
+
+GCodeCommandParams* PrinterGetCurrentPosition(HDRIVER hdriver)
+{
+    Driver* driver = (Driver*)hdriver;
+    return &driver->active_state->position;
+}
+
+PRINTER_STATUS PrinterNextCommand(HDRIVER hdriver)
+{
+    Driver* driver = (Driver*)hdriver;
+    if (driver->last_command_status != GCODE_OK)
+    {
+        return  driver->last_command_status;
     }
 
-    printer->last_command_status = PRINTER_FINISHED;
+    driver->last_command_status = PRINTER_FINISHED;
 
-    if (printer->resume)
+#ifndef FIRMWARE
+    if (driver->resume)
     {
         // before printing the model return everything to the position where pause was pressed
         // we should do this in absolute coordinates
         // this is ugly block but it cannot be done via GCode commands, otherwise M24 leads to deadlock
         // beacuse it calls itself in the end
-        uint8_t p_mode = printer->active_state->coordinates_mode;
-        uint8_t e_mode = printer->active_state->extrusion_mode;
-        printer->active_state->coordinates_mode = GCODE_ABSOLUTE;
-        printer->active_state->actual_position.fetch_speed = 1800;
-        printer->last_command_status = setupMove(&printer->active_state->actual_position, printer);
-        printer->active_state->coordinates_mode = p_mode;
-        printer->active_state->extrusion_mode = e_mode;
-        printer->resume = false;
+        driver->active_state->actual_position.fetch_speed = 1800;
+        driver->last_command_status = setupMove(&driver->active_state->actual_position, driver);
+        driver->resume = false;
 
-        return printer->last_command_status;
+        return driver->last_command_status;
     } 
-    
-    if (printer->commands_count - printer->active_state->current_command)
+#endif 
+
+    if (driver->commands_count - driver->active_state->current_command)
     {
-        ++printer->active_state->current_command;
-        printer->last_command_status = GC_ExecuteFromBuffer(&printer->setup_calls, printer, printer->data_pointer + (size_t)(GCODE_CHUNK_SIZE * printer->active_state->caret_position));
-        if (++printer->active_state->caret_position == SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE)
+        // dont advance in commands execution if next data block is not ready
+        if (driver->pre_load_required && driver->active_state->caret_position + 1 == SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE)
         {
-            SDCARD_ReadSingleBlock(printer->storage, printer->memory->pages[MAIN_COMMANDS_PAGE], ++printer->active_state->current_sector);
-            printer->active_state->caret_position = 0;
+            driver->last_command_status = GCODE_OK;
+            return PRINTER_PRELOAD_REQUIRED;
+        };
+
+        ++driver->active_state->current_command;
+        driver->last_command_status = GC_ExecuteFromBuffer(&driver->setup_calls, driver, driver->data_pointer + (size_t)(GCODE_CHUNK_SIZE * driver->active_state->caret_position));
+        if (++driver->active_state->caret_position == SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE)
+        {
+            MEMORY_PAGES tmp = driver->main_load_page;
+            driver->main_load_page = driver->secondary_load_page;
+            driver->secondary_load_page = tmp;
+            driver->data_pointer = driver->memory->pages[driver->main_load_page];
+            driver->active_state->caret_position = 0;
+            ++driver->active_state->current_sector;
+            driver->pre_load_required = true;
         }
     }
 
-    return printer->last_command_status;
+    return driver->last_command_status;
 }
 
-void PrinterUpdateVoltageT(HPRINTER hprinter, TERMO_REGULATOR regulator, uint16_t voltage)
+void PrinterUpdateVoltageT(HDRIVER hdriver, TERMO_REGULATOR regulator, uint16_t voltage)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-    TR_SetADCValue(printer->regulators[regulator], voltage);
+    Driver* driver = (Driver*)hdriver;
+    TR_SetADCValue(driver->regulators[regulator], voltage);
 }
 
-uint16_t PrinterGetTargetT(HPRINTER hprinter, TERMO_REGULATOR regulator)
+uint16_t PrinterGetTargetT(HDRIVER hdriver, TERMO_REGULATOR regulator)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-    return TR_GetTargetTemperature(printer->regulators[regulator]);
+    Driver* driver = (Driver*)hdriver;
+    return TR_GetTargetTemperature(driver->regulators[regulator]);
 }
 
-uint16_t PrinterGetCurrentT(HPRINTER hprinter, TERMO_REGULATOR regulator)
+uint16_t PrinterGetCurrentT(HDRIVER hdriver, TERMO_REGULATOR regulator)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-    return TR_GetCurrentTemperature(printer->regulators[regulator]);
+    Driver* driver = (Driver*)hdriver;
+    return TR_GetCurrentTemperature(driver->regulators[regulator]);
 }
 
-uint8_t PrinterGetCoolerSpeed(HPRINTER hprinter)
+uint8_t PrinterGetCoolerSpeed(HDRIVER hdriver)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
-    return (uint8_t)PULSE_GetPower(printer->cooler);
+    Driver* driver = (Driver*)hdriver;
+    return (uint8_t)PULSE_GetPower(driver->cooler);
 }
 
-PRINTER_STATUS PrinterExecuteCommand(HPRINTER hprinter)
+PRINTER_STATUS PrinterExecuteCommand(HDRIVER hdriver)
 {
-    PrinterDriver* printer = (PrinterDriver*)hprinter;
+    Driver* driver = (Driver*)hdriver;
     
-    if (0 == printer->tick_index % (MAIN_TIMER_FREQUENCY / TERMO_REQUEST_PER_SECOND))
+    if (0 == driver->tick_index % (MAIN_TIMER_FREQUENCY / TERMO_REQUEST_PER_SECOND))
     {
-        TR_HandleTick(printer->regulators[TERMO_NOZZLE]);
-        printer->termo_regulators_state = (printer->mode & MODE_WAIT_NOZZLE) && !TR_IsHeaterStabilized(printer->regulators[TERMO_NOZZLE]) ? MODE_WAIT_NOZZLE : 0;
-
-        TR_HandleTick(printer->regulators[TERMO_TABLE]);
-        printer->termo_regulators_state |= (printer->mode & MODE_WAIT_TABLE) && !TR_IsHeaterStabilized(printer->regulators[TERMO_TABLE]) ? MODE_WAIT_TABLE : 0;
+        const PRINTER_COMMAD_MODE modes[TERMO_REGULATOR_COUNT] = { MODE_WAIT_NOZZLE, MODE_WAIT_TABLE };
+        driver->termo_regulators_state = 0;
+        for (uint32_t i = 0; i < TERMO_REGULATOR_COUNT; ++i)
+        {
+            TR_HandleTick(driver->regulators[i]);
+            driver->termo_regulators_state |= (driver->mode & modes[i]) && !TR_IsTemperatureReached(driver->regulators[i]) ? modes[i] : 0;
+        }
     }
 
-    if (0 == printer->tick_index % (MAIN_TIMER_FREQUENCY / COOLER_RESOLUTION_PER_SECOND))
+    if (0 == driver->tick_index % (MAIN_TIMER_FREQUENCY / COOLER_RESOLUTION_PER_SECOND))
     {
-        GPIO_PinState pin_state = PULSE_HandleTick(printer->cooler) ? GPIO_PIN_SET : GPIO_PIN_RESET;
-        HAL_GPIO_WritePin(printer->cooler_port, printer->cooler_pin, pin_state);
+        GPIO_PinState pin_state = PULSE_HandleTick(driver->cooler) ? GPIO_PIN_SET : GPIO_PIN_RESET;
+        HAL_GPIO_WritePin(driver->cooler_port, driver->cooler_pin, pin_state);
     }
 
-    if (MAIN_TIMER_FREQUENCY == ++printer->tick_index)
+    if (MAIN_TIMER_FREQUENCY == ++driver->tick_index)
     {
-        printer->tick_index = 0;
+        driver->tick_index = 0;
     }
 
     // Acceleration region is on a both sides of subsequent regions
     // Length of braking region is calculated and equal to acceleration region
-    if ((printer->acceleration_enabled) &&
-        ((printer->acceleration_region < printer->acceleration_segments) ||
-        (printer->acceleration_subsequent_region_length <= printer->acceleration_distance)))
+    if ((driver->acceleration_enabled) &&
+        ((driver->acceleration_region < driver->acceleration_segments) ||
+        (driver->acceleration_subsequent_region_length <= driver->acceleration_distance)))
     {
         // Reaching apogee point in a middle of acceleration lead to revert of steps count an acceleration, 
         // This gave symetric picture of acceleration/braking pair. but dufference can be in 1 segment, due to 
         // Non symmetrical directions of signals in the pulse_engine.
-        if (printer->acceleration_distance - printer->acceleration_subsequent_region_length < 2 && printer->acceleration_distance_increment)
+        if (driver->acceleration_distance - driver->acceleration_subsequent_region_length < 2 && driver->acceleration_distance_increment)
         {
-            printer->acceleration_region_increment = -1;
-            printer->acceleration_tick = STANDARD_ACCELERATION_SEGMENT - printer->acceleration_tick;
-            printer->acceleration_distance_increment = 0;
+            driver->acceleration_region_increment = -1;
+            driver->acceleration_tick = STANDARD_ACCELERATION_SEGMENT - driver->acceleration_tick;
+            driver->acceleration_distance_increment = 0;
         }
 
-        ++printer->acceleration_tick;
-        if (STANDARD_ACCELERATION_SEGMENT <= printer->acceleration_tick)
+        ++driver->acceleration_tick;
+        if (STANDARD_ACCELERATION_SEGMENT <= driver->acceleration_tick)
         {
-            printer->acceleration_tick = 0;
-            printer->acceleration_region += printer->acceleration_region_increment;
+            driver->acceleration_tick = 0;
+            driver->acceleration_region += driver->acceleration_region_increment;
             // Mistake in 1 step, that can happen due to non-symmetrics signals, might lead to
             // zeroeing power, and 0.1 seconds of motors idling
-            if (printer->acceleration_region)
+            if (driver->acceleration_region)
             {
-                PULSE_SetPower(printer->accelerator, printer->acceleration_region);
+                PULSE_SetPower(driver->accelerator, driver->acceleration_region);
             }
         }
 
-        if (!PULSE_HandleTick(printer->accelerator))
+        if (!PULSE_HandleTick(driver->accelerator))
         {
-            return printer->last_command_status;
+            return driver->last_command_status;
         }
 
-        printer->acceleration_distance += printer->acceleration_distance_increment;
+        driver->acceleration_distance += driver->acceleration_distance_increment;
     }
 
-    uint8_t state = printer->termo_regulators_state;
+    uint8_t state = driver->termo_regulators_state;
     for (uint8_t i = 0; i < MOTOR_COUNT; ++i)
     {
-        MOTOR_HandleTick(printer->motors[i]);
-        state |= MOTOR_GetState(printer->motors[i]);
+        MOTOR_HandleTick(driver->motors[i]);
+        state |= MOTOR_GetState(driver->motors[i]);
     }
 
     if (0 == state)
     {
-        printer->last_command_status = GCODE_OK;
-        printer->mode = MODE_IDLE;
+        driver->last_command_status = GCODE_OK;
+        driver->mode = MODE_IDLE;
     }
     else
     {
-        printer->last_command_status = GCODE_INCOMPLETE;
+        driver->last_command_status = GCODE_INCOMPLETE;
     }
 
-    if (printer->acceleration_subsequent_region_length)
+    if (driver->acceleration_subsequent_region_length)
     {
-        --printer->acceleration_subsequent_region_length;
+        --driver->acceleration_subsequent_region_length;
     }
 
-    return printer->last_command_status;
+    return driver->last_command_status;
 }
 

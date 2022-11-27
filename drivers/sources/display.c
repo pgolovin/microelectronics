@@ -13,9 +13,9 @@ typedef struct
     uint16_t c_y;
 } CharacterPlacement;
 
-typedef struct DISPLAY_Internal_type
+typedef struct
 {
-    // DISPLAY protocol
+    // DisplayInternal protocol
     HSPIBUS hspi;
     uint8_t spi_id;
     // SPI 4 data/commands select protocol pin
@@ -32,7 +32,7 @@ typedef struct DISPLAY_Internal_type
 
     uint16_t font_color;
     uint16_t background_color;
-} DISPLAY;
+} DisplayInternal;
 
 enum DISPLAY_FORMAT
 {
@@ -86,7 +86,7 @@ enum ILI9341_Commands
 };
 
 // private functions
-static DISPLAY_Status AbortProcedure(DISPLAY* display, int32_t error)
+static DISPLAY_Status AbortProcedure(DisplayInternal* display, int32_t error)
 {
     SPIBUS_UnselectDevice(display->hspi, display->spi_id);
     display->initialized = false;
@@ -94,7 +94,7 @@ static DISPLAY_Status AbortProcedure(DISPLAY* display, int32_t error)
 }
 
 // Display parameters reset
-static void ResetDisplaySettings(DISPLAY* display)
+static void ResetDisplaySettings(DisplayInternal* display)
 {
     display->c_placement.c_x  = 0;
     display->c_placement.c_y  = 0;
@@ -107,7 +107,7 @@ static void ResetDisplaySettings(DISPLAY* display)
 }
 
 // Display HW reset
-static void Reset(DISPLAY* display)
+static void Reset(DisplayInternal* display)
 {
     HAL_GPIO_WritePin(display->reset_port_array, display->reset_port, GPIO_PIN_RESET);
     HAL_Delay(5);
@@ -116,7 +116,7 @@ static void Reset(DISPLAY* display)
 }
 
 // send command to display
-static HAL_StatusTypeDef SendCommand(DISPLAY* display, uint8_t command)
+static HAL_StatusTypeDef SendCommand(DisplayInternal* display, uint8_t command)
 {
     // switch Display to command receiveing mode by setting low to DC port
     HAL_GPIO_WritePin(display->ds_port_array, display->ds_port, GPIO_PIN_RESET);
@@ -125,7 +125,7 @@ static HAL_StatusTypeDef SendCommand(DISPLAY* display, uint8_t command)
 
 // send data to display
 // assume that maximum SPI protocol capacity is 64K, limit single data chunk by it.
-static HAL_StatusTypeDef WriteData(DISPLAY* display, uint8_t* data, size_t size)
+static HAL_StatusTypeDef WriteData(DisplayInternal* display, uint8_t* data, size_t size)
 {
     // switch Display to data receiveing mode by setting high to DC port
     HAL_GPIO_WritePin(display->ds_port_array, display->ds_port, GPIO_PIN_SET);
@@ -145,7 +145,7 @@ static HAL_StatusTypeDef WriteData(DISPLAY* display, uint8_t* data, size_t size)
     return status;
 }
 
-static HAL_StatusTypeDef SendCommandWithParameters(DISPLAY* display, uint8_t command, uint8_t* parameters, size_t size)
+static HAL_StatusTypeDef SendCommandWithParameters(DisplayInternal* display, uint8_t command, uint8_t* parameters, size_t size)
 {
     HAL_StatusTypeDef status = HAL_OK;
     // send command
@@ -160,7 +160,7 @@ static HAL_StatusTypeDef SendCommandWithParameters(DISPLAY* display, uint8_t com
 }
 
 // define onscreen rectangular area to write data on it
-static HAL_StatusTypeDef SetAddressWindow(DISPLAY* display, const Rect* window)
+static HAL_StatusTypeDef SetAddressWindow(DisplayInternal* display, const Rect* window)
 {
     HAL_StatusTypeDef status = HAL_OK;
     // define X area of the screen
@@ -188,7 +188,7 @@ static HAL_StatusTypeDef SetAddressWindow(DISPLAY* display, const Rect* window)
 }
 
 // dray character using default 8x8 font.
-static HAL_StatusTypeDef DrawSymbol(DISPLAY* display, uint16_t x, uint16_t y, char character, uint16_t text_color, uint16_t background_color)
+static HAL_StatusTypeDef DrawSymbol(DisplayInternal* display, uint16_t x, uint16_t y, char character, uint16_t text_color, uint16_t background_color)
 {
     //show 'not found' symbol for all incorrect codes 
     if (character < 32)
@@ -215,7 +215,7 @@ static HAL_StatusTypeDef DrawSymbol(DISPLAY* display, uint16_t x, uint16_t y, ch
     return WriteData(display, (uint8_t*)char_image, sizeof(char_image));
 }
 
-static HAL_StatusTypeDef DrawString(DISPLAY* display, CharacterPlacement* placement, const Rect* rect, const char* c_str)
+static HAL_StatusTypeDef DrawString(DisplayInternal* display, CharacterPlacement* placement, const Rect* rect, const char* c_str)
 {
     size_t str_len = strlen(c_str);
     SPIBUS_SelectDevice(display->hspi, display->spi_id);
@@ -263,7 +263,7 @@ static HAL_StatusTypeDef DrawString(DISPLAY* display, CharacterPlacement* placem
 // create SDCARD handle and configure ports
 HDISPLAY DISPLAY_Configure(const DisplayConfig* config)
 {
-	DISPLAY* display = DeviceAlloc(sizeof(DISPLAY));
+	DisplayInternal* display = DeviceAlloc(sizeof(DisplayInternal));
 	
 	display->hspi = config->hspi;
 	display->spi_id = SPIBUS_AddPeripherialDevice(config->hspi, config->cs_port_array, config->cs_port);
@@ -282,12 +282,15 @@ HDISPLAY DISPLAY_Configure(const DisplayConfig* config)
 // Initialize display
 DISPLAY_Status DISPLAY_Init(HDISPLAY hdisplay)
 {
-	DISPLAY* display = (DISPLAY*)hdisplay;
-	if (!display || display->initialized)
+	DisplayInternal* display = (DisplayInternal*)hdisplay;
+
+#ifndef FIRMWARE
+    if (!display || display->initialized)
 	{
 		return DISPLAY_INCORRECT_STATE;
 	}
-    
+#endif
+
     Reset(display);
 	// Step 1:
 	// detach all connected from spi bus devices. and select only this display
@@ -355,7 +358,7 @@ DISPLAY_Status DISPLAY_Init(HDISPLAY hdisplay)
 
 DISPLAY_Status DISPLAY_IsInitialized(HDISPLAY hdisplay)
 {
-    DISPLAY* display = (DISPLAY*)hdisplay;
+    DisplayInternal* display = (DisplayInternal*)hdisplay;
 	if (!display || !display->initialized)
 	{
 		return DISPLAY_INCORRECT_STATE;
@@ -365,11 +368,15 @@ DISPLAY_Status DISPLAY_IsInitialized(HDISPLAY hdisplay)
 
 DISPLAY_Status DISPLAY_BeginDraw(HDISPLAY hdisplay, Rect rectangle)
 {
-    DISPLAY* display = (DISPLAY*)hdisplay;
+    DisplayInternal* display = (DisplayInternal*)hdisplay;
+
+#ifndef FIRMWARE
 	if (!display || !display->initialized)
 	{
 		return DISPLAY_INCORRECT_STATE;
 	}
+#endif
+
     SPIBUS_SelectDevice(display->hspi, display->spi_id);
     rectangle.x1 -= 1;
     rectangle.y1 -= 1;
@@ -384,11 +391,14 @@ DISPLAY_Status DISPLAY_BeginDraw(HDISPLAY hdisplay, Rect rectangle)
 
 DISPLAY_Status DISPLAY_WritePixels(HDISPLAY hdisplay, const uint16_t* pixels, size_t count)
 {
-    DISPLAY* display = (DISPLAY*)hdisplay;
+    DisplayInternal* display = (DisplayInternal*)hdisplay;
+
+#ifndef FIRMWARE
 	if (!display || !display->initialized)
 	{
 		return DISPLAY_INCORRECT_STATE;
 	}
+#endif
     
     WriteData(display, (uint8_t*)pixels, count*2);
     return DISPLAY_OK;
@@ -396,11 +406,14 @@ DISPLAY_Status DISPLAY_WritePixels(HDISPLAY hdisplay, const uint16_t* pixels, si
 
 DISPLAY_Status DISPLAY_EndDraw(HDISPLAY hdisplay)
 {
-    DISPLAY* display = (DISPLAY*)hdisplay;
+    DisplayInternal* display = (DisplayInternal*)hdisplay;
+
+#ifndef FIRMWARE
 	if (!display || !display->initialized)
 	{
 		return DISPLAY_INCORRECT_STATE;
 	}
+#endif
     
     SPIBUS_UnselectDevice(display->hspi, display->spi_id);
     
@@ -409,12 +422,15 @@ DISPLAY_Status DISPLAY_EndDraw(HDISPLAY hdisplay)
 
 DISPLAY_Status DISPLAY_FillRect(HDISPLAY hdisplay, Rect rectangle, uint16_t color)
 {
-    DISPLAY* display = (DISPLAY*)hdisplay;
+    DisplayInternal* display = (DisplayInternal*)hdisplay;
+
+#ifndef FIRMWARE
 	if (!display || !display->initialized)
 	{
 		return DISPLAY_INCORRECT_STATE;
 	}
-  
+#endif
+
     uint16_t line_width = rectangle.x1 - rectangle.x0;
     uint16_t lines_count = rectangle.y1 - rectangle.y0;
     
@@ -447,33 +463,45 @@ DISPLAY_Status DISPLAY_FillRect(HDISPLAY hdisplay, Rect rectangle, uint16_t colo
 
 DISPLAY_Status DISPLAY_SetFontColor(HDISPLAY hdisplay, uint16_t font_color)
 {
-    DISPLAY* display = (DISPLAY*)hdisplay;
+    DisplayInternal* display = (DisplayInternal*)hdisplay;
+
+#ifndef FIRMWARE
 	if (!display || !display->initialized)
 	{
 		return DISPLAY_INCORRECT_STATE;
 	}
+#endif
+
     display->font_color = font_color;
     return DISPLAY_OK;
 }
 
 DISPLAY_Status DISPLAY_SetBackgroundColor(HDISPLAY hdisplay, uint16_t background_color)
 {
-    DISPLAY* display = (DISPLAY*)hdisplay;
-	if (!display || !display->initialized)
-	{
-		return DISPLAY_INCORRECT_STATE;
-	}
+    DisplayInternal* display = (DisplayInternal*)hdisplay;
+
+#ifndef FIRMWARE
+    if (!display || !display->initialized)
+    {
+        return DISPLAY_INCORRECT_STATE;
+    }
+#endif
+
     display->background_color = background_color;
     return DISPLAY_OK;
 }
 
 DISPLAY_Status DISPLAY_SetTextArea(HDISPLAY hdisplay, const Rect* text_area)
 {
-    DISPLAY* display = (DISPLAY*)hdisplay;
-	if (!display || !display->initialized)
-	{
-		return DISPLAY_INCORRECT_STATE;
-	}
+    DisplayInternal* display = (DisplayInternal*)hdisplay;
+
+#ifndef FIRMWARE
+    if (!display || !display->initialized)
+    {
+        return DISPLAY_INCORRECT_STATE;
+    }
+#endif
+
     display->text_area = *text_area;
     display->c_placement.c_x = 0;
     display->c_placement.c_y = 0;
@@ -482,11 +510,14 @@ DISPLAY_Status DISPLAY_SetTextArea(HDISPLAY hdisplay, const Rect* text_area)
 
 DISPLAY_Status DISPLAY_Cls(HDISPLAY hdisplay)
 {
-    DISPLAY* display = (DISPLAY*)hdisplay;
+    DisplayInternal* display = (DisplayInternal*)hdisplay;
+
+#ifndef FIRMWARE
     if (!display || !display->initialized)
-	{
-		return DISPLAY_INCORRECT_STATE;
-	}
+    {
+        return DISPLAY_INCORRECT_STATE;
+    }
+#endif
     
     display->c_placement.c_y = 0;
     display->c_placement.c_x = 0;
@@ -496,11 +527,14 @@ DISPLAY_Status DISPLAY_Cls(HDISPLAY hdisplay)
 
 DISPLAY_Status DISPLAY_Print(HDISPLAY hdisplay, char* c_str)
 {
-    DISPLAY* display = (DISPLAY*)hdisplay;
-	if (!display || !display->initialized)
-	{
-		return DISPLAY_INCORRECT_STATE;
-	}
+    DisplayInternal* display = (DisplayInternal*)hdisplay;
+
+#ifndef FIRMWARE
+    if (!display || !display->initialized)
+    {
+        return DISPLAY_INCORRECT_STATE;
+    }
+#endif
 
     if (HAL_OK != DrawString(display, &display->c_placement, &display->text_area, c_str))
     {
@@ -512,11 +546,14 @@ DISPLAY_Status DISPLAY_Print(HDISPLAY hdisplay, char* c_str)
 
 DISPLAY_Status DISPLAY_DrawString(HDISPLAY hdisplay, const Rect* text_area, const char* c_str)
 {
-    DISPLAY* display = (DISPLAY*)hdisplay;
-	if (!display || !display->initialized)
-	{
-		return DISPLAY_INCORRECT_STATE;
-	}
+    DisplayInternal* display = (DisplayInternal*)hdisplay;
+
+#ifndef FIRMWARE
+    if (!display || !display->initialized)
+    {
+        return DISPLAY_INCORRECT_STATE;
+    }
+#endif
     
     CharacterPlacement placement = {0, 0};
     if (HAL_OK != DrawString(display, &placement, text_area, c_str))
