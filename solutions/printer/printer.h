@@ -41,6 +41,10 @@ typedef struct
 //     GCodeAxisConfig         axis_configuration;
 // } PrinterSettings;
 
+/// <summary>
+/// Printer configuration structure contains description of all perepherial devices
+/// that controlled by the main processor
+/// </summary>
 typedef struct
 {
     MemoryManager           memory_manager;
@@ -59,10 +63,42 @@ typedef struct
     HTOUCH                  htouch;
 } PrinterConfiguration;
 
+/// <summary>
+/// Configures printer state and connects all perepherial devices to the main controller
+/// </summary>
+/// <param name="cfg">Pointer to the printer configuration structure</param>
+/// <returns>Handle on the printer or nullptr otherwise</returns>
 HPRINTER  Configure(PrinterConfiguration* cfg);
+
+/// <summary>
+/// Main thread function that is called in main infinite loop.
+/// All interaction with sdcards, display, and termal regulators are performed here
+/// </summary>
+/// <param name="hprinter">Handle for the configured printer</param>
 void      MainLoop(HPRINTER hprinter);
+
+/// <summary>
+/// Handler of the main timer. This function performs control over printing motion engines
+/// </summary>
+/// <param name="hprinter">Handle for the configured printer</param>
 void      OnTimer(HPRINTER hprinter);
+
+// TODO: move it to the private section.
+/// <summary>
+/// Forwards touch action to the printer UI handler object
+/// </summary>
+/// <param name="hprinter">Handle for the configured printer</param>
+/// <param name="x">X touch coordinate</param>
+/// <param name="y">Y touch coordinate</param>
+/// <param name="pressed">Touch state, is user pressed the touch or not</param>
 void      TrackAction(HPRINTER hprinter, uint16_t x, uint16_t y, bool pressed);
+
+/// <summary>
+/// Updates termo regulator voltage values received from ADC.
+/// </summary>
+/// <param name="hprinter">Handle for the configured printer</param>
+/// <param name="regulator">Termo regulator ID. Nozzle or table</param>
+/// <param name="value">ADC value on this termo regulator</param>
 void      ReadADCValue(HPRINTER hprinter, TERMO_REGULATOR regulator, uint16_t value);
 
 #ifdef __cplusplus

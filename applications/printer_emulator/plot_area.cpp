@@ -9,11 +9,6 @@ PlotArea::PlotArea(const RECT& wnd_position, const std::string& title, const std
 
 void PlotArea::onIdle()
 {
-    std::lock_guard<std::mutex> guard(m_guard);
-    if (m_current_positions.size())
-    {
-        Refresh();
-    }
 }
 
 LRESULT CALLBACK PlotArea::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -50,6 +45,7 @@ void PlotArea::Step(int32_t x_increment, int32_t y_increment)
     m_last_position.x += x_increment;
     m_last_position.y += y_increment;
 
-    m_current_positions.push_back(m_last_position);
-
+    HDC hdc = GetDC(GetWindowHandle());
+    SetPixel(hdc, m_last_position.x / 5 - 1200, m_last_position.y / 5 - 1200, 0x50000000);
+    ReleaseDC(GetWindowHandle(), hdc);
 }

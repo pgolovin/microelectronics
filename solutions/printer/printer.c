@@ -27,13 +27,14 @@ typedef struct
     FIL* file;
     DIR* dir;
     size_t gcode_blocks_count;
-
     HSDCARD* storages;
 
     HDRIVER driver;
     HTOUCH htouch;
     UI ui_handle;
     HIndicator temperature[TERMO_REGULATOR_COUNT];
+    uint16_t current_temperature[TERMO_REGULATOR_COUNT];
+
     HIndicator progress;
     HFrame     printing_frame;
     HButton    transfer_button;
@@ -52,6 +53,7 @@ static bool startTransfer(ActionParameter* param)
     printer->gcode_blocks_count = FileManagerOpenGCode(printer->file_manager, "model.gcode");
     if (0 != printer->gcode_blocks_count)
     {
+        UI_SetIndicatorLabel(printer->progress, "Transfer");
         printer->current_mode = FILE_TRANSFERING;
     }
     return true;
@@ -88,14 +90,11 @@ static bool runCommand(ActionParameter* param)
     uint32_t count = 0;
     for (uint32_t i = 0; i < COMMAND_LENGTH; ++i)
     {
-        if (0 == command[i])
+        if (0 == command[i] && GCODE_OK_COMMAND_CREATED == GC_ParseCommand(printer->interpreter, cmd))
         {
-            if (GCODE_OK_COMMAND_CREATED == GC_ParseCommand(printer->interpreter, cmd))
-            {
-                caret += GC_CompressCommand(printer->interpreter, caret);
-                cmd = &command[i + 1];
-                ++count;
-            }
+            caret += GC_CompressCommand(printer->interpreter, caret);
+            cmd = &command[i + 1];
+            ++count;
         }
     }
 
@@ -216,7 +215,7 @@ void MainLoop(HPRINTER hprinter)
             printer->fail_count = 0;
         }
 
-        if (10 < printer->fail_count)
+        if (SDCARD_READ_FAIL_ATTEMPTS < printer->fail_count)
         {
             char name[16];
             sprintf(name, "F: %d", PrinterGetRemainingCommandsCount(printer->driver));
@@ -229,12 +228,19 @@ void MainLoop(HPRINTER hprinter)
             sprintf(name, "%d", PrinterGetRemainingCommandsCount(printer->driver));
             UI_SetIndicatorLabel(printer->progress, name);
         }
-        for (uint32_t regulator = 0; regulator < TERMO_REGULATOR_COUNT; ++regulator)
+    }
+    
+    for (uint32_t regulator = 0; regulator < TERMO_REGULATOR_COUNT; ++regulator)
+    {
+        uint16_t current = PrinterGetCurrentT(printer->driver, regulator);
+        if (current == printer->current_temperature[regulator])
         {
-            char name[16];
-            sprintf(name, "%d:%d", PrinterGetCurrentT(printer->driver, regulator), PrinterGetTargetT(printer->driver, regulator));
-            UI_SetIndicatorLabel(printer->temperature[regulator], name);
+            continue;
         }
+        printer->current_temperature[regulator] = current;
+        char name[16];
+        sprintf(name, "%d:%d", current, PrinterGetTargetT(printer->driver, regulator));
+        UI_SetIndicatorLabel(printer->temperature[regulator], name);
     }
 
     if (CONFIGURATION == printer->current_mode)
@@ -275,12 +281,6 @@ void MainLoop(HPRINTER hprinter)
             return;
         }
         --printer->gcode_blocks_count;
-        if (0 == printer->gcode_blocks_count % 10)
-        {
-            char name[16];
-            sprintf(name, "%d", printer->gcode_blocks_count);
-            UI_SetIndicatorLabel(printer->progress, name);
-        }
     }
     
     

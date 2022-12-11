@@ -61,7 +61,7 @@ static const char* parseValue(const char* command_line, parameterType multiplier
     for (; (*command_line && *command_line != ' ' && *command_line != '\r' && *command_line != '\n'); ++command_line)
     {
         result = result + (*command_line - '0') / divider;
-        divider *= 10;
+        divider *= 10.f;
     }
 
     if (*command_line)
