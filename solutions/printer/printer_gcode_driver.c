@@ -74,7 +74,7 @@ typedef struct
     HMOTOR *motors;
     const GCodeAxisConfig* axis_cfg;
 
-    PRINTER_ACCELERATION acceleration_enabled; // TO BE CONSTANT
+    PRINTER_ACCELERATION acceleration_enabled;
     HPULSE    accelerator;
     uint8_t   acceleration_tick;
     uint8_t   acceleration_region;
@@ -100,14 +100,14 @@ typedef struct
 static inline uint32_t compareTimeWithSpeedLimit(int32_t signed_segment, uint32_t time, uint16_t resolution, Driver* driver)
 {
     uint32_t segment = signed_segment;
-    // distance in time is alweys positive
+    // distance in time is always positive
     if (signed_segment < 0)
     {
         segment = (uint32_t)(-signed_segment);
     }
 
     // check if we reached speed limit: amount of steps required to reach destination lower than amount of requested steps 
-    if ((MAIN_TIMER_FREQUENCY * SECONDS_IN_MINUTE) / (resolution * driver->current_segment.fetch_speed) > 1)
+    if (driver->current_segment.fetch_speed && (MAIN_TIMER_FREQUENCY * SECONDS_IN_MINUTE) / (resolution * driver->current_segment.fetch_speed) > 1)
     {
         segment = segment * ((float)(MAIN_TIMER_FREQUENCY * SECONDS_IN_MINUTE) / (float)(resolution * driver->current_segment.fetch_speed));
     }
@@ -117,6 +117,7 @@ static inline uint32_t compareTimeWithSpeedLimit(int32_t signed_segment, uint32_
 
 static inline uint32_t calculateTime(Driver* driver, GCodeCommandParams* segment)
 {
+    // calculate max time required to complete the current command
     uint32_t time = compareTimeWithSpeedLimit((int32_t)(sqrt((double)segment->x * segment->x + (double)segment->y * segment->y) + 0.5), 0U, driver->axis_cfg->x_steps_per_mm, driver);
     time = compareTimeWithSpeedLimit(segment->z, time, driver->axis_cfg->z_steps_per_mm, driver);
     time = compareTimeWithSpeedLimit(segment->e, time, driver->axis_cfg->e_steps_per_mm, driver);
@@ -130,6 +131,7 @@ static inline double dot(const GCodeCommandParams* vector1, const GCodeCommandPa
 
 static PRINTER_STATUS restoreState(Driver* driver)
 {
+    // Read state block to restore HEAD state
     SDCARD_ReadSingleBlock(driver->storage, driver->memory->pages[STATE_PAGE], STATE_BLOCK_POSITION);
     PrinterState tmp = { STATE_BLOCK_SEC_CODE, 0 };
     driver->state = tmp;
@@ -153,6 +155,7 @@ static void calculateAccelRegion(Driver* driver, uint32_t initial_region)
 {
     driver->acceleration_subsequent_region_length = initial_region;
 
+    // looking for the different command or fetch speed
     uint32_t current_caret = driver->active_state->caret_position + 1;
     GCODE_COMMAND_LIST command_id = GCODE_MOVE;
     uint8_t* data_block = driver->memory->pages[driver->main_load_page];
@@ -162,12 +165,32 @@ static void calculateAccelRegion(Driver* driver, uint32_t initial_region)
 
     const uint32_t commands_per_block = SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE;
     uint32_t sector = driver->active_state->current_sector;
-
+    // scan for the closest segment with big angle or different command, for this scan commands in cache before we find
+    // the first one that will close contignuous region
     for (uint32_t i = 0; i < driver->commands_count; ++i)
     {
         if (current_caret == commands_per_block)
         {
-            SDCARD_ReadSingleBlock(driver->storage, driver->memory->pages[LOOKUP_COMMANDS_PAGE], ++sector);
+            SDCARD_Status status = SDCARD_OK;
+            uint8_t fail_count = 0;
+            do
+            {
+                status = SDCARD_ReadSingleBlock(driver->storage, driver->memory->pages[LOOKUP_COMMANDS_PAGE], ++sector);
+                if (SDCARD_OK != status)
+                {
+                    // try to read data from SDCARD, if operation failes, will try to restore connection to the cars, if it fails
+                    // contignuous region will be closed
+                    ++fail_count;
+                    SDCARD_Init(driver->storage);
+                    SDCARD_ReadBlocksNumber(driver->storage);
+                    if (SDCARD_READ_FAIL_ATTEMPTS == fail_count)
+                    {
+                        return;
+                    }
+                }
+            } 
+            while (SDCARD_OK != status);
+
             data_block = driver->memory->pages[LOOKUP_COMMANDS_PAGE];
             current_caret = 0;
         }
@@ -189,7 +212,7 @@ static void calculateAccelRegion(Driver* driver, uint32_t initial_region)
         double last_length = dot(&last_segment, &last_segment);
         double length      = dot(&segment, &segment);
 
-        if (0.000001 > length || 0.000001 > last_length)
+        if (0.000001 > length * last_length)
         {
             // zero division guard
             return;
@@ -219,12 +242,14 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hdriver)
         return GCODE_ERROR_INVALID_PARAM;
     }
 
+    // calulate the current segment length
     driver->current_segment.fetch_speed = params->fetch_speed;
     driver->current_segment.x = params->x - driver->active_state->position.x;
     driver->current_segment.y = params->y - driver->active_state->position.y;
     driver->current_segment.z = params->z - driver->active_state->position.z;
     driver->current_segment.e = params->e - driver->active_state->position.e;
 
+    // update final position of the head
     driver->active_state->position.fetch_speed = driver->current_segment.fetch_speed;
     driver->active_state->position.x += driver->current_segment.x;
     driver->active_state->position.y += driver->current_segment.y;
@@ -235,6 +260,7 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hdriver)
 
     // basic fetch speed is calculated as velocity of the head, without velocity of the table, it is calculated independently.
     uint32_t time = calculateTime(driver, &driver->current_segment);
+    // program motors to performa requested amount of steps using max time segment
     MOTOR_SetProgram(driver->motors[MOTOR_X], time, driver->current_segment.x);
     MOTOR_SetProgram(driver->motors[MOTOR_Y], time, driver->current_segment.y);
     MOTOR_SetProgram(driver->motors[MOTOR_Z], time, driver->current_segment.z);
@@ -246,6 +272,7 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hdriver)
 
         if (driver->acceleration_enabled && !driver->acceleration_subsequent_region_length)
         {
+            // calculate length of contignous acceleration region by looking for segments with big angles, or another command
             calculateAccelRegion(driver, time);
 
             parameterType fetch_speed = driver->current_segment.fetch_speed / SECONDS_IN_MINUTE;
@@ -270,6 +297,7 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hdriver)
 
 static GCODE_COMMAND_STATE setupHome(GCodeCommandParams* params, void* hdriver)
 {
+    // command home is the same as move, but it uses constant fetch speed that defined here
     GCodeCommandParams home_params = *params;
     home_params.fetch_speed = 1800;
     GCODE_COMMAND_STATE state = setupMove(&home_params, hdriver);
@@ -290,6 +318,7 @@ static GCODE_COMMAND_STATE saveCoordinates(GCodeCommandParams* params, void* hdr
     params = params;
     PrinterState state = *driver->active_state;
     restoreState(driver);
+    // saves only position of the head
     driver->state.position.x = state.position.x;
     driver->state.position.y = state.position.y;
     driver->state.position.z = state.position.z;
@@ -305,6 +334,8 @@ static GCODE_COMMAND_STATE saveState(GCodeCommandParams* params, void* hdriver)
     Driver* driver = (Driver*)hdriver;
     params = params;
 
+    // saves current state as a current position. if configuration commands will be executed
+    // the system should return head back to this position.
     driver->state.actual_position = driver->state.position;
     driver->state.position = driver->active_state->position;
     PrinterState* saved_state = (PrinterState*)driver->memory->pages[STATE_PAGE];
@@ -316,7 +347,6 @@ static GCODE_COMMAND_STATE saveState(GCodeCommandParams* params, void* hdriver)
 }
 
 // Subcommands list. M-commands
-
 static GCODE_COMMAND_STATE setNozzleTemperature(GCodeSubCommandParams* params, void* hdriver)
 {
     Driver* driver = (Driver*)hdriver;
@@ -413,6 +443,7 @@ HDRIVER PrinterConfigure(DriverConfig* printer_cfg)
     driver->state.sec_code         = STATE_BLOCK_SEC_CODE;
     driver->service_state.sec_code = STATE_BLOCK_SEC_CODE;
 
+    // setup executor commands
     driver->setup_calls.commands[GCODE_MOVE]                       = setupMove;
     driver->setup_calls.commands[GCODE_HOME]                       = setupHome;
     driver->setup_calls.commands[GCODE_SET]                        = setupSet;
@@ -426,26 +457,33 @@ HDRIVER PrinterConfigure(DriverConfig* printer_cfg)
     driver->setup_calls.subcommands[GCODE_SET_COOLER_SPEED]        = setCoolerSpeed;
     driver->setup_calls.subcommands[GCODE_START_RESUME]            = resumePrint;
 
+    // enables acceleration parameters: TODO: move to Initialize parameter
     driver->acceleration_enabled = printer_cfg->acceleration_enabled;
     driver->accelerator = PULSE_Configure(PULSE_HIGHER);
-
-    driver->axis_cfg = printer_cfg->axis_configuration;
     driver->acceleration_subsequent_region_length = 0;
+    
+    // configures table restrictions
+    driver->axis_cfg = printer_cfg->axis_configuration;
 
+    // enables motors and termo regulators
     driver->motors = printer_cfg->motors;
     driver->regulators = printer_cfg->termo_regulators;
     
+    // resets printer state
     driver->mode = MODE_IDLE;
     driver->tick_index = 0;
     driver->termo_regulators_state = 0;
 
+    // setup nozzle cooler
     driver->cooler = PULSE_Configure(PULSE_LOWER);
     driver->cooler_port = printer_cfg->cooler_port;
     driver->cooler_pin = printer_cfg->cooler_pin;
 
+    // setup printer motion state
     driver->active_state = &driver->state;
     driver->pre_load_required = false;
 
+    // Resets accelerator and cooler state
     PULSE_SetPeriod(driver->accelerator, STANDARD_ACCELERATION_SEGMENT);
     PULSE_SetPeriod(driver->cooler, COOLER_MAX_POWER);
 
@@ -478,6 +516,7 @@ void PrinterSetTemperature(HDRIVER hdriver, TERMO_REGULATOR regulator, uint16_t 
 {
     Driver* driver = (Driver*)hdriver;
 
+    // material override doesn't affect termo regulator shutdown command which is encoded by value=0
     if (material_override && value > 0)
     {
         value = material_override->temperature[regulator];
@@ -556,6 +595,7 @@ PRINTER_STATUS PrinterPrintFromCache(HDRIVER hdriver, MaterialFile * material_ov
     driver->active_state->current_sector   = control_block.file_sector + mode * (driver->active_state->current_sector - control_block.file_sector);
     driver->commands_count                 = control_block.commands_count - driver->active_state->current_command;
 
+    // in case of print resume we should first restore temperatures
     if (mode)
     {
         GCodeSubCommandParams temperature;
@@ -566,6 +606,7 @@ PRINTER_STATUS PrinterPrintFromCache(HDRIVER hdriver, MaterialFile * material_ov
         driver->last_command_status = setTableTemperatureBlocking(&temperature, hdriver);
     }
 
+    // read data for the current sector to start/continue print
     driver->main_load_page = MAIN_COMMANDS_PAGE;
     driver->secondary_load_page = PRELOAD_COMMANDS_PAGE;
 
@@ -643,10 +684,8 @@ PRINTER_STATUS PrinterNextCommand(HDRIVER hdriver)
         // we should do this in absolute coordinates
         // this is ugly block but it cannot be done via GCode commands, otherwise M24 leads to deadlock
         // beacuse it calls itself in the end
-        driver->active_state->actual_position.fetch_speed = 1800;
-        driver->last_command_status = setupMove(&driver->active_state->actual_position, driver);
+        driver->last_command_status = setupHome(&driver->active_state->actual_position, driver);
         driver->resume = false;
-
         return driver->last_command_status;
     } 
 #endif 
@@ -660,10 +699,12 @@ PRINTER_STATUS PrinterNextCommand(HDRIVER hdriver)
             return PRINTER_PRELOAD_REQUIRED;
         };
 
+        // execute the next command
         ++driver->active_state->current_command;
         driver->last_command_status = GC_ExecuteFromBuffer(&driver->setup_calls, driver, driver->data_pointer + (size_t)(GCODE_CHUNK_SIZE * driver->active_state->caret_position));
         if (++driver->active_state->caret_position == SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE)
         {
+            // if the last command in the block is executed, swap current buffer by the preloaded one and request for the next block to be loaded
             MEMORY_PAGES tmp = driver->main_load_page;
             driver->main_load_page = driver->secondary_load_page;
             driver->secondary_load_page = tmp;
@@ -707,6 +748,7 @@ PRINTER_STATUS PrinterExecuteCommand(HDRIVER hdriver)
     
     if (0 == driver->tick_index % (MAIN_TIMER_FREQUENCY / TERMO_REQUEST_PER_SECOND))
     {
+        // check termo regulator value to control requested temperature
         const PRINTER_COMMAD_MODE modes[TERMO_REGULATOR_COUNT] = { MODE_WAIT_NOZZLE, MODE_WAIT_TABLE };
         driver->termo_regulators_state = 0;
         for (uint32_t i = 0; i < TERMO_REGULATOR_COUNT; ++i)
@@ -718,6 +760,7 @@ PRINTER_STATUS PrinterExecuteCommand(HDRIVER hdriver)
 
     if (0 == driver->tick_index % (MAIN_TIMER_FREQUENCY / COOLER_RESOLUTION_PER_SECOND))
     {
+        // manage nozzle cooler speed
         GPIO_PinState pin_state = PULSE_HandleTick(driver->cooler) ? GPIO_PIN_SET : GPIO_PIN_RESET;
         HAL_GPIO_WritePin(driver->cooler_port, driver->cooler_pin, pin_state);
     }
@@ -764,6 +807,7 @@ PRINTER_STATUS PrinterExecuteCommand(HDRIVER hdriver)
         driver->acceleration_distance += driver->acceleration_distance_increment;
     }
 
+    // do actual steps
     uint8_t state = driver->termo_regulators_state;
     for (uint8_t i = 0; i < MOTOR_COUNT; ++i)
     {
@@ -771,6 +815,7 @@ PRINTER_STATUS PrinterExecuteCommand(HDRIVER hdriver)
         state |= MOTOR_GetState(driver->motors[i]);
     }
 
+    // if all steps done and required temperature reached, move to the next command
     if (0 == state)
     {
         driver->last_command_status = GCODE_OK;
