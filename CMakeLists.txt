@@ -28,14 +28,13 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /WX")
 set(VERSION_MAJOR 0)
 set(VERSION_MINOR 0)
 
-
 add_compile_definitions(PRODUCT_VERSION="${VERSION_MAJOR}.${VERSION_MINOR}")
 
 # add sub-project
-add_subdirectory(${PROJECT_SOURCE_DIR}/device_mock)
-add_subdirectory(${PROJECT_SOURCE_DIR}/drivers)
-add_subdirectory(${PROJECT_SOURCE_DIR}/libraries)
-add_subdirectory(${PROJECT_SOURCE_DIR}/solutions)
-add_subdirectory(${PROJECT_SOURCE_DIR}/applications)
-add_subdirectory(${PROJECT_SOURCE_DIR}/3rd_party/fatfs)
-add_subdirectory(${PROJECT_SOURCE_DIR}/test)
+add_subdirectory(${PROJECT_SOURCE_DIR}/lib/drivers)
+add_subdirectory(${PROJECT_SOURCE_DIR}/lib/libraries)
+add_subdirectory(${PROJECT_SOURCE_DIR}/lib/printer)
+add_subdirectory(${PROJECT_SOURCE_DIR}/lib/fatfs)
+add_subdirectory(${PROJECT_SOURCE_DIR}/emulator/tests)
+add_subdirectory(${PROJECT_SOURCE_DIR}/emulator/tests/device_mock)
+add_subdirectory(${PROJECT_SOURCE_DIR}/emulator/applications)
