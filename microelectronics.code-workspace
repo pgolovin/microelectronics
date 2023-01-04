@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"memory.h": "c",
+			"math.h": "c",
+			"stdio.h": "c",
+			"ff.h": "c",
+			"main.h": "c",
+			"printer.h": "c",
+			"termal_regulator.h": "c",
+			"typeinfo": "c",
+			"sstream": "cpp"
+		}
+	}
+}
