@@ -93,7 +93,15 @@ void      MainLoop(HPRINTER hprinter);
 /// <param name="hprinter">Handle for the configured printer</param>
 void      OnTimer(HPRINTER hprinter);
 
-// TODO: move it to the private section.
+/// <summary>
+/// Updates termo regulator voltage values received from ADC.
+/// </summary>
+/// <param name="hprinter">Handle for the configured printer</param>
+/// <param name="regulator">Termo regulator ID. Nozzle or table</param>
+/// <param name="value">ADC value on this termo regulator</param>
+void      ReadADCValue(HPRINTER hprinter, TERMO_REGULATOR regulator, uint16_t value);
+
+////////// EMULATOR FUNCTIONS //////////
 /// <summary>
 /// Forwards touch action to the printer UI handler object
 /// </summary>
@@ -102,14 +110,11 @@ void      OnTimer(HPRINTER hprinter);
 /// <param name="y">Y touch coordinate</param>
 /// <param name="pressed">Touch state, is user pressed the touch or not</param>
 void      TrackAction(HPRINTER hprinter, uint16_t x, uint16_t y, bool pressed);
-
 /// <summary>
-/// Updates termo regulator voltage values received from ADC.
+/// Returns current acceleration timer power
 /// </summary>
 /// <param name="hprinter">Handle for the configured printer</param>
-/// <param name="regulator">Termo regulator ID. Nozzle or table</param>
-/// <param name="value">ADC value on this termo regulator</param>
-void      ReadADCValue(HPRINTER hprinter, TERMO_REGULATOR regulator, uint16_t value);
+uint8_t   GetTimerPower(HPRINTER hprinter);
 
 #ifdef __cplusplus
 }

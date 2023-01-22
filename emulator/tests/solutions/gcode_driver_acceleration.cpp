@@ -387,7 +387,6 @@ public:
         : PrinterEmulator(10000)
     {}
 protected:
-    const size_t acceleration_value = 60; // mm/sec^2
     const size_t steps_per_block = 100; // 1 mm per region
     const size_t fetch_speed = 1800; // 1 mm per region
     size_t commands_count = 0;
@@ -530,7 +529,6 @@ public:
         : PrinterEmulator(10000)
     {}
 protected:
-    const size_t acceleration_value = 60; // mm/sec^2
     const size_t steps_per_block = 100; // 1 mm per region
     size_t commands_count = 0;
     virtual void SetUp()
@@ -591,8 +589,7 @@ public:
         : PrinterEmulator(10000)
     {}
 protected:
-    const size_t acceleration_value = 60; // mm/sec^2
-    const size_t steps_per_block = 25; // 1 mm per region
+    const size_t steps_per_block = 400; // 1 mm per region
     size_t commands_count = 0;
     virtual void SetUp()
     {
@@ -609,38 +606,30 @@ protected:
         commands_count = commands.size();
 
         StartPrinting(commands, nullptr);
+        PrinterNextCommand(printer_driver);
     }
 };
 
 TEST_F(GCodeDriverAccelZTest, printer_accel_start)
 {
-    //accel = 60 => max velocity will be available after 5000 steps (0.5 sec);
-    PrinterNextCommand(printer_driver);
-    uint32_t cmd_index = 0;
     size_t steps = CompleteCommand(PrinterNextCommand(printer_driver));
-    ASSERT_GT(steps, CalculateStepsCount(600, steps_per_block, 400));
+    ASSERT_GT(steps, CalculateStepsCount(600, steps_per_block, axis_configuration.z_steps_per_mm));
 }
 
 TEST_F(GCodeDriverAccelZTest, printer_accel_middle)
 {
-    //accel = 60 => max velocity will be available after 5000 steps (0.5 sec);
-    PrinterNextCommand(printer_driver);
-    uint32_t cmd_index = 0;
     size_t steps_s = CompleteCommand(PrinterNextCommand(printer_driver));
     size_t steps_m = CompleteCommand(PrinterNextCommand(printer_driver));
-    ASSERT_GT(steps_m, CalculateStepsCount(600, steps_per_block, 400));
+    ASSERT_GE(steps_m, CalculateStepsCount(600, steps_per_block, axis_configuration.z_steps_per_mm));
     ASSERT_GT(steps_s, steps_m);
 }
 
 TEST_F(GCodeDriverAccelZTest, printer_accel_end)
 {
-    //accel = 60 => max velocity will be available after 5000 steps (0.5 sec);
-    PrinterNextCommand(printer_driver);
-    uint32_t cmd_index = 0;
     int32_t steps_s = CompleteCommand(PrinterNextCommand(printer_driver));
     int32_t steps_m = CompleteCommand(PrinterNextCommand(printer_driver));
     int32_t steps_e = CompleteCommand(PrinterNextCommand(printer_driver));
-    ASSERT_GT(steps_e, CalculateStepsCount(600, steps_per_block, 400));
+    ASSERT_GT(steps_e, CalculateStepsCount(600, steps_per_block, axis_configuration.z_steps_per_mm));
     ASSERT_GT(steps_e, steps_m);
     ASSERT_LT(abs(steps_s - steps_e), 100);
 }
@@ -652,7 +641,6 @@ public:
         : PrinterEmulator(10000)
     {}
 protected:
-    const size_t acceleration_value = 60; // mm/sec^2
     const size_t steps_per_block = 25; // 1 mm per region
     size_t commands_count = 0;
     virtual void SetUp()

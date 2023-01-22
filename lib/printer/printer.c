@@ -350,3 +350,8 @@ void ReadADCValue(HPRINTER hprinter, TERMO_REGULATOR regulator, uint16_t value)
     PrinterUpdateVoltageT(printer->driver, regulator, value);
 }
 
+uint8_t   GetTimerPower(HPRINTER hprinter)
+{
+    Printer* printer = (Printer*)hprinter;
+    return PrinterGetAccelTimerPower(printer->driver);
+}

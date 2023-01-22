@@ -645,8 +645,8 @@ INSTANTIATE_TEST_SUITE_P(
         SpeedTest{ "only_Y",    "G0 F2400 X0 Y120 Z0 E0",      PRINTER_OK,  375 }, // steps * 10000 * 60 / fetch
         SpeedTest{ "only_Z",    "G0 F300 X0 Y0 Z600 E0",       PRINTER_OK, 1500 }, 
         SpeedTest{ "only_E",    "G0 F600 X0 Y0 Z0 E600",       PRINTER_OK, 5769 },
-        SpeedTest{ "limit_X",   "G0 F7200 X600 Y0 Z0 E0",      PRINTER_OK,  600 }, // number of stepps cannot be less than required distance
-        SpeedTest{ "limit_Y",   "G0 F7200 X0 Y600 Z0 E0",      PRINTER_OK,  600 }, // number of stepps cannot be less than required distance
+        SpeedTest{ "limit_X",   "G0 F9000 X600 Y0 Z0 E0",      PRINTER_OK,  600 }, // number of stepps cannot be less than required distance
+        SpeedTest{ "limit_Y",   "G0 F9000 X0 Y600 Z0 E0",      PRINTER_OK,  600 }, // number of stepps cannot be less than required distance
         SpeedTest{ "limit_Z",   "G0 F5800 X0 Y0 Z600 E0",      PRINTER_OK,  600 }, // number of stepps cannot be less than required distance
         SpeedTest{ "limit_E",   "G0 F7200 X0 Y0 Z0 E600",      PRINTER_OK,  600 }, // number of stepps cannot be less than required distance
         SpeedTest{ "XYgtE",     "G1 F1800 X300 Y400 Z0 E600",  PRINTER_OK, 2083 },

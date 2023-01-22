@@ -107,7 +107,7 @@ int main(int argc, char** argv)
     ofn.hwndOwner = nullptr;
     ofn.lpstrFile = szFile;
     ofn.nMaxFile = sizeof(szFile);
-    ofn.lpstrFilter = _T("All\0*.*\0GCode\0*.gcode\0");
+    ofn.lpstrFilter = _T("GCode\0*.gcode\0");
     ofn.nFilterIndex = 1;
     ofn.lpstrFileTitle = NULL;
     ofn.nMaxFileTitle = 0;
@@ -223,9 +223,12 @@ int main(int argc, char** argv)
             uint32_t step = 0;
             device.ResetPinGPIOCounters(X_ENG_STEP_GPIO_Port, 0);
             device.ResetPinGPIOCounters(Y_ENG_STEP_GPIO_Port, 0);
+            device.ResetPinGPIOCounters(Z_ENG_STEP_GPIO_Port, 0);
             LARGE_INTEGER freq = {0};
             QueryPerformanceFrequency(&freq);
-            freq.QuadPart /= 100000;
+            //Calculate tick duration. For real printer it is 1/10000th of second 
+            freq.QuadPart /= 10000;
+
             while (printer_ui.IsRunning())
             {
                 ++step;

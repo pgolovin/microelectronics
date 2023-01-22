@@ -221,6 +221,13 @@ GCodeCommandParams* PrinterGetCurrentPath(HDRIVER hdriver);
 /// <returns>Fetch speed and position in motor steps</returns>
 GCodeCommandParams* PrinterGetCurrentPosition(HDRIVER hdriver);
 
+/// <summary>
+/// Test function. Returns current acceleration timer value
+/// </summary>
+/// <param name="hdriver">Handle on the valid printing driver</param>
+/// <returns>Current power of accelerator pulse engine</returns>
+uint8_t PrinterGetAccelTimerPower(HDRIVER hdriver);
+
 #ifdef __cplusplus
 }
 #endif
