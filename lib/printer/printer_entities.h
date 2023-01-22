@@ -112,7 +112,11 @@ typedef struct
 
 // Length of constant velocity during acceleration. 
 // Acceleration represents speed ledder, with constant segments
-#define STANDARD_ACCELERATION_SEGMENT 50U
+#define STANDARD_ACCELERATION_SEGMENT 50
+
+// Minimal velocity between 2 regions of printing.
+// the value is set in mm/min, the same units as gcode fetch_speed
+#define MINIMAL_VELOCITY 300
 
 // Frequency of main timer. The value corresponds to the max frequency of the TMC driver
 // Which is equal to 10000 tacts per second

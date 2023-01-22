@@ -78,13 +78,13 @@ typedef struct
     PRINTER_ACCELERATION acceleration_enabled;
     HPULSE    accelerator;
     uint8_t   acceleration_tick;
-    uint8_t   acceleration_region;
-    uint32_t  acceleration_segments; // not sure that it is possible to have more than 256 acceleration segments
+    uint32_t  acceleration_region;
+    uint32_t  acceleration_segments;
     int8_t    acceleration_region_increment;
     uint32_t  acceleration_distance;
     uint8_t   acceleration_distance_increment;
     uint32_t  acceleration_subsequent_region_length;
-    uint32_t  acceleration_regions_count;
+    uint32_t  acceleration_region_commands;
 
     MaterialFile *material_override;
     // Heaters: nozzle and table
@@ -109,7 +109,7 @@ static inline uint32_t compareTimeWithSpeedLimit(int32_t signed_segment, uint32_
     }
 
     // check if we reached speed limit: amount of steps required to reach destination lower than amount of requested steps 
-    if (driver->current_segment.fetch_speed && (MAIN_TIMER_FREQUENCY * SECONDS_IN_MINUTE) / (resolution * driver->current_segment.fetch_speed) > 1)
+    if (driver->current_segment.fetch_speed && (float)(MAIN_TIMER_FREQUENCY * SECONDS_IN_MINUTE) / (float)(resolution * driver->current_segment.fetch_speed) > 1)
     {
         segment = segment * ((float)(MAIN_TIMER_FREQUENCY * SECONDS_IN_MINUTE) / (float)(resolution * driver->current_segment.fetch_speed));
     }
@@ -231,7 +231,7 @@ static void calculateAccelRegion(Driver* driver, uint32_t initial_region)
         last_segment.z = segment.z;
 
         driver->acceleration_subsequent_region_length += calculateTime(driver, &segment);
-        ++driver->acceleration_regions_count;
+        ++driver->acceleration_region_commands;
 
         last_position = *parameters;
     }
@@ -274,24 +274,36 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hdriver)
     {
         driver->last_command_status = GCODE_INCOMPLETE;
 
-        if (driver->acceleration_enabled && !driver->acceleration_subsequent_region_length)
+        if (driver->acceleration_enabled && !driver->acceleration_region_commands)
         {
             // at least one command form this acceleration region
-            driver->acceleration_regions_count = 1;
+            driver->acceleration_region_commands = 1;
             // calculate length of contignous acceleration region by looking for segments with big angles, or another command
             calculateAccelRegion(driver, time);
 
-            parameterType fetch_speed = driver->current_segment.fetch_speed / SECONDS_IN_MINUTE;
-            uint32_t acceleration_time = MAIN_TIMER_FREQUENCY * fetch_speed / STANDARD_ACCELERATION;
+            parameterType fetch_speed_delta = (driver->current_segment.fetch_speed - MINIMAL_VELOCITY) / SECONDS_IN_MINUTE;
+            parameterType base_velocity = MINIMAL_VELOCITY / SECONDS_IN_MINUTE;
+            // if velocity is small assume that acceleration is required from 0 
+            // this is Z and E cases
+            if (fetch_speed_delta <= 0)
+            {
+                fetch_speed_delta = driver->current_segment.fetch_speed / SECONDS_IN_MINUTE;
+                base_velocity = 0;
+            }
+
+            uint32_t acceleration_time = MAIN_TIMER_FREQUENCY * fetch_speed_delta / STANDARD_ACCELERATION;
+
+            const uint32_t base_velocity_acceleration_time = MAIN_TIMER_FREQUENCY * base_velocity / STANDARD_ACCELERATION;
             
-            // number of segments required to get full speed;
-            driver->acceleration_segments = acceleration_time / STANDARD_ACCELERATION_SEGMENT;
+            // number of segments required to get the full speed;
+            driver->acceleration_segments = (base_velocity_acceleration_time + acceleration_time) / STANDARD_ACCELERATION_SEGMENT;
             driver->acceleration_tick = 0;
 
             driver->acceleration_distance = 0;
             driver->acceleration_distance_increment = 1;
 
-            driver->acceleration_region = 1;
+            //Tricky thing. here we start not from 1/50th of max speed but from 1/10th
+            driver->acceleration_region = base_velocity_acceleration_time / STANDARD_ACCELERATION_SEGMENT + 1;
             driver->acceleration_region_increment = 1;
 
             PULSE_SetPower(driver->accelerator, driver->acceleration_region);
@@ -467,6 +479,8 @@ HDRIVER PrinterConfigure(DriverConfig* printer_cfg)
     driver->acceleration_enabled = printer_cfg->acceleration_enabled;
     driver->accelerator = PULSE_Configure(PULSE_HIGHER);
     driver->acceleration_subsequent_region_length = 0;
+    driver->acceleration_region                   = 0;
+    driver->acceleration_segments                 = 0;
     
     // configures table restrictions
     driver->axis_cfg = printer_cfg->axis_configuration;
@@ -555,20 +569,22 @@ PRINTER_STATUS PrinterPrintFromBuffer(HDRIVER hdriver, const uint8_t* command_st
         return PRINTER_INVALID_PARAMETER;
     }
 
-    driver->main_load_page = MAIN_COMMANDS_PAGE;
-    driver->secondary_load_page = PRELOAD_COMMANDS_PAGE;
+    driver->main_load_page                  = MAIN_COMMANDS_PAGE;
+    driver->secondary_load_page             = PRELOAD_COMMANDS_PAGE;
 
-    driver->resume = false;
-    driver->material_override = 0;
-    driver->service_state = *driver->active_state;
-    driver->active_state = &driver->service_state;
+    driver->resume                          = false;
+    driver->material_override               = 0;
+    driver->service_state                   = *driver->active_state;
+    driver->active_state                    = &driver->service_state;
 
-    driver->active_state->position.e = 0;
-    driver->active_state->current_command = 0;
-    driver->active_state->caret_position = 0;
-    driver->commands_count = commands_count;
-    driver->data_pointer = command_stream;
-    driver->pre_load_required = false;
+    driver->active_state->position.e        = 0;
+    driver->active_state->current_command   = 0;
+    driver->active_state->caret_position    = 0;
+    driver->commands_count                  = commands_count;
+    driver->data_pointer                    = command_stream;
+    driver->pre_load_required               = false;
+    driver->acceleration_region_commands    = 0;
+    driver->acceleration_region             = 0;
 
     PULSE_SetPower(driver->accelerator, STANDARD_ACCELERATION_SEGMENT);
 
@@ -604,7 +620,8 @@ PRINTER_STATUS PrinterPrintFromCache(HDRIVER hdriver, MaterialFile * material_ov
     driver->active_state->caret_position  *= mode;
     driver->active_state->current_sector   = control_block.file_sector + mode * (driver->active_state->current_sector - control_block.file_sector);
     driver->commands_count                 = control_block.commands_count - driver->active_state->current_command;
-
+    driver->acceleration_region_commands   = 0;
+    driver->acceleration_region            = 0;
     // in case of print resume we should first restore temperatures
     if (mode)
     {
@@ -668,7 +685,7 @@ uint32_t PrinterGetAccelerationRegion(HDRIVER hdriver)
 uint32_t PrinterGetAccelerationRegionsCount(HDRIVER hdriver)
 {
     Driver* driver = (Driver*)hdriver;
-    return driver->acceleration_regions_count;
+    return driver->acceleration_region_commands;
 }
 
 GCodeCommandParams* PrinterGetCurrentPath(HDRIVER hdriver)
@@ -690,7 +707,7 @@ PRINTER_STATUS PrinterNextCommand(HDRIVER hdriver)
     {
         return  driver->last_command_status;
     }
-    if (SDCARD_BUSY == SDCARD_GetStatus(driver->storage) && 0 == driver->acceleration_regions_count)
+    if (SDCARD_BUSY == SDCARD_GetStatus(driver->storage) && 0 == driver->acceleration_region_commands)
     {
         return PRINTER_SKIP;
     }
@@ -721,9 +738,9 @@ PRINTER_STATUS PrinterNextCommand(HDRIVER hdriver)
         // execute the next command
         ++driver->active_state->current_command;
 
-        if (driver->acceleration_regions_count)
+        if (driver->acceleration_region_commands)
         {
-            --driver->acceleration_regions_count;
+            --driver->acceleration_region_commands;
         }
 
         driver->last_command_status = GC_ExecuteFromBuffer(&driver->setup_calls, driver, driver->data_pointer + (size_t)(GCODE_CHUNK_SIZE * driver->active_state->caret_position));
@@ -767,6 +784,12 @@ uint8_t PrinterGetCoolerSpeed(HDRIVER hdriver)
     return (uint8_t)PULSE_GetPower(driver->cooler);
 }
 
+uint8_t PrinterGetAccelTimerPower(HDRIVER hdriver)
+{
+    Driver* driver = (Driver*)hdriver;
+    return PULSE_GetPower(driver->accelerator);
+}
+
 PRINTER_STATUS PrinterExecuteCommand(HDRIVER hdriver)
 {
     Driver* driver = (Driver*)hdriver;
@@ -797,14 +820,15 @@ PRINTER_STATUS PrinterExecuteCommand(HDRIVER hdriver)
 
     // Acceleration region is on a both sides of subsequent regions
     // Length of braking region is calculated and equal to acceleration region
-    if ((driver->acceleration_enabled) &&
+    if ((driver->acceleration_enabled) && (driver->acceleration_segments) &&
         ((driver->acceleration_region < driver->acceleration_segments) ||
-        (driver->acceleration_subsequent_region_length <= driver->acceleration_distance)))
+        (driver->acceleration_subsequent_region_length <= (driver->acceleration_distance - 1))))
     {
         // Reaching apogee point in a middle of acceleration lead to revert of steps count an acceleration, 
         // This gave symetric picture of acceleration/braking pair. but dufference can be in 1 segment, due to 
         // Non symmetrical directions of signals in the pulse_engine.
-        if (driver->acceleration_distance - driver->acceleration_subsequent_region_length < 2 && driver->acceleration_distance_increment)
+        if (driver->acceleration_distance > driver->acceleration_subsequent_region_length && 
+            driver->acceleration_distance_increment)
         {
             driver->acceleration_region_increment = -1;
             driver->acceleration_tick = STANDARD_ACCELERATION_SEGMENT - driver->acceleration_tick;
@@ -814,13 +838,19 @@ PRINTER_STATUS PrinterExecuteCommand(HDRIVER hdriver)
         ++driver->acceleration_tick;
         if (STANDARD_ACCELERATION_SEGMENT <= driver->acceleration_tick)
         {
+            //FIXME: 
+            // hmm, after all steps are passed 1 step remains on power lower than minimal requested
+            // need to understand why is this +1 happened...
             driver->acceleration_tick = 0;
-            driver->acceleration_region += driver->acceleration_region_increment;
-            // Mistake in 1 step, that can happen due to non-symmetrics signals, might lead to
-            // zeroeing power, and 0.1 seconds of motors idling
             if (driver->acceleration_region)
             {
-                PULSE_SetPower(driver->accelerator, driver->acceleration_region);
+                driver->acceleration_region += driver->acceleration_region_increment;
+                uint32_t acceleration_power = (driver->acceleration_region * STANDARD_ACCELERATION_SEGMENT)/driver->acceleration_segments;
+                if (0 == acceleration_power)
+                {
+                    acceleration_power = 1;
+                }
+                PULSE_SetPower(driver->accelerator, acceleration_power);
             }
         }
 

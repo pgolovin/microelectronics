@@ -67,6 +67,25 @@ extern TIM_HandleTypeDef htim3;
 /* USER CODE BEGIN EV */
 extern uint32_t g_error_code;
 extern Application g_app;
+
+void PrecessFault()
+{
+  //disable heaters on fault.
+  HAL_GPIO_WritePin(NOZZLE_HEAT_RELEY_GPIO_Port, NOZZLE_HEAT_RELEY_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(TABLE_HEAT_RELEY_GPIO_Port, TABLE_HEAT_RELEY_Pin, GPIO_PIN_RESET);
+
+  DISPLAY_Print(g_app.hdisplay, trace[0]);
+  DISPLAY_Print(g_app.hdisplay, trace[1]);
+
+  while (1)
+  {
+    /* USER CODE BEGIN W1_HardFault_IRQn 0 */
+    HAL_GPIO_TogglePin(FAIL_INDICATOR_LED_GPIO_Port, FAIL_INDICATOR_LED_Pin);
+    HAL_Delay(500);
+    /* USER CODE END W1_HardFault_IRQn 0 */
+  }
+}
+
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -92,22 +111,14 @@ void NMI_Handler(void)
   */
 void HardFault_Handler(void)
 {
-  /* USER CODE BEGIN HardFault_IRQn 0 */
-  //disable heaters on fault.
-  HAL_GPIO_WritePin(NOZZLE_HEAT_RELEY_GPIO_Port, NOZZLE_HEAT_RELEY_Pin, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(TABLE_HEAT_RELEY_GPIO_Port, TABLE_HEAT_RELEY_Pin, GPIO_PIN_RESET);
-
-  DISPLAY_Print(g_app.hdisplay, trace[0]);
-  DISPLAY_Print(g_app.hdisplay, trace[1]);
-
-  /* USER CODE END HardFault_IRQn 0 */
+   /* USER CODE BEGIN W1_HardFault_IRQn 0 */
+  PrecessFault();
+  /* USER CODE END W1_HardFault_IRQn 0 */
+  /* USER CODE BEGIN W1_HardFault_IRQn 1 */
   while (1)
   {
-    /* USER CODE BEGIN W1_HardFault_IRQn 0 */
-    HAL_GPIO_TogglePin(FAIL_INDICATOR_LED_GPIO_Port, FAIL_INDICATOR_LED_Pin);
-    HAL_Delay(500);
-    /* USER CODE END W1_HardFault_IRQn 0 */
   }
+  /* USER CODE END W1_HardFault_IRQn 1 */
 }
 
 /**
@@ -116,7 +127,7 @@ void HardFault_Handler(void)
 void MemManage_Handler(void)
 {
   /* USER CODE BEGIN MemoryManagement_IRQn 0 */
-
+  PrecessFault();
   /* USER CODE END MemoryManagement_IRQn 0 */
   while (1)
   {
@@ -131,7 +142,7 @@ void MemManage_Handler(void)
 void BusFault_Handler(void)
 {
   /* USER CODE BEGIN BusFault_IRQn 0 */
-
+  PrecessFault();
   /* USER CODE END BusFault_IRQn 0 */
   while (1)
   {
@@ -146,7 +157,7 @@ void BusFault_Handler(void)
 void UsageFault_Handler(void)
 {
   /* USER CODE BEGIN UsageFault_IRQn 0 */
-
+  PrecessFault();
   /* USER CODE END UsageFault_IRQn 0 */
   while (1)
   {
