@@ -69,14 +69,14 @@ The library that can be used independently for any other STM projects. The libra
 The library can be used independently from the project, the library is not require any specific HW, and can be linked to any project. The main purpose of the library is to simplify work with HW components of 3D printer. Main components of the library:
 * GCode parser. The library provides functionality to compile validate and compress text GCode into the binary format
 * UI library. Lightweight UI library supports different set of User controls to simplify work with touch based interfaces. It provides flexibility to customize appearance of the controls, color, text size and color. Supports the next controls:
-    * Frame: Window like area - continer for other controls
+    * Frame: Window like area - container for other controls
     * Button: simple button with user action callback
     * Indicator: small indicator with text and active/inactive state
     * Label: short label with text, can be used as a window names or to output short messages    
 ![UI Library screenshot](docs/images/UIlibrary.png)
 
 ## [Tests and mocks](emulator/tests)
-GCode based tests for validation of SW part of the printer and its component library. The tests covers almost all functionality of the printer. The parts that cannot be covered by this tests are mocked. Test set includes Unit and Integration test for all software compoents.   
+GTest based tests for validation of SW part of the printer and its component library. The tests covers almost all functionality of the printer. The parts that cannot be covered by this tests are mocked. Test set includes Unit and Integration test for all software compoents.   
 
 Mock library contains the following HW simulatied components:
 * Basic components of STM. The component allows to check correctnes of produced signals on its pins, and amount of dynamically allocated memory
