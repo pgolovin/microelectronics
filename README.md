@@ -12,7 +12,7 @@ Homemade 3D Printer firmware based on STM chip with limited ability for customiz
    * CommandsCompiler - Standalone compiler of G-Code commands to check correctness of compilation or create binary buffer that can be used by printer firmware. (not used)
    
 ## [3D Printer Firmware](lib/printer)
-The simple #d printer firmware implemented for STM32 processor. can be found
+The simple 3d printer firmware implemented for STM32 processor.
 ### Construction:
 The printer contains different components working together to provide stable and accurate printing. Printer operates without external connection to any PC/Laptop. All commands and models provided through SDCard. The configuration and interaction with user is done using ILI9341 display with touch. UI library supports different set of components that used in forming printer UI.  
 
