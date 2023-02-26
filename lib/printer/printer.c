@@ -133,6 +133,7 @@ HPRINTER Configure(PrinterConfiguration* cfg)
         cfg->storages[STORAGE_INTERNAL], 
         &cfg->memory_manager, 
         printer->interpreter, 
+        0,
         &cfg->file_handle, 
         printer);
     

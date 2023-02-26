@@ -125,6 +125,7 @@ GCODE_COMMAND_STATE     GC_ExecuteFromBuffer(GCodeFunctionList* functions, void*
 parameterType           GC_GetCurrentCommandCode(HGCODE hcode);
 GCodeCommandParams*     GC_GetCurrentCommand(HGCODE hcode);
 GCodeSubCommandParams*  GC_GetCurrentSubCommand(HGCODE hcode);
+GCodeAxisConfig*        GC_GetAxisConfig(HGCODE hcode);
 
 #ifdef __cplusplus
 }

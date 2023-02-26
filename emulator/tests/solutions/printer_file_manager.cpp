@@ -19,7 +19,7 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_ram)
     FIL f;
     HGCODE gc = GC_Configure(&axis_configuration, 0);
 
-    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), 0, &mem, gc, &f, nullptr));
+    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), 0, &mem, gc, nullptr, &f, nullptr));
 }
 
 TEST(GCodeFileConverterBasicTest, cannot_create_without_card)
@@ -32,7 +32,7 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_card)
     FIL f;
     HGCODE gc = GC_Configure(&axis_configuration, 0);
 
-    ASSERT_TRUE(nullptr == FileManagerConfigure(0, (HSDCARD)(&card), &mem, gc, &f, nullptr));
+    ASSERT_TRUE(nullptr == FileManagerConfigure(0, (HSDCARD)(&card), &mem, gc, nullptr, &f, nullptr));
 }
 
 TEST(GCodeFileConverterBasicTest, cannot_create_without_memory)
@@ -44,7 +44,7 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_memory)
     FIL f;
     HGCODE gc = GC_Configure(&axis_configuration, 0);
 
-    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), 0, gc, &f, nullptr));
+    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), 0, gc, nullptr, &f, nullptr));
 }
 
 TEST(GCodeFileConverterBasicTest, cannot_create_without_interpreter)
@@ -56,7 +56,7 @@ TEST(GCodeFileConverterBasicTest, cannot_create_without_interpreter)
     MemoryManager mem;
     FIL f;
 
-    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), &mem, 0, &f, nullptr));
+    ASSERT_TRUE(nullptr == FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), &mem, 0, nullptr, &f, nullptr));
 }
 
 TEST(GCodeFileConverterBasicTest, can_create)
@@ -69,7 +69,7 @@ TEST(GCodeFileConverterBasicTest, can_create)
     FIL f;
     HGCODE gc = GC_Configure(&axis_configuration, 0);
 
-    ASSERT_TRUE(nullptr != FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), &mem, gc, &f, nullptr));
+    ASSERT_TRUE(nullptr != FileManagerConfigure((HSDCARD)(&card), (HSDCARD)(&card), &mem, gc, nullptr, &f, nullptr));
 }
 
 class GCodeFileConverterTest : public ::testing::Test
@@ -86,7 +86,7 @@ protected:
 
         m_gc = GC_Configure(&axis_configuration, 0);
 
-        m_file_manager = FileManagerConfigure((HSDCARD)m_sdcard.get(), (HSDCARD)m_ram.get(), &m_memory_manager, m_gc, m_f.get(), nullptr);
+        m_file_manager = FileManagerConfigure((HSDCARD)m_sdcard.get(), (HSDCARD)m_ram.get(), &m_memory_manager, m_gc, nullptr, m_f.get(), nullptr);
     }
 
     virtual void TearDown()

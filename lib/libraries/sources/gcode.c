@@ -299,6 +299,12 @@ GCodeSubCommandParams* GC_GetCurrentSubCommand(HGCODE hcode)
     return 0;
 }
 
+GCodeAxisConfig* GC_GetAxisConfig(HGCODE hcode)
+{
+    GCode* gcode = (GCode*)hcode;
+    return &gcode->cfg;
+}
+
 uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
 {
     GCode* gcode = (GCode*)hcode;

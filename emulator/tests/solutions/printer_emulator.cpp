@@ -38,6 +38,8 @@ void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERA
     device = std::make_unique<Device>(ds);
     AttachDevice(*device);
 
+    external_config = axis_config;
+
     //extruder engine starts extrusion and the start of the segment, to avoid gaps in the printing
     MotorConfig motor[MOTOR_COUNT] = 
     {
@@ -65,8 +67,7 @@ void PrinterEmulator::SetupPrinter(GCodeAxisConfig axis_config, PRINTER_ACCELERA
     MemoryManagerConfigure(&m_memory);
 
     RegisterSDCard();
-
-    external_config = axis_config;
+    
     DriverConfig cfg = { &m_memory, m_storage.get(),
         m_motors,
         m_regulators,
@@ -119,7 +120,7 @@ void PrinterEmulator::RegisterSDCard()
 {
     InsertSDCARD(m_sdcard.get());
     m_gc = GC_Configure(&axis, 0);
-    m_file_manager = FileManagerConfigure(m_sdcard.get(), m_storage.get(), &m_memory, m_gc, &m_f, 0);
+    m_file_manager = FileManagerConfigure(m_sdcard.get(), m_storage.get(), &m_memory, m_gc, &external_config, &m_f, 0);
 }
 
 void PrinterEmulator::StartPrinting(const std::vector<std::string>& commands, MaterialFile* material_override)
