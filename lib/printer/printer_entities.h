@@ -131,6 +131,19 @@ typedef struct
 // if connection cannot be restored by this number of attempts overall execution will be stopped
 #define SDCARD_READ_FAIL_ATTEMPTS 10
 
+// to keep gcode parser as it is, will reconstruct command parameters at the moment of storing
+// them in the internal storage
+// max structure size should be 32B.
+
+#pragma pack(push, 1)
+typedef struct 
+{
+    GCodeCommandParams g;           // original g code parameters. the structure valid only for commands
+    uint32_t      segment_time;     // time to complete the segment
+    uint32_t      sequence_time;    // time to complete the whole acceleration sequence. 0 for intermediate segments
+} ExtendedGCodeCommandParams;
+#pragma pack(pop)
+
 // Printer error codes
 enum PRINTER_STATUS_Type
 {

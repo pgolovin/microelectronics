@@ -201,13 +201,6 @@ uint8_t PrinterGetCoolerSpeed(HDRIVER hdriver);
 uint32_t PrinterGetAccelerationRegion(HDRIVER hdriver);
 
 /// <summary>
-/// Test command. Returns number of commands that forms acceleration region
-/// </summary>
-/// <param name="hdriver">Handle on the valid printing driver</param>
-/// <returns>Length of acceleration region in number of commands</returns>
-uint32_t PrinterGetAccelerationRegionsCount(HDRIVER hdriver);
-
-/// <summary>
 /// Test function. Returns length of current printing segment defined by the last command
 /// </summary>
 /// <param name="hdriver">Handle on the valid printing driver</param>

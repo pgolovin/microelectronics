@@ -1,5 +1,6 @@
 #include "printer_gcode_driver.h"
 #include "printer_entities.h"
+#include "printer_math.h"
 #include "include/motor.h"
 #include "include/memory.h"
 #include <math.h>
@@ -84,7 +85,6 @@ typedef struct
     uint32_t  acceleration_distance;
     uint8_t   acceleration_distance_increment;
     uint32_t  acceleration_subsequent_region_length;
-    uint32_t  acceleration_region_commands;
 
     MaterialFile *material_override;
     // Heaters: nozzle and table
@@ -98,38 +98,6 @@ typedef struct
 
     FIL* log_file;
 } Driver;
-
-static inline uint32_t compareTimeWithSpeedLimit(int32_t signed_segment, uint32_t time, uint16_t resolution, Driver* driver)
-{
-    uint32_t segment = signed_segment;
-    // distance in time is always positive
-    if (signed_segment < 0)
-    {
-        segment = (uint32_t)(-signed_segment);
-    }
-
-    // check if we reached speed limit: amount of steps required to reach destination lower than amount of requested steps 
-    if (driver->current_segment.fetch_speed && (float)(MAIN_TIMER_FREQUENCY * SECONDS_IN_MINUTE) / (float)(resolution * driver->current_segment.fetch_speed) > 1)
-    {
-        segment = segment * ((float)(MAIN_TIMER_FREQUENCY * SECONDS_IN_MINUTE) / (float)(resolution * driver->current_segment.fetch_speed));
-    }
-    // return the longest distance
-    return segment > time ? segment : time;
-}
-
-static inline uint32_t calculateTime(Driver* driver, GCodeCommandParams* segment)
-{
-    // calculate max time required to complete the current command
-    uint32_t time = compareTimeWithSpeedLimit((int32_t)(sqrt((double)segment->x * segment->x + (double)segment->y * segment->y) + 0.5), 0U, driver->axis_cfg->x_steps_per_mm, driver);
-    time = compareTimeWithSpeedLimit(segment->z, time, driver->axis_cfg->z_steps_per_mm, driver);
-    time = compareTimeWithSpeedLimit(segment->e, time, driver->axis_cfg->e_steps_per_mm, driver);
-    return time;
-}
-
-static inline double dot(const GCodeCommandParams* vector1, const GCodeCommandParams* vector2)
-{
-    return (double)vector1->x * vector2->x + (double)vector1->y * vector2->y + (double)vector1->z * vector2->z;
-}
 
 static PRINTER_STATUS restoreState(Driver* driver)
 {
@@ -147,101 +115,14 @@ static PRINTER_STATUS restoreState(Driver* driver)
     return PRINTER_OK;
 }
 
-/// <summary>
-/// Calculate the length of the segment that driver will do with a constant speed
-/// On the beginning and the end of the region head will accelerate to prevent nozzle oscillations
-/// </summary>
-/// <param name="driver">Pointer to driver data</param>
-/// <param name="initial_region">Length of the current printing region</param>
 
-static void calculateAccelRegion(Driver* driver, uint32_t initial_region)
-{
-    driver->acceleration_subsequent_region_length = initial_region;
-
-    // looking for the different command or fetch speed
-    uint32_t current_caret = driver->active_state->caret_position + 1;
-    GCODE_COMMAND_LIST command_id = GCODE_MOVE;
-    uint8_t* data_block = driver->memory->pages[driver->main_load_page];
-
-    GCodeCommandParams last_segment = driver->current_segment;
-    GCodeCommandParams last_position = driver->active_state->position;
-
-    const uint32_t commands_per_block = SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE;
-    uint32_t sector = driver->active_state->current_sector;
-    // scan for the closest segment with big angle or different command, for this scan commands in cache before we find
-    // the first one that will close contignuous region
-    for (uint32_t i = 0; i < driver->commands_count; ++i)
-    {
-        if (current_caret == commands_per_block)
-        {
-            SDCARD_Status status = SDCARD_OK;
-            uint8_t fail_count = 0;
-            do
-            {
-                status = SDCARD_ReadSingleBlock(driver->storage, driver->memory->pages[LOOKUP_COMMANDS_PAGE], ++sector);
-                if (SDCARD_OK != status)
-                {
-                    // try to read data from SDCARD, if operation failes, will try to restore connection to the cars, if it fails
-                    // contignuous region will be closed
-                    ++fail_count;
-                    SDCARD_Init(driver->storage);
-                    SDCARD_ReadBlocksNumber(driver->storage);
-                    if (SDCARD_READ_FAIL_ATTEMPTS == fail_count)
-                    {
-                        return;
-                    }
-                }
-            }
-            while (SDCARD_OK != status);
-
-            data_block = driver->memory->pages[LOOKUP_COMMANDS_PAGE];
-            current_caret = 0;
-        }
-
-        GCodeCommandParams* parameters = GC_DecompileFromBuffer(data_block + (size_t)(GCODE_CHUNK_SIZE * current_caret), &command_id);
-        ++current_caret;
-        // get the next chunk of commands to continue calculation of accelerated sector size;
-
-        if (!parameters ||
-            driver->current_segment.fetch_speed != parameters->fetch_speed ||
-            command_id != GCODE_MOVE)
-        {
-            return;
-        }
-
-        GCodeCommandParams segment = { parameters->x - last_position.x, parameters->y - last_position.y, parameters->z - last_position.z };
-
-        double scalar_mul  = dot(&segment, &last_segment);
-        double last_length = dot(&last_segment, &last_segment);
-        double length      = dot(&segment, &segment);
-
-        if (0.000001 > length * last_length)
-        {
-            // zero division guard
-            return;
-        }
-
-        if (scalar_mul / sqrt(last_length * length) < CONTINUOUS_SEGMENT_COS)
-        {
-            return;
-        }
-
-        last_segment.x = segment.x;
-        last_segment.y = segment.y;
-        last_segment.z = segment.z;
-
-        driver->acceleration_subsequent_region_length += calculateTime(driver, &segment);
-        ++driver->acceleration_region_commands;
-
-        last_position = *parameters;
-    }
-}
 
 // setup commands
 static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hdriver)
 {
     Driver* driver = (Driver*)hdriver;
-    if (params->fetch_speed <= 0)
+    ExtendedGCodeCommandParams* segment_data = params;
+    if (segment_data->g.fetch_speed <= 0)
     {
         return GCODE_ERROR_INVALID_PARAM;
     }
@@ -263,7 +144,12 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hdriver)
     driver->last_command_status = GCODE_OK;
 
     // basic fetch speed is calculated as velocity of the head, without velocity of the table, it is calculated independently.
-    uint32_t time = calculateTime(driver, &driver->current_segment);
+    uint32_t time = segment_data->segment_time;
+    if (0 == time)
+    {
+        // initial and configuration segments doesn't have time precalculated. so calculate it;
+        time = CalculateTime(driver->axis_cfg, &driver->current_segment);
+    }
     // program motors to performa requested amount of steps using max time segment
     MOTOR_SetProgram(driver->motors[MOTOR_X], time, driver->current_segment.x);
     MOTOR_SetProgram(driver->motors[MOTOR_Y], time, driver->current_segment.y);
@@ -274,12 +160,11 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hdriver)
     {
         driver->last_command_status = GCODE_INCOMPLETE;
 
-        if (driver->acceleration_enabled && !driver->acceleration_region_commands)
+        if (driver->acceleration_enabled && segment_data->sequence_time)
         {
             // at least one command form this acceleration region
-            driver->acceleration_region_commands = 1;
             // calculate length of contignous acceleration region by looking for segments with big angles, or another command
-            calculateAccelRegion(driver, time);
+            driver->acceleration_subsequent_region_length = segment_data->sequence_time;
 
             parameterType fetch_speed_delta = (driver->current_segment.fetch_speed - MINIMAL_VELOCITY) / SECONDS_IN_MINUTE;
             parameterType base_velocity = MINIMAL_VELOCITY / SECONDS_IN_MINUTE;
@@ -316,8 +201,8 @@ static GCODE_COMMAND_STATE setupMove(GCodeCommandParams* params, void* hdriver)
 static GCODE_COMMAND_STATE setupHome(GCodeCommandParams* params, void* hdriver)
 {
     // command home is the same as move, but it uses constant fetch speed that defined here
-    GCodeCommandParams home_params = *params;
-    home_params.fetch_speed = 1800;
+    ExtendedGCodeCommandParams home_params = *((ExtendedGCodeCommandParams*)params);
+    home_params.g.fetch_speed = 1800;
     GCODE_COMMAND_STATE state = setupMove(&home_params, hdriver);
     return state;
 }
@@ -583,7 +468,6 @@ PRINTER_STATUS PrinterPrintFromBuffer(HDRIVER hdriver, const uint8_t* command_st
     driver->commands_count                  = commands_count;
     driver->data_pointer                    = command_stream;
     driver->pre_load_required               = false;
-    driver->acceleration_region_commands    = 0;
     driver->acceleration_region             = 0;
 
     PULSE_SetPower(driver->accelerator, STANDARD_ACCELERATION_SEGMENT);
@@ -620,7 +504,6 @@ PRINTER_STATUS PrinterPrintFromCache(HDRIVER hdriver, MaterialFile * material_ov
     driver->active_state->caret_position  *= mode;
     driver->active_state->current_sector   = control_block.file_sector + mode * (driver->active_state->current_sector - control_block.file_sector);
     driver->commands_count                 = control_block.commands_count - driver->active_state->current_command;
-    driver->acceleration_region_commands   = 0;
     driver->acceleration_region            = 0;
     // in case of print resume we should first restore temperatures
     if (mode)
@@ -682,12 +565,6 @@ uint32_t PrinterGetAccelerationRegion(HDRIVER hdriver)
     return driver->acceleration_subsequent_region_length;
 }
 
-uint32_t PrinterGetAccelerationRegionsCount(HDRIVER hdriver)
-{
-    Driver* driver = (Driver*)hdriver;
-    return driver->acceleration_region_commands;
-}
-
 GCodeCommandParams* PrinterGetCurrentPath(HDRIVER hdriver)
 {
     Driver* driver = (Driver*)hdriver;
@@ -707,10 +584,6 @@ PRINTER_STATUS PrinterNextCommand(HDRIVER hdriver)
     {
         return  driver->last_command_status;
     }
-    if (SDCARD_BUSY == SDCARD_GetStatus(driver->storage) && 0 == driver->acceleration_region_commands)
-    {
-        return PRINTER_SKIP;
-    }
     driver->last_command_status = PRINTER_FINISHED;
 
 #ifndef FIRMWARE
@@ -720,7 +593,15 @@ PRINTER_STATUS PrinterNextCommand(HDRIVER hdriver)
         // we should do this in absolute coordinates
         // this is ugly block but it cannot be done via GCode commands, otherwise M24 leads to deadlock
         // beacuse it calls itself in the end
-        driver->last_command_status = setupHome(&driver->active_state->actual_position, driver);
+        
+        
+        ExtendedGCodeCommandParams extended_params = {driver->active_state->actual_position, 0, 0};
+        extended_params.segment_time = CalculateSegmentTime(driver->axis_cfg, 
+            &driver->active_state->actual_position, 
+            &driver->active_state->position);
+        extended_params.sequence_time = extended_params.segment_time;
+
+        driver->last_command_status = setupHome(&extended_params, driver);
         driver->resume = false;
         return driver->last_command_status;
     } 
@@ -737,12 +618,8 @@ PRINTER_STATUS PrinterNextCommand(HDRIVER hdriver)
 
         // execute the next command
         ++driver->active_state->current_command;
-
-        if (driver->acceleration_region_commands)
-        {
-            --driver->acceleration_region_commands;
-        }
-
+        static int cmd_number = 0;
+        ++cmd_number;
         driver->last_command_status = GC_ExecuteFromBuffer(&driver->setup_calls, driver, driver->data_pointer + (size_t)(GCODE_CHUNK_SIZE * driver->active_state->caret_position));
         if (++driver->active_state->caret_position == SDCARD_BLOCK_SIZE / GCODE_CHUNK_SIZE)
         {
