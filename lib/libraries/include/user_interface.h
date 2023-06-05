@@ -16,6 +16,7 @@ extern "C"
 
 #define NORMAL_FONT 8
 #define LARGE_FONT 16
+#define PROGRESS_BORDER_WIDTH 4
 
 typedef struct UI_type
 {
@@ -26,7 +27,7 @@ struct Frame_type
 {
     uint32_t id;
 };
-typedef struct Frame_type * HFrame;
+typedef struct Frame_type *HFrame;
 
 typedef struct
 {
@@ -37,19 +38,25 @@ struct Indicator_type
 {
     uint32_t id;
 };
-typedef struct Indicator_type * HIndicator;
+typedef struct Indicator_type *HIndicator;
 
 struct Button_type
 {
     uint32_t id;
 };
-typedef struct Button_type * HButton;
+typedef struct Button_type *HButton;
 
 typedef struct
 {
     void* metadata;
     void* subparameter;
 } ActionParameter;
+
+struct Progress_type
+{
+    uint32_t id;
+};
+typedef struct Progress_type *HProgress;
 
 typedef bool(*Action)(ActionParameter* action_data);
 
@@ -95,6 +102,7 @@ HFrame     UI_CreateFrame(UI ui_handle, HFrame parent, Rect frame, bool visible)
 HLabel     UI_CreateLabel(UI ui_handle, HFrame parent, Rect frame, const char* label, uint8_t font_height);
 HButton    UI_CreateButton(UI ui_handle, HFrame parent, Rect button_rect, const char* label, uint8_t font_height, bool enabled, Action action, void* metadata, void* subparameter);
 HIndicator UI_CreateIndicator(UI ui_handle, HFrame parent, Rect indicator_rect, const char* label, uint8_t font_height, uint16_t custom_color, bool default_state);
+HProgress  UI_CreateProgress(UI ui_handle, HFrame parent, Rect indicator_rect, bool show_numbers, uint8_t font_height, uint32_t min, uint32_t max, uint32_t step);
 
 Rect       UI_GetFrameUserArea(UI ui_handle, HFrame frame);
 void       UI_EnableButton(HButton hbutton, bool enabled);
@@ -102,6 +110,14 @@ void       UI_SetButtonLabel(HButton hbutton, const char* label);
 void       UI_SetLabel(HLabel hlabel, const char* label);
 void       UI_EnableFrame(HFrame hframe, bool enabled);
 void       UI_Print(UI ui_handle, const Rect* area, const char* label);
+
+// Progress bar controls
+uint32_t   UI_GetProgressValue(HProgress hprogress);
+void       UI_SetProgressValue(HProgress hprogress, uint32_t value);
+void       UI_SetProgressMinimum(HProgress hprogress, uint32_t new_minimum);
+void       UI_SetProgressMaximum(HProgress hprogress, uint32_t new_maximum);
+void       UI_ProgressStep(HProgress hprogress);
+uint32_t   UI_GetProgressDrawPosition(HProgress hprogress);
 
 // UI items mahagement
 void UI_SetIndicatorValue(HIndicator indicator, bool state);

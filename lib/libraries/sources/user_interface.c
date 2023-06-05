@@ -20,6 +20,7 @@ enum UIItemTypes
     UIButton,
     UIIndicator,
     UILabel,
+    UIProgress,
 };
 
 typedef struct
@@ -57,6 +58,20 @@ typedef struct
     void*   sub_parameter;
     Action  action;
 } Button;
+
+typedef struct
+{
+    UI      context;
+    Rect    frame;
+    uint8_t font_height;
+    uint32_t min;
+    uint32_t max;
+    uint32_t step;
+    uint32_t current_value;
+    uint16_t drawing_width;
+    uint16_t drawing_current_value;
+    bool    show_label;
+} Progress;
 
 typedef struct Internal_Frame_type
 {
@@ -252,6 +267,51 @@ static void DrawLabel(UI_CORE* ui, Label* label)
     DrawRect(ui, &label->frame, label->label, true, true, false, ui_item_label, ui->color_schema[ColorMain], label->font_height);
 }
 
+static void DrawProgressFrame(UI_CORE* ui, Progress* progress)
+{
+    DrawRect(ui, &progress->frame, "", true, true, false, ui_item_frame, ui->color_schema[ColorMain], progress->font_height);
+}
+
+static void DrawProgressBar(UI_CORE* ui, Progress* progress, uint16_t previous_state)
+{
+    uint16_t left = previous_state;
+    uint16_t right = progress->drawing_current_value;
+    uint8_t color = ColorIndicator;
+    if (left > right)
+    {
+        left = progress->drawing_current_value;
+        right = previous_state;
+        color = ColorBackground;
+    };
+
+    Rect frame = {
+        progress->frame.x0 + PROGRESS_BORDER_WIDTH + left,
+        progress->frame.y0 + PROGRESS_BORDER_WIDTH,
+        progress->frame.x0 + PROGRESS_BORDER_WIDTH + right,
+        progress->frame.y1 - PROGRESS_BORDER_WIDTH
+    };
+    
+    uint16_t line = (frame.x1 - frame.x0);
+    uint16_t raws = (frame.y1 - frame.y0);
+    if (0 == line)
+    {
+        return;
+    }
+
+    DISPLAY_BeginDraw(ui->context, frame);
+    uint16_t scan_line[320] = {0};
+    for (uint16_t y = 0; y < raws; ++y)
+    {
+        // draw texture line by line
+        for (uint16_t x = 0; x < line; ++x)
+        {
+            scan_line[x] = ui->color_schema[color];
+        }
+        DISPLAY_WritePixels(ui->context, scan_line, line);
+    }  
+    DISPLAY_EndDraw(ui->context);
+}
+
 static void DrawFrame(UI_CORE* ui, Frame* frame)
 {
     if (!frame->enabled)
@@ -275,6 +335,10 @@ static void DrawFrame(UI_CORE* ui, Frame* frame)
             break;
         case UILabel:
             DrawLabel(ui, frame->children[child].handle);
+            break;
+        case UIProgress:
+            DrawProgressFrame(ui, frame->children[child].handle);
+            DrawProgressBar(ui, frame->children[child].handle, 0);
             break;
         default:
             DrawFrame(ui, frame->children[child].handle);
@@ -390,12 +454,7 @@ HFrame UI_GetRootFrame(UI ui_handle)
 HFrame UI_CreateFrame(UI ui_handle, HFrame parent, Rect frame, bool visible)
 {
     UI_CORE* ui = (UI_CORE*)ui_handle;
-    if (!parent)
-    {
-        parent = (HFrame)&ui->root;
-    }
-        
-    Frame* parent_frame = (Frame*)parent;
+    Frame* parent_frame = (0 != parent) ? (Frame*)parent : &ui->root;
     if (CHILDREN_COUNT == parent_frame->count)
     {
         return 0;
@@ -420,16 +479,12 @@ HFrame UI_CreateFrame(UI ui_handle, HFrame parent, Rect frame, bool visible)
 HLabel UI_CreateLabel(UI ui_handle, HFrame parent, Rect frame, const char* label, uint8_t font_height)
 {
     UI_CORE* ui = (UI_CORE*)ui_handle;
-    if (!parent)
-    {
-        parent = (HFrame)&ui->root;
-    }
-
-    Frame* parent_frame = (Frame*)parent;
+    Frame* parent_frame = (0 != parent) ? (Frame*)parent : &ui->root;
     if (CHILDREN_COUNT == parent_frame->count)
     {
         return 0;
     }
+
 
     Label* ui_label = DeviceAlloc(sizeof(Label));
     size_t len = strlen(label);
@@ -453,12 +508,7 @@ HLabel UI_CreateLabel(UI ui_handle, HFrame parent, Rect frame, const char* label
 HButton UI_CreateButton(UI ui_handle, HFrame parent, Rect button_rect, const char* label, uint8_t font_height, bool enabled, Action action, void* metadata, void* sub_parameter)
 {
     UI_CORE* ui = (UI_CORE*)ui_handle;
-    if (!parent)
-    {
-        parent = (HFrame)&ui->root;
-    }
-    
-    Frame* parent_frame = (Frame*)parent;
+    Frame* parent_frame = (0 != parent) ? (Frame*)parent : &ui->root;
     if (CHILDREN_COUNT == parent_frame->count)
     {
         return 0;
@@ -490,12 +540,7 @@ HButton UI_CreateButton(UI ui_handle, HFrame parent, Rect button_rect, const cha
 HIndicator UI_CreateIndicator(UI ui_handle, HFrame parent, Rect indicator_rect, const char* label, uint8_t font_height, uint16_t custom_color, bool default_state)
 {
     UI_CORE* ui = (UI_CORE*)ui_handle;
-    if (!parent)
-    {
-        parent = (HFrame)&ui->root;
-    }
-    
-    Frame* parent_frame = (Frame*)parent;
+    Frame* parent_frame = (0 != parent) ? (Frame*)parent : &ui->root;
     if (CHILDREN_COUNT == parent_frame->count)
     {
         return 0;
@@ -520,6 +565,32 @@ HIndicator UI_CreateIndicator(UI ui_handle, HFrame parent, Rect indicator_rect, 
     parent_frame->children[parent_frame->count++].type = UIIndicator;
     
     return (HIndicator)indicator;
+}
+
+HProgress UI_CreateProgress(UI ui_handle, HFrame parent, Rect progress_rect, bool show_numbers, uint8_t font_height, uint32_t min, uint32_t max, uint32_t step)
+{
+    UI_CORE* ui = (UI_CORE*)ui_handle;
+    Frame* parent_frame = (0 != parent) ? (Frame*)parent : &ui->root;
+    if (CHILDREN_COUNT == parent_frame->count)
+    {
+        return 0;
+    }
+
+    Progress* progress      = DeviceAlloc(sizeof(Progress)); 
+    progress->context       = ui_handle;
+    progress->min           = min;
+    progress->max           = max;
+    progress->step          = step;
+    progress->current_value = min;
+    progress->drawing_current_value = 0;
+    progress->drawing_width = progress_rect.x1 - progress_rect.x0 - 2 * PROGRESS_BORDER_WIDTH;
+
+    CalculateFrame(&progress->frame, &progress_rect, &parent_frame->frame, ui->guide); 
+
+    parent_frame->children[parent_frame->count].handle = progress;
+    parent_frame->children[parent_frame->count++].type = UIProgress;
+
+    return (HProgress)progress;
 }
 
 Rect UI_GetFrameUserArea(UI ui_handle, HFrame frame)
@@ -591,6 +662,73 @@ void UI_SetLabel(HLabel hlabel, const char* label)
     strcpy(lbl->label, label);
     lbl->label[len] = 0;
     DrawLabel(ui, lbl);
+}
+
+uint32_t UI_GetProgressValue(HProgress hprogress)
+{
+    Progress* progress = (Progress*)hprogress;
+    return progress->current_value;
+}
+
+void UI_SetProgressValue(HProgress hprogress, uint32_t value)
+{
+    Progress* progress = (Progress*)hprogress;
+    progress->current_value = value;
+    if (progress->current_value > progress->max)
+    {
+        progress->current_value = progress->max;
+    }   
+    else if (progress->current_value < progress->min)
+    {
+        progress->current_value = progress->min;
+    }
+    uint16_t drawing_value = progress->drawing_current_value;
+    progress->drawing_current_value = ((progress->current_value - progress->min) * progress->drawing_width) / 
+                                      (progress->max - progress->min);
+    if (drawing_value != progress->drawing_current_value)
+    {
+        DrawProgressBar((UI_CORE*)progress->context, progress, drawing_value);
+    }
+}
+
+void UI_SetProgressMinimum(HProgress hprogress, uint32_t new_minimum)
+{
+    //TODO: int max?
+    Progress* progress = (Progress*)hprogress;
+    progress->min = new_minimum;
+    if (progress->max <= new_minimum)
+    {
+        progress->max = new_minimum + 1;
+    }
+    UI_SetProgressValue(hprogress, progress->min);
+}
+
+void UI_SetProgressMaximum(HProgress hprogress, uint32_t new_maximum)
+{
+    //TODO: int max?
+    Progress* progress = (Progress*)hprogress;
+    if (!new_maximum)
+    {
+        new_maximum = 1;
+    }
+    if (progress->min >= new_maximum)
+    {
+        progress->min = new_maximum - 1;
+    }
+    progress->max = new_maximum;
+    UI_SetProgressValue(hprogress, progress->min);
+}
+
+void UI_ProgressStep(HProgress hprogress)
+{
+    Progress* progress = (Progress*)hprogress;
+    UI_SetProgressValue(progress, progress->current_value + progress->step);
+}
+
+uint32_t UI_GetProgressDrawPosition(HProgress hprogress)
+{
+    Progress* progress = (Progress*)hprogress;
+    return progress->drawing_current_value;
 }
 
 void UI_SetIndicatorLabel(HIndicator indicator, const char* label)

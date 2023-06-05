@@ -38,7 +38,8 @@ typedef struct
     HIndicator temperature[TERMO_REGULATOR_COUNT];
     uint16_t current_temperature[TERMO_REGULATOR_COUNT];
 
-    HIndicator progress;
+    HIndicator operation_name;
+    HProgress  progress;
     HFrame     printing_frame;
     HButton    transfer_button;
     HButton    start_button;
@@ -56,7 +57,9 @@ static bool startTransfer(ActionParameter* param)
     printer->gcode_blocks_count = FileManagerOpenGCode(printer->file_manager, "model.gcode");
     if (0 != printer->gcode_blocks_count)
     {
-        UI_SetIndicatorLabel(printer->progress, "Transfer");
+        UI_SetIndicatorLabel(printer->operation_name, "Transfer");
+        UI_SetProgressMaximum(printer->progress, printer->gcode_blocks_count);
+        UI_SetProgressValue(printer->progress, 0);
         printer->current_mode = FILE_TRANSFERING;
     }
     return true;
@@ -71,10 +74,10 @@ static bool startPrinting(ActionParameter* param)
     PrinterInitialize(printer->driver);
     PrinterPrintFromCache(printer->driver, 0, PRINTER_START);
 
+    UI_SetIndicatorLabel(printer->operation_name, "Printing");
     printer->total_commands_count = PrinterGetRemainingCommandsCount(printer->driver);
-    char name[16];
-    sprintf(name, "%ld", printer->total_commands_count);
-    UI_SetIndicatorLabel(printer->progress, name);
+    UI_SetProgressMaximum(printer->progress, printer->total_commands_count);
+    UI_SetProgressValue(printer->progress, 0);
 
     printer->current_mode = PRINTING;
     return true;
@@ -161,16 +164,19 @@ HPRINTER Configure(PrinterConfiguration* cfg)
         PrinterSetTemperature(printer->driver, i, 25, 0);
     }
 
-    Rect progress = { 100, 0, 220, 50 };
-    printer->progress = UI_CreateIndicator(printer->ui_handle, 0, progress, "0000", LARGE_FONT, 0, true);
+    Rect progress = { 0, 50, 320, 75 };
+    printer->progress = UI_CreateProgress(printer->ui_handle, 0, progress, false, LARGE_FONT, 0, 100, 1);
 
+    Rect operation = { 100, 0, 220, 50 };
+    printer->operation_name = UI_CreateIndicator(printer->ui_handle, 0, operation, "0000", LARGE_FONT, 0, true);
+    
     Rect stub = { 0, 0, 100, 50 };
     printer->temperature[TERMO_NOZZLE] = UI_CreateIndicator(printer->ui_handle, 0, stub, "0000", LARGE_FONT, 0, true);
 
     Rect indicator = { 220, 0, 320, 50 };
     printer->temperature[TERMO_TABLE] = UI_CreateIndicator(printer->ui_handle, 0, indicator, "0000", LARGE_FONT, 0, true);
 
-    Rect frame = { 0, 50, 320, 240 };
+    Rect frame = { 0, 75, 320, 240 };
     printer->printing_frame = UI_CreateFrame(printer->ui_handle, 0, frame, true);
 
     // calibration buttons
@@ -207,7 +213,8 @@ void MainLoop(HPRINTER hprinter)
         PrinterReadControlBlock(printer->driver, &cbl);
         UI_EnableButton(printer->start_button, (CONTROL_BLOCK_SEC_CODE == cbl.secure_id && cbl.commands_count));
 
-        UI_SetIndicatorLabel(printer->progress, "DONE");
+        UI_SetIndicatorLabel(printer->operation_name, "DONE");
+        UI_ProgressStep(printer->progress);
 
         printer->current_mode = CONFIGURATION;
     }
@@ -230,14 +237,13 @@ void MainLoop(HPRINTER hprinter)
         {
             char name[16];
             sprintf(name, "F: %ld", PrinterGetRemainingCommandsCount(printer->driver));
-            UI_SetIndicatorLabel(printer->progress, name);
+            UI_SetIndicatorLabel(printer->operation_name, name);
             printer->current_mode = CONFIGURATION;
         }
         else
         {
-            char name[16];
-            sprintf(name, "%ld", PrinterGetRemainingCommandsCount(printer->driver));
-            UI_SetIndicatorLabel(printer->progress, name);
+            uint32_t commands_count = printer->total_commands_count - PrinterGetRemainingCommandsCount(printer->driver);
+            UI_SetProgressValue(printer->progress, commands_count);
         }
     }
 
@@ -300,7 +306,8 @@ void MainLoop(HPRINTER hprinter)
         if (0 == printer->gcode_blocks_count)
         {
             FileManagerCloseGCode(printer->file_manager);
-            UI_SetIndicatorLabel(printer->progress, "Complete");
+            UI_SetIndicatorLabel(printer->operation_name, "DONE");
+            UI_ProgressStep(printer->progress);
             UI_EnableButton(printer->transfer_button, true);
             UI_EnableButton(printer->start_button, true);
             printer->current_mode = CONFIGURATION;
@@ -311,15 +318,16 @@ void MainLoop(HPRINTER hprinter)
         {
             // file failure
             printer->current_mode = FAILURE;
-            UI_SetIndicatorLabel(printer->progress, FileManagerGetError(printer->file_manager));
+            UI_SetIndicatorLabel(printer->operation_name, FileManagerGetError(printer->file_manager));
             return;
         }
+        UI_ProgressStep(printer->progress);
         --printer->gcode_blocks_count;
     }
         
     if (FAILURE == printer->current_mode)
     {
-        UI_SetIndicatorLabel(printer->progress, "ERROR");
+        UI_SetIndicatorLabel(printer->operation_name, "ERROR");
         printer->current_mode = CONFIGURATION;
     }
 }

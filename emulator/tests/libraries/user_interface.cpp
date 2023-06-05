@@ -190,3 +190,127 @@ TEST_F(UITest, complex_ui)
     }
 }
 
+TEST_F(UITest, progress_bar)
+{
+    ASSERT_TRUE(nullptr != UI_CreateProgress(m_context, 0, { 10, 10, 100, 40 }, true, LARGE_FONT, 0, 100, 1));
+}
+
+class UIProgressTest : public UITest
+{
+protected:
+    HProgress m_progress;
+    uint32_t m_minimum = 50;
+    uint32_t m_maximum = m_minimum + 100;
+    uint32_t m_step = 12;
+
+    virtual void SetUp()
+    {
+        UITest::SetUp();
+        m_progress = UI_CreateProgress(m_context, 0, { 10, 10, 110 + 2*PROGRESS_BORDER_WIDTH, 40 }, true, LARGE_FONT, m_minimum, m_maximum, m_step);
+    }
+};
+
+TEST_F(UIProgressTest, progress_bar_minimal_default_value)
+{
+    ASSERT_EQ(m_minimum, UI_GetProgressValue(m_progress));
+}
+
+TEST_F(UIProgressTest, progress_bar_step_increments_value)
+{
+    UI_ProgressStep(m_progress);
+    ASSERT_EQ(m_minimum + m_step, UI_GetProgressValue(m_progress));
+}
+
+TEST_F(UIProgressTest, progress_bar_step_cannot_exceed_max)
+{
+    for (uint32_t i = 0; i < m_maximum - m_minimum + 10; ++i)
+    {
+        UI_ProgressStep(m_progress);
+    }
+    ASSERT_EQ(m_maximum, UI_GetProgressValue(m_progress));
+}
+
+TEST_F(UIProgressTest, progress_bar_can_set_value)
+{
+    uint32_t value = m_minimum + 10;
+    UI_SetProgressValue(m_progress, value);
+    ASSERT_EQ(value, UI_GetProgressValue(m_progress));
+}
+
+TEST_F(UIProgressTest, progress_bar_value_cannot_exceed_max)
+{
+    uint32_t value = m_maximum + 10;
+    UI_SetProgressValue(m_progress, value);
+    ASSERT_EQ(m_maximum, UI_GetProgressValue(m_progress));
+}
+
+TEST_F(UIProgressTest, progress_bar_value_cannot_be_lower_min)
+{
+    uint32_t value = m_minimum - 10;
+    UI_SetProgressValue(m_progress, value);
+    ASSERT_EQ(m_minimum, UI_GetProgressValue(m_progress));
+}
+
+TEST_F(UIProgressTest, progress_bar_current_draw_position)
+{
+    ASSERT_EQ(0, UI_GetProgressDrawPosition(m_progress));
+}
+
+TEST_F(UIProgressTest, progress_bar_max_draw_position)
+{
+    UI_SetProgressValue(m_progress, m_maximum);
+    ASSERT_EQ(100, UI_GetProgressDrawPosition(m_progress));
+}
+
+TEST_F(UIProgressTest, progress_bar_change_min)
+{
+    m_minimum = 1000;
+    UI_SetProgressMinimum(m_progress, m_minimum);
+    ASSERT_EQ(m_minimum, UI_GetProgressValue(m_progress));
+}
+
+TEST_F(UIProgressTest, progress_bar_change_min_less_max_no_change)
+{
+    m_minimum = m_maximum - 10;
+    UI_SetProgressMinimum(m_progress, m_minimum);
+    UI_SetProgressValue(m_progress, m_maximum);
+    ASSERT_EQ(m_maximum, UI_GetProgressValue(m_progress));
+}
+
+TEST_F(UIProgressTest, progress_bar_change_min_affects_max)
+{
+    m_minimum = m_maximum + 10;
+    UI_SetProgressMinimum(m_progress, m_minimum);
+    UI_SetProgressValue(m_progress, m_minimum + 10);
+    ASSERT_EQ(m_minimum + 1, UI_GetProgressValue(m_progress));
+}
+
+TEST_F(UIProgressTest, progress_bar_change_max_eq_min_affects_min)
+{
+    m_minimum = m_maximum - 10;
+    UI_SetProgressMaximum(m_progress, m_minimum);
+    UI_SetProgressValue(m_progress, m_minimum - 1);
+    ASSERT_EQ(m_minimum - 1, UI_GetProgressValue(m_progress));
+}
+
+TEST_F(UIProgressTest, progress_bar_change_max_gt_min_no_change)
+{
+    m_maximum = m_minimum + 10;
+    UI_SetProgressMaximum(m_progress, m_maximum);
+    UI_SetProgressValue(m_progress, m_minimum);
+    ASSERT_EQ(m_minimum, UI_GetProgressValue(m_progress));
+}
+
+TEST_F(UIProgressTest, progress_bar_change_max_to_zero)
+{
+    UI_SetProgressMaximum(m_progress, 0);
+    UI_SetProgressValue(m_progress, 1);
+    ASSERT_EQ(1, UI_GetProgressValue(m_progress));
+}
+
+TEST_F(UIProgressTest, progress_bar_change_max_to_zero_min)
+{
+    UI_SetProgressMaximum(m_progress, 0);
+    UI_SetProgressValue(m_progress, 0);
+    ASSERT_EQ(0, UI_GetProgressValue(m_progress));
+}
