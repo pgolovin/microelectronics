@@ -183,8 +183,9 @@ void GC_Reset(HGCODE hcode, const GCodeCommandParams* initial_state)
     GCode* gcode = (GCode*)hcode;
     
     // relative commands from non-zero point
-    gcode->command.g = initial_state ? *initial_state : zero_command;
-    gcode->command.m = m;
+    gcode->command.g        = initial_state ? *initial_state : zero_command;
+    gcode->command.g.e      = 0;
+    gcode->command.m        = m;
     gcode->motion_mode      = GCODE_ABSOLUTE;
     gcode->extrusion_mode   = GCODE_ABSOLUTE;
 }
@@ -359,6 +360,7 @@ uint32_t GC_CompressCommand(HGCODE hcode, uint8_t* buffer)
             gcode->command.g.fetch_speed = gcode->max_fetch_speed;
         }
 
+        memset(buffer, 0, GCODE_CHUNK_SIZE);
         *(GCodeCommandParams*)(buffer + sizeof(parameterType)) = gcode->command.g;
         *(uint32_t*)buffer = GCODE_COMMAND | index;
     }
