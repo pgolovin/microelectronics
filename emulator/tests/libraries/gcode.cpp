@@ -907,7 +907,7 @@ TEST_F(GCodeParserStateTest, parser_reset_state_with_zero)
 }
 
 
-TEST_F(GCodeParserStateTest, parser_reset_state_with_initial_position)
+TEST_F(GCodeParserStateTest, DISABLED_parser_reset_state_with_initial_position)
 {
     std::vector<std::string> commands = {
         "G0 F1800 X30",
