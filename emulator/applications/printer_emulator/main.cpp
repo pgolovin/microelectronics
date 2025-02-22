@@ -80,8 +80,8 @@ int main(int argc, char** argv)
     Device device(ds);
     AttachDevice(device);
 
-    SDcardMock external_card(4096);
-    SDcardMock internal_card(4096);
+    SDcardMock external_card(256*1024); //128MB
+    SDcardMock internal_card(256*1024); //128MB
 
     app.config.storages[STORAGE_EXTERNAL] = &external_card;
     app.config.storages[STORAGE_INTERNAL] = &internal_card;
@@ -91,7 +91,7 @@ int main(int argc, char** argv)
 
     MKFS_PARM fs_params =
     {
-        FM_FAT,
+        FM_FAT32,
         1,
         0,
         0,

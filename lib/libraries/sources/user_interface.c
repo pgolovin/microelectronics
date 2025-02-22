@@ -269,7 +269,7 @@ static void DrawLabel(UI_CORE* ui, Label* label)
 
 static void DrawProgressFrame(UI_CORE* ui, Progress* progress)
 {
-    DrawRect(ui, &progress->frame, "", true, true, false, ui_item_frame, ui->color_schema[ColorMain], progress->font_height);
+    DrawRect(ui, &progress->frame, "", true, true, false, ui_item_frame, ui->color_schema[ColorMain], 0);
 }
 
 static void DrawProgressBar(UI_CORE* ui, Progress* progress, uint16_t previous_state)
@@ -722,7 +722,7 @@ void UI_SetProgressMaximum(HProgress hprogress, uint32_t new_maximum)
 void UI_ProgressStep(HProgress hprogress)
 {
     Progress* progress = (Progress*)hprogress;
-    UI_SetProgressValue(progress, progress->current_value + progress->step);
+    UI_SetProgressValue(hprogress, progress->current_value + progress->step);
 }
 
 uint32_t UI_GetProgressDrawPosition(HProgress hprogress)

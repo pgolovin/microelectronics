@@ -27,16 +27,16 @@ typedef struct
     HGCODE         interpreter;
 
     HFILEMANAGER file_manager;
-    FIL* file;
-    DIR* dir;
-    size_t gcode_blocks_count;
-    HSDCARD* storages;
+    FIL*      file;
+    DIR*      dir;
+    size_t    gcode_blocks_count;
+    HSDCARD*  storages;
 
-    HDRIVER driver;
-    HTOUCH htouch;
-    UI ui_handle;
+    HDRIVER    driver;
+    HTOUCH     htouch;
+    UI         ui_handle;
     HIndicator temperature[TERMO_REGULATOR_COUNT];
-    uint16_t current_temperature[TERMO_REGULATOR_COUNT];
+    uint16_t   current_temperature[TERMO_REGULATOR_COUNT];
 
     HIndicator operation_name;
     HProgress  progress;
@@ -142,7 +142,8 @@ HPRINTER Configure(PrinterConfiguration* cfg)
     
     printer->ui_handle = UI_Configure(cfg->hdisplay, viewport, 1, 1, false);
 
-    uint16_t colors[ColorsCount] = { 0x0000, 0x5BDF, 0x0007, 0xFEE0 };
+    //uint16_t colors[ColorsCount] = { 0x0000, 0x5BDF, 0x0007, 0xFEE0 };
+    uint16_t colors[ColorsCount] = { 0x0000, 0xa082, 0x0000, 0xf800 };
     UI_SetUIColors(printer->ui_handle, colors);
 
     DriverConfig drv_cfg = {
@@ -164,9 +165,6 @@ HPRINTER Configure(PrinterConfiguration* cfg)
         PrinterSetTemperature(printer->driver, i, 25, 0);
     }
 
-    Rect progress = { 0, 50, 320, 75 };
-    printer->progress = UI_CreateProgress(printer->ui_handle, 0, progress, false, LARGE_FONT, 0, 100, 1);
-
     Rect operation = { 100, 0, 220, 50 };
     printer->operation_name = UI_CreateIndicator(printer->ui_handle, 0, operation, "0000", LARGE_FONT, 0, true);
     
@@ -175,6 +173,9 @@ HPRINTER Configure(PrinterConfiguration* cfg)
 
     Rect indicator = { 220, 0, 320, 50 };
     printer->temperature[TERMO_TABLE] = UI_CreateIndicator(printer->ui_handle, 0, indicator, "0000", LARGE_FONT, 0, true);
+
+    Rect progress = { 0, 50, 320, 75 };
+    printer->progress = UI_CreateProgress(printer->ui_handle, 0, progress, false, LARGE_FONT, 0, 100, 1);
 
     Rect frame = { 0, 75, 320, 240 };
     printer->printing_frame = UI_CreateFrame(printer->ui_handle, 0, frame, true);

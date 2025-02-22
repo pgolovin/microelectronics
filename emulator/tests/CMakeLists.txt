@@ -26,11 +26,16 @@ set(SOURCES
 # add sub-project
 add_executable(driver_tests ${SOURCES})
 
+find_package(GTest REQUIRED)
+
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/resources/model.gcode" "${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}/model.gcode" COPYONLY)
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/resources/wanhao.gcode" "${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}/wanhao.gcode" COPYONLY)
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/resources/pla.mtl" "${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}/pla.mtl" COPYONLY)
 
-target_link_libraries(driver_tests PUBLIC device_mock drivers libraries solutions fatfs GTest::gtest)
+target_link_libraries(driver_tests PUBLIC device_mock drivers libraries solutions fatfs 
+        GTest::GTest
+        GTest::gtest
+        GTest::gtest_main)
 target_include_directories(driver_tests PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME drivers 
          COMMAND driver_tests.exe)

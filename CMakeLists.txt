@@ -5,17 +5,10 @@ project(stm_simulator_project)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR})
 list(APPEND CMAKE_PREFIX_PATH ${CMAKE_BINARY_DIR})
 
-include(${PROJECT_SOURCE_DIR}/3rd_party/conan/conan.cmake)
-
-conan_cmake_configure(REQUIRES gtest/1.11.0 
-                      GENERATORS cmake_find_package)
-
-conan_cmake_autodetect(CONAN_SETTINGS)
-
-conan_cmake_install(PATH_OR_REFERENCE ${CMAKE_BINARY_DIR}
-                    BUILD missing
-                    REMOTE conancenter
-                    SETTINGS ${CONAN_SETTINGS})
+execute_process(COMMAND conan profile detect --force)
+execute_process(COMMAND conan install ${PROJECT_SOURCE_DIR}\\3rd_party\\conan --output-folder=${CMAKE_BINARY_DIR} --build=missing -s build_type=${CMAKE_BUILD_TYPE})
+#include(${CMAKE_BINARY_DIR}/conan_toolchain.cmake)
+add_compile_definitions(CMAKE_TOOLCHAIN_FILE="${CMAKE_BINARY_DIR}/conan_toolchain.cmake")
 
 # specify the C++ standard
 set(CMAKE_CXX_STANDARD 17)
